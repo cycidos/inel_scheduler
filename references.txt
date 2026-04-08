@@ -1,0 +1,8 @@
+# Reference 기록 파일
+# 형식:
+# - name: 참고 자료 이름
+# - source: URL 또는 경로
+# - type: submodule | file | project
+# - imported_at: YYYY-MM-DD
+# - note: 참고 목적
+

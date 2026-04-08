@@ -1,0 +1,22 @@
+# Reference assets (keep only metadata in references.txt)
+references/
+reference/
+external/
+vendor/
+
+# Python env / cache / build artifacts
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+pip-wheel-metadata/
+dist/
+build/
+
+# Local environment files
+.env
+.env.*

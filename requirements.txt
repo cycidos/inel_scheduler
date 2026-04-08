@@ -1,0 +1,3 @@
+# Python dependency list
+# 예시: requests>=2.32.0
+
