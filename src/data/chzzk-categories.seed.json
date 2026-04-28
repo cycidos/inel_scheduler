@@ -1,0 +1,963 @@
+{
+  "generatedAt": "2026-04-28T16:12:39.314Z",
+  "source": "service/v1/lives (POPULAR + LATEST) + service/v1/search/lives (다양한 키워드) + manual ETC seed",
+  "note": "비공식 API 크롤링 결과. 활동 중 라이브가 있는 카테고리만 수집됨. 비활성 카테고리는 런타임 자동 등록(다시보기)으로 보강.",
+  "crawlStats": {
+    "totalLives": 14000,
+    "totalSearch": 2611,
+    "keywordsCount": 67
+  },
+  "count": 190,
+  "categories": [
+    {
+      "categoryId": "animation",
+      "categoryValue": "애니메이션",
+      "categoryType": "ENTERTAINMENT"
+    },
+    {
+      "categoryType": "ETC",
+      "categoryId": "art",
+      "categoryValue": "그림/아트"
+    },
+    {
+      "categoryType": "ETC",
+      "categoryId": "study",
+      "categoryValue": "스터디"
+    },
+    {
+      "categoryType": "ETC",
+      "categoryId": "irl",
+      "categoryValue": "야외/일상"
+    },
+    {
+      "categoryType": "ETC",
+      "categoryId": "movie",
+      "categoryValue": "영화/드라마"
+    },
+    {
+      "categoryType": "ETC",
+      "categoryId": "cook",
+      "categoryValue": "요리/먹방"
+    },
+    {
+      "categoryType": "ETC",
+      "categoryId": "music",
+      "categoryValue": "음악/노래"
+    },
+    {
+      "categoryType": "ETC",
+      "categoryId": "talk",
+      "categoryValue": "토크"
+    },
+    {
+      "categoryType": "ETC",
+      "categoryId": "asmr",
+      "categoryValue": "ASMR"
+    },
+    {
+      "categoryId": "Black_Desert",
+      "categoryValue": "검은사막",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Getamped",
+      "categoryValue": "겟앰프드",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Getting_Over_It_with_Bennett_Foddy",
+      "categoryValue": "겟팅 오버 잇 위드 베넷 포디",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "classic_game",
+      "categoryValue": "고전 게임",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Gray_Zone_Warfare",
+      "categoryValue": "그레이 존 워페어",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Green_Hell",
+      "categoryValue": "그린 헬",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "GUILTY_GEAR_STRIVE",
+      "categoryValue": "길티기어 -스트라이브-",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "NieR_Replicant_ver122474487139",
+      "categoryValue": "니어 레플리칸트 ver.1.22474487139...",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "The_NOexistenceN_of_you_AND_me",
+      "categoryValue": "당신과 나의 존재불명",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "the_Game_of_LIFE_for_Nintendo_Switch",
+      "categoryValue": "더 게임 오브 라이프 포 닌텐도 스위치",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "The_Game_of_Sisyphus",
+      "categoryValue": "더 게임 오브 시시포스",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "The_Last_of_Us_Part1",
+      "categoryValue": "더 라스트 오브 어스 파트 1",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Dungeon_Fighter",
+      "categoryValue": "던전앤파이터",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Dungeon_Fighter_Mobile",
+      "categoryValue": "던전앤파이터 모바일",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "DEAD_BY_DAYLIGHT",
+      "categoryValue": "데드 바이 데이라이트",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Deadlock",
+      "categoryValue": "데드락",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Destiny_Guardians",
+      "categoryValue": "데스티니 가디언즈",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "They_Are_Billions",
+      "categoryValue": "데이 아 빌리언즈",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "DeltaForce_HawkOps",
+      "categoryValue": "델타포스",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Dota2",
+      "categoryValue": "도타 2",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Dont_Starve_Together",
+      "categoryValue": "돈 스타브 투게더",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Dome_Keeper",
+      "categoryValue": "돔 키퍼",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "DragonNest_Classic",
+      "categoryValue": "드래곤네스트 클래식",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Diablo_IV",
+      "categoryValue": "디아블로 4",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Diablo_IV_Lord_of_Hatred",
+      "categoryValue": "디아블로 4: 증오의 군주",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Diablo_IV_Vessel_of_Hatred",
+      "categoryValue": "디아블로 4: 증오의 그릇",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Diablo2_Resurrected",
+      "categoryValue": "디아블로 II: 레저렉션",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "DJMAX_RESPECT_V",
+      "categoryValue": "디제이맥스 리스펙트 V",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "DIGIMON_MASTERS",
+      "categoryValue": "디지몬마스터즈",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "rasalas",
+      "categoryValue": "라살라스",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Roblox",
+      "categoryValue": "로블록스",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Lost_Ark",
+      "categoryValue": "로스트아크",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Mega_Man_X",
+      "categoryValue": "록맨 X",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Lunacid",
+      "categoryValue": "루나시드",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "League_of_Legends",
+      "categoryValue": "리그 오브 레전드",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "League_of_Legends_Wild_Rift",
+      "categoryValue": "리그 오브 레전드: 와일드 리프트",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Lineage_M",
+      "categoryValue": "리니지M",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Lethal_Company",
+      "categoryValue": "리썰 컴퍼니",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Limbus_Company",
+      "categoryValue": "림버스 컴퍼니",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Rimworld",
+      "categoryValue": "림월드",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Mabinogi",
+      "categoryValue": "마비노기",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "mabinogimobile",
+      "categoryValue": "마비노기 모바일",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Minecraft",
+      "categoryValue": "마인크래프트",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "MapleStory",
+      "categoryValue": "메이플스토리",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "MapleStory_WORLDS",
+      "categoryValue": "메이플스토리 월드",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Arknights",
+      "categoryValue": "명일방주",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Arknights_Endfield",
+      "categoryValue": "명일방주: 엔드필드",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "WutheringWaves",
+      "categoryValue": "명조:워더링 웨이브",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "stardive",
+      "categoryValue": "몬길: STAR DIVE",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Monster_Hunter_Wilds",
+      "categoryValue": "몬스터 헌터 와일즈",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Monster_Hunter_World_Iceborne",
+      "categoryValue": "몬스터 헌터 월드: 아이스본",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "MONSTER_HUNTER_DOUBLE_CROSS",
+      "categoryValue": "몬스터 헌터 XX",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "MONSTER_HUNTER_WORLD",
+      "categoryValue": "몬스터 헌터: 월드",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "MIMESIS",
+      "categoryValue": "미메시스",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "The_Kingdom_of_the_Wind",
+      "categoryValue": "바람의나라",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "BIOHAZARD7_resident_evil",
+      "categoryValue": "바이오하자드 7 레지던트 이블",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "BIOHAZARD_requiem",
+      "categoryValue": "바이오하자드 레퀴엠",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Resident_Evil2",
+      "categoryValue": "바이오하자드 RE:2",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Valorant",
+      "categoryValue": "발로란트",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Escape_Simulator",
+      "categoryValue": "방 탈출 시뮬레이터",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Vampire_Crawlers",
+      "categoryValue": "뱀파이어 크롤러즈: 더 터보 와일드카드 프롬 뱀파이어 서바이버즈",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Azur_Lane",
+      "categoryValue": "벽람항로",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "CrimsonDesert",
+      "categoryValue": "붉은사막",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Honkai_Impact_Star_Rail",
+      "categoryValue": "붕괴: 스타레일",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Brawl_Stars",
+      "categoryValue": "브롤스타즈",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "BlueProtocol_StarResonance",
+      "categoryValue": "블루 프로토콜: 스타 레조넌스",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "BLEACH_Soul_Resonance",
+      "categoryValue": "블리치: 소울 레조넌스",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Cyphers",
+      "categoryValue": "사이퍼즈",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "SILENT_HILL2",
+      "categoryValue": "사일런트 힐 2",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Sannabi",
+      "categoryValue": "산나비",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Shadowverse_Worlds_Beyond",
+      "categoryValue": "섀도우버스 월즈 비욘드",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Sudden_Attack",
+      "categoryValue": "서든어택",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Subnautica_Below_Zero",
+      "categoryValue": "서브노티카: 빌로우 제로",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "SEKIRO_SHADOWS_DIE_TWICE",
+      "categoryValue": "세키로: 섀도우 다이 트와이스",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Sephiria",
+      "categoryValue": "세피리아",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Watermelon_Game",
+      "categoryValue": "수박게임",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "SUPER_ROBOT_WARS_Y",
+      "categoryValue": "슈퍼로봇대전 Y",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Skul",
+      "categoryValue": "스컬: 더 히어로 슬레이어",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "STAR_CITIZEN",
+      "categoryValue": "스타 시티즌",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Stardew_Valley",
+      "categoryValue": "스타듀 밸리",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "StarCraft_Remastered",
+      "categoryValue": "스타크래프트 : 리마스터",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "StarCraft_Brood_War",
+      "categoryValue": "스타크래프트 : 브루드 워",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Starcraft_II_Legacy_of_the_Void",
+      "categoryValue": "스타크래프트 II : 공허의 유산",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "StarCraft_II_Wings_of_Liberty",
+      "categoryValue": "스타크래프트 II : 자유의 날개",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "STALCRAFT",
+      "categoryValue": "스탈크래프트 X",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Strinova",
+      "categoryValue": "스트리노바",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Street_Fighter6",
+      "categoryValue": "스트리트 파이터 6",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Slay_the_Spire2",
+      "categoryValue": "슬레이 더 스파이어 2",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "NIKKE_The_Goddess_of_Victory",
+      "categoryValue": "승리의 여신: 니케",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Sixtar_Gate_STARTRAIL",
+      "categoryValue": "식스타 게이트: 스타트레일",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Assetto_Corsa_Competizione",
+      "categoryValue": "아세토 코르사 컴페티치오네",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Asgard",
+      "categoryValue": "아스가르드",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "AION2",
+      "categoryValue": "아이온2",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Ensemble_Stars",
+      "categoryValue": "앙상블스타즈!!",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Legend_Of_Darkness",
+      "categoryValue": "어둠의전설",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Assassins_Creed4_Black_Flag",
+      "categoryValue": "어쌔신 크리드 4: 블랙 플래그",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Alien_Isolation",
+      "categoryValue": "에이리언: 아이솔레이션",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Apex_Legends",
+      "categoryValue": "에이펙스 레전드",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "The_Elder_Scrolls_V_Skyrim",
+      "categoryValue": "엘더스크롤 5: 스카이림",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Elden_Ring",
+      "categoryValue": "엘든 링",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Teach_my_little_sister_how_to_drive",
+      "categoryValue": "여동생 운전 가르치기",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Where_Winds_Meet",
+      "categoryValue": "연운",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "OVERWATCH",
+      "categoryValue": "오버워치",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Overwatch_Legendary_Edition",
+      "categoryValue": "오버워치 레전더리 에디션",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Overcooked_All_You_Can_Eat",
+      "categoryValue": "오버쿡! 올 유 캔 잇",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "LYLZZ",
+      "categoryValue": "용윤입지전",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Umamusume",
+      "categoryValue": "우마무스메 프리티 더비",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Genshin_Impact",
+      "categoryValue": "원신",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "ONE_PIECE_Bounty_Rush",
+      "categoryValue": "원피스 바운티 러쉬",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "World_Of_Warships",
+      "categoryValue": "월드 오브 워쉽",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "World_of_Warcraft",
+      "categoryValue": "월드 오브 워크래프트 오리지널",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "World_of_Warcraft_Classic",
+      "categoryValue": "월드 오브 워크래프트 클래식",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "World_of_Warcraft_The_War_Within",
+      "categoryValue": "월드 오브 워크래프트: 내부 전쟁",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "World_of_Warcraft_Midnight",
+      "categoryValue": "월드 오브 워크래프트: 한밤",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "World_of_Tanks",
+      "categoryValue": "월드 오브 탱크",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "World_War_Z_Aftermath",
+      "categoryValue": "월드 워 Z: 애프터매스",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Crosswind",
+      "categoryValue": "윈드로즈",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Yu_Gi_Oh_Master_Duel",
+      "categoryValue": "유희왕 마스터 듀얼",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Yunyun_Syndrome_Rhythm_Psychosis",
+      "categoryValue": "융융 전파 신드롬",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Escape_from_Tarkov",
+      "categoryValue": "이스케이프 프롬 타르코프",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "EZ2ON_REBOOT_R",
+      "categoryValue": "이지투온 리부트: R",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Black_Survival_Eternal_Return",
+      "categoryValue": "이터널 리턴",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "eFootball_2022",
+      "categoryValue": "이풋볼 2023",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Enshrouded",
+      "categoryValue": "인슈라오디드",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "The_Imjin_War_The_Counterattack",
+      "categoryValue": "임진왜란:조선의 반격",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "mahjong_soul",
+      "categoryValue": "작혼: 리치 마작",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "The_Scourge",
+      "categoryValue": "재앙",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "JUDGMENT_Remastered",
+      "categoryValue": "저지 아이즈: 사신의 유언 Remastered",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Teamfight_Tactics",
+      "categoryValue": "전략적 팀 전투 : 우주의 신들",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "various_games",
+      "categoryValue": "종합 게임",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Tekken",
+      "categoryValue": "철권",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "TEKKEN8",
+      "categoryValue": "철권 8",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "TEKKEN_TAG_TOURNAMENT2",
+      "categoryValue": "철권 태그 토너먼트 2",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Tomodachi_Life_Living_the_Dream",
+      "categoryValue": "친구모아 아일랜드 두근두근 라이프",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Company_of_Heroes3",
+      "categoryValue": "컴퍼니 오브 히어로즈 3",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Kenshi",
+      "categoryValue": "켄시",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Core_Keeper",
+      "categoryValue": "코어 키퍼",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Tales_Runner",
+      "categoryValue": "테일즈런너",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Torchlight_Infinite",
+      "categoryValue": "토치라이트: 인피니트",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Rainbow_Six_Siege",
+      "categoryValue": "톰 클랜시의 레인보우 식스 시즈 X",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Trickcal",
+      "categoryValue": "트릭컬 리바이브",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Far_Far_West",
+      "categoryValue": "파 파 웨스트",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "PowerWash_Simulator",
+      "categoryValue": "파워워시 시뮬레이터",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "FINAL_FANTASY_XIV",
+      "categoryValue": "파이널판타지14",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Finding_Paradise",
+      "categoryValue": "파인딩 파라다이스",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Palworld",
+      "categoryValue": "팰월드",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Fate_Grand_order",
+      "categoryValue": "페이트/그랜드 오더",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Fate_stay_night_REMASTERED",
+      "categoryValue": "페이트/스테이 나이트 리마스터드",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "POJANGMACHA",
+      "categoryValue": "포장마차 : 한국 길거리 음식 경영시뮬레이터",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Pokemon_LEGENDS_ZA",
+      "categoryValue": "포켓몬 레전드 Z-A",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Pokemon_Champions",
+      "categoryValue": "포켓몬 챔피언스",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "pokemon_tcg_pocket",
+      "categoryValue": "포켓몬 카드 게임 Pocket",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Pokemon_Pokopia",
+      "categoryValue": "포켓몬 포코피아",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Pokemon_Leaf_Green",
+      "categoryValue": "포켓몬스터 리프그린",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Pokemon_Sword_Shield",
+      "categoryValue": "포켓몬스터 소드 · 실드",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Pokemon_Scarlet_Violet",
+      "categoryValue": "포켓몬스터 스칼렛 · 바이올렛",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Pokemon_Red",
+      "categoryValue": "포켓몬스터 적",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Pokemon_Fire_Red",
+      "categoryValue": "포켓몬스터 파이어레드",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Pokemon_Heart_Gold",
+      "categoryValue": "포켓몬스터 하트골드",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Funi_Raccoon_Game",
+      "categoryValue": "푸니 라쿤 게임",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "PRAGMATA",
+      "categoryValue": "프래그마타",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "HADES2",
+      "categoryValue": "하데스 2",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Hearthstone",
+      "categoryValue": "하스스톤",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Hollow_Knight",
+      "categoryValue": "할로우 나이트",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Hollow_Knight_Silksong",
+      "categoryValue": "할로우 나이트: 실크송",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Heavenly_Bodies",
+      "categoryValue": "헤븐리 바디스",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "HELLDIVERS2",
+      "categoryValue": "헬다이버즈 2",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Gold_Million_Arthur",
+      "categoryValue": "확산성 밀리언아서",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Human_Fall_Flat",
+      "categoryValue": "휴먼: 폴 플랫",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Elden_Ring_Nightreign",
+      "categoryValue": "ELDEN RING 밤의 통치자",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "FIFA_ONLINE4",
+      "categoryValue": "FC온라인",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Grand_Theft_Auto_V",
+      "categoryValue": "Grand Theft Auto V",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Grand_Theft_Auto",
+      "categoryValue": "GTA",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Once_Human",
+      "categoryValue": "Once Human",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Lies_of_P",
+      "categoryValue": "P의 거짓",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Player_Unknowns_Battle_Grounds",
+      "categoryValue": "PUBG: 배틀그라운드",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "REPO",
+      "categoryValue": "R.E.P.O.",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "SD_Gundam_G_Generation_ETERNAL",
+      "categoryValue": "SD건담 지 제네레이션 이터널",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "trpg",
+      "categoryValue": "TRPG",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "V_Rising",
+      "categoryValue": "V 라이징",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "VRChat",
+      "categoryValue": "VR챗",
+      "categoryType": "GAME"
+    }
+  ]
+}
