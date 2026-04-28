@@ -49,5 +49,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   categoriesLoadUser: () => ipcRenderer.invoke("categories-load-user"),
 
   categoriesAddUser: (categoryId, categoryValue, categoryType) =>
-    ipcRenderer.invoke("categories-add-user", { categoryId, categoryValue, categoryType })
+    ipcRenderer.invoke("categories-add-user", { categoryId, categoryValue, categoryType }),
+
+  categoriesSearchOnline: (keyword, limit = 20) =>
+    ipcRenderer.invoke("categories-search-online", { keyword, limit })
 });

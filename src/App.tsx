@@ -25,6 +25,8 @@ declare global {
         Promise<{ ok: boolean; categories?: Array<{ categoryId: string; categoryValue: string; categoryType: string; addedAt?: string }>; path?: string }>;
       categoriesAddUser: (categoryId: string, categoryValue: string, categoryType?: string) =>
         Promise<{ ok: boolean; added?: boolean; categories?: Array<{ categoryId: string; categoryValue: string; categoryType: string; addedAt?: string }>; error?: string }>;
+      categoriesSearchOnline: (keyword: string, limit?: number) =>
+        Promise<{ ok: boolean; categories?: Array<{ categoryId: string; categoryValue: string; categoryType: string }>; keyword?: string; error?: string }>;
     };
   }
 }
@@ -320,6 +322,8 @@ function App() {
   const [openAssigneeMenuKey, setOpenAssigneeMenuKey] = useState<string | null>(null);
   const [userCategories, setUserCategories] = useState<ChzzkCategory[]>([]);
   const [categorySearchQuery, setCategorySearchQuery] = useState("");
+  const [onlineCategoryResults, setOnlineCategoryResults] = useState<ChzzkCategory[]>([]);
+  const [onlineSearching, setOnlineSearching] = useState(false);
 
   const seedCategories = useMemo<ChzzkCategory[]>(
     () => (chzzkCategoriesSeed.categories as ChzzkCategory[]) || [],
@@ -343,6 +347,37 @@ function App() {
       )
       .slice(0, 50);
   }, [allCategories, categorySearchQuery]);
+
+  /**
+   * 로컬(시드+사용자) 검색 결과가 비어있을 때만 비공식 search/lives로 온라인 폴백.
+   * 350ms debounce + 결과는 별도 영역으로 표기 (사용자가 클릭 시 영구 등록).
+   */
+  useEffect(() => {
+    const q = categorySearchQuery.trim();
+    if (!q) {
+      setOnlineCategoryResults([]);
+      setOnlineSearching(false);
+      return;
+    }
+    if (filteredCategories.length > 0) {
+      setOnlineCategoryResults([]);
+      setOnlineSearching(false);
+      return;
+    }
+    const api = window.electronAPI;
+    if (!api?.categoriesSearchOnline) return;
+    setOnlineSearching(true);
+    const handle = window.setTimeout(async () => {
+      const res = await api.categoriesSearchOnline(q, 20);
+      const localIds = new Set(allCategories.map((c) => c.categoryId));
+      const fresh = (res.ok && res.categories ? res.categories : []).filter(
+        (c) => !localIds.has(c.categoryId)
+      );
+      setOnlineCategoryResults(fresh);
+      setOnlineSearching(false);
+    }, 350);
+    return () => window.clearTimeout(handle);
+  }, [categorySearchQuery, filteredCategories.length, allCategories]);
   const [undoStack, setUndoStack] = useState<UndoSnapshot[]>([]);
   const [historyLogs, setHistoryLogs] = useState<string[]>([]);
   const [urlViewMode, setUrlViewMode] = useState<Record<string, boolean>>({});
@@ -1673,24 +1708,54 @@ function App() {
                   />
                   {categorySearchQuery.trim() && (
                     <div className="category-search-dropdown">
-                      {filteredCategories.length === 0 ? (
+                      {filteredCategories.length > 0 && (
+                        <>
+                          <p className="category-section-label">로컬 (시드 + 등록)</p>
+                          {filteredCategories.map((cat) => (
+                            <button
+                              key={cat.categoryId}
+                              type="button"
+                              className={`category-option category-${cat.categoryType.toLowerCase()}`}
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => {
+                                commitNewTag(row.id, column.key, cat.categoryValue);
+                                setCategorySearchQuery("");
+                              }}
+                            >
+                              <span className="category-tag-type">{cat.categoryType}</span>
+                              <span className="category-tag-name">{cat.categoryValue}</span>
+                            </button>
+                          ))}
+                        </>
+                      )}
+                      {filteredCategories.length === 0 && onlineSearching && (
+                        <p className="category-empty">치지직에서 검색 중…</p>
+                      )}
+                      {onlineCategoryResults.length > 0 && (
+                        <>
+                          <p className="category-section-label">치지직 라이브에서 발견 (선택 시 자동 등록)</p>
+                          {onlineCategoryResults.map((cat) => (
+                            <button
+                              key={`online-${cat.categoryId}`}
+                              type="button"
+                              className={`category-option category-online category-${cat.categoryType.toLowerCase()}`}
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={async () => {
+                                await addUserCategory(cat);
+                                commitNewTag(row.id, column.key, cat.categoryValue);
+                                setCategorySearchQuery("");
+                                setOnlineCategoryResults([]);
+                              }}
+                            >
+                              <span className="category-tag-type">{cat.categoryType}</span>
+                              <span className="category-tag-name">{cat.categoryValue}</span>
+                              <span className="category-online-badge">+ 등록</span>
+                            </button>
+                          ))}
+                        </>
+                      )}
+                      {filteredCategories.length === 0 && !onlineSearching && onlineCategoryResults.length === 0 && (
                         <p className="category-empty">검색 결과 없음 (Enter로 직접 추가)</p>
-                      ) : (
-                        filteredCategories.map((cat) => (
-                          <button
-                            key={cat.categoryId}
-                            type="button"
-                            className={`category-option category-${cat.categoryType.toLowerCase()}`}
-                            onMouseDown={(e) => e.preventDefault()}
-                            onClick={() => {
-                              commitNewTag(row.id, column.key, cat.categoryValue);
-                              setCategorySearchQuery("");
-                            }}
-                          >
-                            <span className="category-tag-type">{cat.categoryType}</span>
-                            <span className="category-tag-name">{cat.categoryValue}</span>
-                          </button>
-                        ))
                       )}
                     </div>
                   )}

@@ -1452,6 +1452,36 @@ tbody td.role-cell.role-editor::before {
   color: #9ca3af;
 }
 
+.category-section-label {
+  margin: 6px 6px 2px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #db2777;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.category-option.category-online {
+  background: #fef9fb;
+  border-style: dashed;
+  border-color: #fbcfe8;
+}
+
+.category-option.category-online:hover {
+  background: #fdf2f8;
+  border-style: solid;
+}
+
+.category-online-badge {
+  margin-left: auto;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #fce7f3;
+  color: #831843;
+}
+
 .category-option {
   display: flex;
   align-items: center;

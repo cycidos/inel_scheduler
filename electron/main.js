@@ -253,6 +253,44 @@ function createWindow() {
     return { ok: true, added: true, categories: list };
   });
 
+  /**
+   * 비공식 search/lives endpoint를 우회로 활용한 카테고리 온라인 검색.
+   * 시드/사용자 데이터에 없는 카테고리를 입력 중인 키워드로 실시간 추출.
+   * 활동 중 라이브가 한 건이라도 있는 카테고리만 잡힘.
+   */
+  ipcMain.handle("categories-search-online", async (_event, { keyword, limit = 20 }) => {
+    if (!keyword || !keyword.trim()) return { ok: true, categories: [] };
+    const trimmed = keyword.trim();
+    try {
+      const params = new URLSearchParams({ size: "30", offset: "0", keyword: trimmed });
+      const url = `https://api.chzzk.naver.com/service/v1/search/lives?${params}`;
+      const json = await new Promise((resolve, reject) => {
+        https.get(url, { headers: { "User-Agent": "InelScheduler/1.0", "Accept": "application/json" } }, (res) => {
+          let body = "";
+          res.on("data", (chunk) => { body += chunk; });
+          res.on("end", () => {
+            try { resolve(JSON.parse(body)); } catch (e) { reject(new Error("JSON parse error")); }
+          });
+        }).on("error", reject);
+      });
+      if (json?.code !== 200) return { ok: false, error: `API code ${json?.code}` };
+      const items = json?.content?.data || [];
+      const sink = new Map();
+      for (const item of items) {
+        const live = item.live || item;
+        const id = live?.liveCategory || live?.videoCategory;
+        const value = live?.liveCategoryValue || live?.videoCategoryValue;
+        const type = live?.categoryType;
+        if (!id || !value || !type) continue;
+        if (!sink.has(id)) sink.set(id, { categoryId: id, categoryValue: value, categoryType: type });
+        if (sink.size >= limit) break;
+      }
+      return { ok: true, categories: Array.from(sink.values()), keyword: trimmed };
+    } catch (err) {
+      return { ok: false, error: err.message || String(err) };
+    }
+  });
+
   ipcMain.handle("sheets-test-connection", async (_event, { sheetUrl }) => {
     if (!sheetsClient) {
       return { ok: false, error: "Service Account JSON이 등록되지 않았습니다." };

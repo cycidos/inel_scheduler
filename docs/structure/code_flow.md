@@ -71,9 +71,19 @@
 
 `src/App.tsx | tbody row-action-col | layout | 행 hover-actions(드래그 핸들 + 삭제)를 위한 별도 좌측 36px 컬럼. 첫 데이터 컬럼 폭에 영향 없음. 드래그 핸들 버튼만 draggable | -`
 
-`scripts/seed-chzzk-categories.mjs | seed crawler | script | 치지직 비공식 (1) /service/v1/lives POPULAR/LATEST 페이지네이션 + (2) /service/v1/search/lives 다양한 키워드 (한글 자모/영문/인기게임) 검색을 합쳐 unique 카테고리 시드 생성. ETC 카테고리는 명시 시드 우선 | -> https://api.chzzk.naver.com/service/v1/{lives,search/lives}`
+`scripts/seed-chzzk-categories.mjs | seed crawler | script | 치지직 비공식 (1) /service/v1/lives POPULAR/LATEST 페이지네이션 + (2) /service/v1/search/lives 키워드 105개 검색(한글 자모/영문/인기게임/스포츠/ETC/엔터) 합쳐 unique 카테고리 시드 생성. ETC 카테고리는 명시 시드 우선 | -> https://api.chzzk.naver.com/service/v1/{lives,search/lives}`
 
-`src/data/chzzk-categories.seed.json | seed | data | ~190개 카테고리 (categoryId/categoryValue/categoryType). 빌드 시 vite import로 renderer 번들에 포함. 활동 중 라이브가 있는 카테고리만 수집되며, 비활성 카테고리는 다시보기 자동등록으로 보강 | -`
+`src/data/chzzk-categories.seed.json | seed | data | ~207개 카테고리 (GAME 191 / ETC 11 / SPORTS 3 / ENTERTAINMENT 2). 빌드 시 vite import로 renderer 번들에 포함. 활동 중 라이브가 있는 카테고리만 수집되며, 비활성/희귀 카테고리는 온라인 폴백(categories-search-online) + 다시보기 자동등록으로 보강 | -`
+
+`electron/main.js | categories-search-online (IPC) | handler | 입력 키워드를 /service/v1/search/lives로 호출 → 라이브에서 unique 카테고리 추출(최대 limit개). CORS 회피 위해 main 프로세스에서 https GET | -> https://api.chzzk.naver.com/service/v1/search/lives`
+
+`electron/preload.js | categoriesSearchOnline | bridge | 렌더러에서 categories-search-online IPC 호출 | -`
+
+`src/App.tsx | onlineCategoryResults / onlineSearching / useEffect(debounce 350ms) | state+hook | 로컬(시드+사용자) 결과가 비었을 때만 비공식 search/lives 폴백. 응답 카테고리 중 로컬에 없는 항목만 표시 | -> categoriesSearchOnline`
+
+`src/App.tsx | renderCellEditor (videoCategory dropdown 폴백 영역) | UI | 로컬 결과 + "치지직 라이브에서 발견 (선택 시 자동 등록)" 영역 분리 표시. 클릭 시 addUserCategory + commitNewTag 동시 실행 → 다음 export부터 시트에 텍스트로 반영 | -> addUserCategory, commitNewTag`
+
+`src/styles.css | .category-section-label / .category-online / .category-online-badge | stylesheet | dropdown 섹션 라벨 + 온라인 폴백 항목용 점선 스타일 + "+ 등록" 칩 | -`
 
 `electron/main.js | categories-load-user (IPC) | handler | userData/chzzk-categories-user.json 로드. 사용자가 추가한 카테고리만 영구 저장 | -> fs`
 

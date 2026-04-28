@@ -1,18 +1,28 @@
 {
-  "generatedAt": "2026-04-28T16:12:39.314Z",
+  "generatedAt": "2026-04-28T16:34:40.714Z",
   "source": "service/v1/lives (POPULAR + LATEST) + service/v1/search/lives (다양한 키워드) + manual ETC seed",
   "note": "비공식 API 크롤링 결과. 활동 중 라이브가 있는 카테고리만 수집됨. 비활성 카테고리는 런타임 자동 등록(다시보기)으로 보강.",
   "crawlStats": {
     "totalLives": 14000,
-    "totalSearch": 2611,
-    "keywordsCount": 67
+    "totalSearch": 2534,
+    "keywordsCount": 105
   },
-  "count": 190,
+  "count": 207,
   "categories": [
+    {
+      "categoryId": "drama",
+      "categoryValue": "드라마",
+      "categoryType": "ENTERTAINMENT"
+    },
     {
       "categoryId": "animation",
       "categoryValue": "애니메이션",
       "categoryType": "ENTERTAINMENT"
+    },
+    {
+      "categoryId": "sci_tech",
+      "categoryValue": "과학/기술",
+      "categoryType": "ETC"
     },
     {
       "categoryType": "ETC",
@@ -20,9 +30,19 @@
       "categoryValue": "그림/아트"
     },
     {
+      "categoryId": "mukbang",
+      "categoryValue": "먹방/쿡방",
+      "categoryType": "ETC"
+    },
+    {
       "categoryType": "ETC",
       "categoryId": "study",
       "categoryValue": "스터디"
+    },
+    {
+      "categoryId": "news",
+      "categoryValue": "시사/경제",
+      "categoryType": "ETC"
     },
     {
       "categoryType": "ETC",
@@ -75,6 +95,11 @@
       "categoryType": "GAME"
     },
     {
+      "categoryId": "Ghost_Online",
+      "categoryValue": "귀혼",
+      "categoryType": "GAME"
+    },
+    {
       "categoryId": "Gray_Zone_Warfare",
       "categoryValue": "그레이 존 워페어",
       "categoryType": "GAME"
@@ -85,18 +110,18 @@
       "categoryType": "GAME"
     },
     {
-      "categoryId": "GUILTY_GEAR_STRIVE",
-      "categoryValue": "길티기어 -스트라이브-",
-      "categoryType": "GAME"
-    },
-    {
       "categoryId": "NieR_Replicant_ver122474487139",
       "categoryValue": "니어 레플리칸트 ver.1.22474487139...",
       "categoryType": "GAME"
     },
     {
-      "categoryId": "The_NOexistenceN_of_you_AND_me",
-      "categoryValue": "당신과 나의 존재불명",
+      "categoryId": "Dark_Souls_II",
+      "categoryValue": "다크 소울 2",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "DARK_SOULS_III",
+      "categoryValue": "다크 소울 3",
       "categoryType": "GAME"
     },
     {
@@ -110,8 +135,8 @@
       "categoryType": "GAME"
     },
     {
-      "categoryId": "The_Last_of_Us_Part1",
-      "categoryValue": "더 라스트 오브 어스 파트 1",
+      "categoryId": "The_Karters2_Turbo_Charged",
+      "categoryValue": "더 카터스 2: 터보 차지드",
       "categoryType": "GAME"
     },
     {
@@ -132,6 +157,11 @@
     {
       "categoryId": "Deadlock",
       "categoryValue": "데드락",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Death_Stranding2_On_the_Beach",
+      "categoryValue": "데스 스트랜딩 2: 온 더 비치",
       "categoryType": "GAME"
     },
     {
@@ -170,6 +200,11 @@
       "categoryType": "GAME"
     },
     {
+      "categoryId": "Diablo_II",
+      "categoryValue": "디아블로 2",
+      "categoryType": "GAME"
+    },
+    {
       "categoryId": "Diablo_IV",
       "categoryValue": "디아블로 4",
       "categoryType": "GAME"
@@ -200,8 +235,18 @@
       "categoryType": "GAME"
     },
     {
+      "categoryId": "Ragnarok_Online",
+      "categoryValue": "라그나로크 온라인",
+      "categoryType": "GAME"
+    },
+    {
       "categoryId": "rasalas",
       "categoryValue": "라살라스",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "LaTale",
+      "categoryValue": "라테일",
       "categoryType": "GAME"
     },
     {
@@ -235,23 +280,23 @@
       "categoryType": "GAME"
     },
     {
+      "categoryId": "Lineage_Classic",
+      "categoryValue": "리니지 클래식",
+      "categoryType": "GAME"
+    },
+    {
       "categoryId": "Lineage_M",
       "categoryValue": "리니지M",
       "categoryType": "GAME"
     },
     {
-      "categoryId": "Lethal_Company",
-      "categoryValue": "리썰 컴퍼니",
-      "categoryType": "GAME"
-    },
-    {
-      "categoryId": "Limbus_Company",
-      "categoryValue": "림버스 컴퍼니",
-      "categoryType": "GAME"
-    },
-    {
       "categoryId": "Rimworld",
       "categoryValue": "림월드",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "RingFit_Adventure",
+      "categoryValue": "링 피트 어드벤처",
       "categoryType": "GAME"
     },
     {
@@ -262,6 +307,11 @@
     {
       "categoryId": "mabinogimobile",
       "categoryValue": "마비노기 모바일",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Mount_&_Blade2_Bannerlord",
+      "categoryValue": "마운트 앤 블레이드 2: 배너로드",
       "categoryType": "GAME"
     },
     {
@@ -295,13 +345,13 @@
       "categoryType": "GAME"
     },
     {
-      "categoryId": "stardive",
-      "categoryValue": "몬길: STAR DIVE",
+      "categoryId": "Animal_Crossing_New_Horizons",
+      "categoryValue": "모여봐요 동물의 숲",
       "categoryType": "GAME"
     },
     {
-      "categoryId": "Monster_Hunter_Wilds",
-      "categoryValue": "몬스터 헌터 와일즈",
+      "categoryId": "stardive",
+      "categoryValue": "몬길: STAR DIVE",
       "categoryType": "GAME"
     },
     {
@@ -320,11 +370,6 @@
       "categoryType": "GAME"
     },
     {
-      "categoryId": "MIMESIS",
-      "categoryValue": "미메시스",
-      "categoryType": "GAME"
-    },
-    {
       "categoryId": "The_Kingdom_of_the_Wind",
       "categoryValue": "바람의나라",
       "categoryType": "GAME"
@@ -332,11 +377,6 @@
     {
       "categoryId": "BIOHAZARD7_resident_evil",
       "categoryValue": "바이오하자드 7 레지던트 이블",
-      "categoryType": "GAME"
-    },
-    {
-      "categoryId": "BIOHAZARD_requiem",
-      "categoryValue": "바이오하자드 레퀴엠",
       "categoryType": "GAME"
     },
     {
@@ -375,18 +415,13 @@
       "categoryType": "GAME"
     },
     {
-      "categoryId": "Brawl_Stars",
-      "categoryValue": "브롤스타즈",
-      "categoryType": "GAME"
-    },
-    {
       "categoryId": "BlueProtocol_StarResonance",
       "categoryValue": "블루 프로토콜: 스타 레조넌스",
       "categoryType": "GAME"
     },
     {
-      "categoryId": "BLEACH_Soul_Resonance",
-      "categoryValue": "블리치: 소울 레조넌스",
+      "categoryId": "Cyberpunk2077",
+      "categoryValue": "사이버펑크 2077",
       "categoryType": "GAME"
     },
     {
@@ -402,6 +437,11 @@
     {
       "categoryId": "Sannabi",
       "categoryValue": "산나비",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Satisfactory",
+      "categoryValue": "새티스팩토리",
       "categoryType": "GAME"
     },
     {
@@ -430,8 +470,18 @@
       "categoryType": "GAME"
     },
     {
+      "categoryId": "Girls_Frontline2_Exilium",
+      "categoryValue": "소녀전선2: 망명",
+      "categoryType": "GAME"
+    },
+    {
       "categoryId": "Watermelon_Game",
       "categoryValue": "수박게임",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "SUPER_MARIO_GALAXY",
+      "categoryValue": "슈퍼 마리오 Wii 갤럭시 어드벤처",
       "categoryType": "GAME"
     },
     {
@@ -475,11 +525,6 @@
       "categoryType": "GAME"
     },
     {
-      "categoryId": "STALCRAFT",
-      "categoryValue": "스탈크래프트 X",
-      "categoryType": "GAME"
-    },
-    {
       "categoryId": "Strinova",
       "categoryValue": "스트리노바",
       "categoryType": "GAME"
@@ -487,6 +532,11 @@
     {
       "categoryId": "Street_Fighter6",
       "categoryValue": "스트리트 파이터 6",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Splatoon3",
+      "categoryValue": "스플래툰 3",
       "categoryType": "GAME"
     },
     {
@@ -510,33 +560,23 @@
       "categoryType": "GAME"
     },
     {
-      "categoryId": "Asgard",
-      "categoryValue": "아스가르드",
-      "categoryType": "GAME"
-    },
-    {
       "categoryId": "AION2",
       "categoryValue": "아이온2",
       "categoryType": "GAME"
     },
     {
-      "categoryId": "Ensemble_Stars",
-      "categoryValue": "앙상블스타즈!!",
+      "categoryId": "ARC_Raiders",
+      "categoryValue": "아크 레이더스",
       "categoryType": "GAME"
     },
     {
-      "categoryId": "Legend_Of_Darkness",
-      "categoryValue": "어둠의전설",
+      "categoryId": "ARK_Survival_Evolved",
+      "categoryValue": "아크: 서바이벌 이볼브드",
       "categoryType": "GAME"
     },
     {
-      "categoryId": "Assassins_Creed4_Black_Flag",
-      "categoryValue": "어쌔신 크리드 4: 블랙 플래그",
-      "categoryType": "GAME"
-    },
-    {
-      "categoryId": "Alien_Isolation",
-      "categoryValue": "에이리언: 아이솔레이션",
+      "categoryId": "Age_of_Empires_II_Definitive_Edition",
+      "categoryValue": "에이지 오브 엠파이어 2: 디피니티브 에디션",
       "categoryType": "GAME"
     },
     {
@@ -555,6 +595,16 @@
       "categoryType": "GAME"
     },
     {
+      "categoryId": "Elsword",
+      "categoryValue": "엘소드",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "The_Bridge_Curse2_The_Extrication",
+      "categoryValue": "여귀교2: 자유로운 영혼의 길",
+      "categoryType": "GAME"
+    },
+    {
       "categoryId": "Teach_my_little_sister_how_to_drive",
       "categoryValue": "여동생 운전 가르치기",
       "categoryType": "GAME"
@@ -570,33 +620,18 @@
       "categoryType": "GAME"
     },
     {
-      "categoryId": "Overwatch_Legendary_Edition",
-      "categoryValue": "오버워치 레전더리 에디션",
-      "categoryType": "GAME"
-    },
-    {
       "categoryId": "Overcooked_All_You_Can_Eat",
       "categoryValue": "오버쿡! 올 유 캔 잇",
       "categoryType": "GAME"
     },
     {
-      "categoryId": "LYLZZ",
-      "categoryValue": "용윤입지전",
-      "categoryType": "GAME"
-    },
-    {
-      "categoryId": "Umamusume",
-      "categoryValue": "우마무스메 프리티 더비",
+      "categoryId": "One_Hand_Clapping",
+      "categoryValue": "원 핸드 클래핑",
       "categoryType": "GAME"
     },
     {
       "categoryId": "Genshin_Impact",
       "categoryValue": "원신",
-      "categoryType": "GAME"
-    },
-    {
-      "categoryId": "ONE_PIECE_Bounty_Rush",
-      "categoryValue": "원피스 바운티 러쉬",
       "categoryType": "GAME"
     },
     {
@@ -645,11 +680,6 @@
       "categoryType": "GAME"
     },
     {
-      "categoryId": "Yunyun_Syndrome_Rhythm_Psychosis",
-      "categoryValue": "융융 전파 신드롬",
-      "categoryType": "GAME"
-    },
-    {
       "categoryId": "Escape_from_Tarkov",
       "categoryValue": "이스케이프 프롬 타르코프",
       "categoryType": "GAME"
@@ -675,6 +705,11 @@
       "categoryType": "GAME"
     },
     {
+      "categoryId": "The_Seven_Deadly_Sins_Origin",
+      "categoryValue": "일곱 개의 대죄: Origin",
+      "categoryType": "GAME"
+    },
+    {
       "categoryId": "The_Imjin_War_The_Counterattack",
       "categoryValue": "임진왜란:조선의 반격",
       "categoryType": "GAME"
@@ -682,11 +717,6 @@
     {
       "categoryId": "mahjong_soul",
       "categoryValue": "작혼: 리치 마작",
-      "categoryType": "GAME"
-    },
-    {
-      "categoryId": "The_Scourge",
-      "categoryValue": "재앙",
       "categoryType": "GAME"
     },
     {
@@ -700,8 +730,23 @@
       "categoryType": "GAME"
     },
     {
+      "categoryId": "Identity_V",
+      "categoryValue": "제5인격",
+      "categoryType": "GAME"
+    },
+    {
       "categoryId": "various_games",
       "categoryValue": "종합 게임",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Geometry_Dash",
+      "categoryValue": "지오메트리 대시",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Great_Merchant",
+      "categoryValue": "천하제일상거상",
       "categoryType": "GAME"
     },
     {
@@ -725,13 +770,28 @@
       "categoryType": "GAME"
     },
     {
-      "categoryId": "Company_of_Heroes3",
-      "categoryValue": "컴퍼니 오브 히어로즈 3",
+      "categoryId": "Chaos_Zero_Nightmare",
+      "categoryValue": "카오스 제로 나이트메어",
       "categoryType": "GAME"
     },
     {
-      "categoryId": "Kenshi",
-      "categoryValue": "켄시",
+      "categoryId": "Counter_Strike_Global_Offensive",
+      "categoryValue": "카운터 스트라이크 2",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "kartrider_rush_plus",
+      "categoryValue": "카트라이더 러쉬플러스",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "CAPTURED2",
+      "categoryValue": "캡처드 2",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Company_of_Heroes3",
+      "categoryValue": "컴퍼니 오브 히어로즈 3",
       "categoryType": "GAME"
     },
     {
@@ -740,8 +800,18 @@
       "categoryType": "GAME"
     },
     {
+      "categoryId": "CLOSERS",
+      "categoryValue": "클로저스",
+      "categoryType": "GAME"
+    },
+    {
       "categoryId": "Tales_Runner",
       "categoryValue": "테일즈런너",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "The_Texas_Chain_Saw_Massacre",
+      "categoryValue": "텍사스 전기톱 학살",
       "categoryType": "GAME"
     },
     {
@@ -757,6 +827,11 @@
     {
       "categoryId": "Trickcal",
       "categoryValue": "트릭컬 리바이브",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Team_Fortress2",
+      "categoryValue": "팀 포트리스 2",
       "categoryType": "GAME"
     },
     {
@@ -780,6 +855,11 @@
       "categoryType": "GAME"
     },
     {
+      "categoryId": "Path_of_Exile",
+      "categoryValue": "패스 오브 엑자일",
+      "categoryType": "GAME"
+    },
+    {
       "categoryId": "Palworld",
       "categoryValue": "팰월드",
       "categoryType": "GAME"
@@ -800,6 +880,11 @@
       "categoryType": "GAME"
     },
     {
+      "categoryId": "Pocket_Rogues",
+      "categoryValue": "포켓로그",
+      "categoryType": "GAME"
+    },
+    {
       "categoryId": "Pokemon_LEGENDS_ZA",
       "categoryValue": "포켓몬 레전드 Z-A",
       "categoryType": "GAME"
@@ -817,6 +902,11 @@
     {
       "categoryId": "Pokemon_Pokopia",
       "categoryValue": "포켓몬 포코피아",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "Pokemon_Lets_Go_Eevee",
+      "categoryValue": "포켓몬스터 레츠고! 이브이",
       "categoryType": "GAME"
     },
     {
@@ -845,23 +935,8 @@
       "categoryType": "GAME"
     },
     {
-      "categoryId": "Pokemon_Heart_Gold",
-      "categoryValue": "포켓몬스터 하트골드",
-      "categoryType": "GAME"
-    },
-    {
-      "categoryId": "Funi_Raccoon_Game",
-      "categoryValue": "푸니 라쿤 게임",
-      "categoryType": "GAME"
-    },
-    {
       "categoryId": "PRAGMATA",
       "categoryValue": "프래그마타",
-      "categoryType": "GAME"
-    },
-    {
-      "categoryId": "HADES2",
-      "categoryValue": "하데스 2",
       "categoryType": "GAME"
     },
     {
@@ -870,13 +945,8 @@
       "categoryType": "GAME"
     },
     {
-      "categoryId": "Hollow_Knight",
-      "categoryValue": "할로우 나이트",
-      "categoryType": "GAME"
-    },
-    {
-      "categoryId": "Hollow_Knight_Silksong",
-      "categoryValue": "할로우 나이트: 실크송",
+      "categoryId": "Hearts_of_Iron_IV",
+      "categoryValue": "하츠 오브 아이언 4",
       "categoryType": "GAME"
     },
     {
@@ -895,8 +965,13 @@
       "categoryType": "GAME"
     },
     {
-      "categoryId": "Human_Fall_Flat",
-      "categoryValue": "휴먼: 폴 플랫",
+      "categoryId": "Hero_Siege",
+      "categoryValue": "히어로 시즈",
+      "categoryType": "GAME"
+    },
+    {
+      "categoryId": "DNF_Duel",
+      "categoryValue": "DNF 듀얼",
       "categoryType": "GAME"
     },
     {
@@ -912,11 +987,6 @@
     {
       "categoryId": "Grand_Theft_Auto_V",
       "categoryValue": "Grand Theft Auto V",
-      "categoryType": "GAME"
-    },
-    {
-      "categoryId": "Grand_Theft_Auto",
-      "categoryValue": "GTA",
       "categoryType": "GAME"
     },
     {
@@ -958,6 +1028,21 @@
       "categoryId": "VRChat",
       "categoryValue": "VR챗",
       "categoryType": "GAME"
+    },
+    {
+      "categoryId": "sports",
+      "categoryValue": "스포츠",
+      "categoryType": "SPORTS"
+    },
+    {
+      "categoryId": "baseball",
+      "categoryValue": "야구",
+      "categoryType": "SPORTS"
+    },
+    {
+      "categoryId": "soccer",
+      "categoryValue": "축구",
+      "categoryType": "SPORTS"
     }
   ]
 }
