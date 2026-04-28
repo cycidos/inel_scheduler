@@ -6,3 +6,4 @@
 # - imported_at: YYYY-MM-DD
 # - note: 참고 목적
 
+https://ai.studio/apps/93d59069-1880-46a1-b59e-16f7028f649d

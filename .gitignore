@@ -4,7 +4,7 @@ reference/
 external/
 vendor/
 
-# Python env / cache / build artifacts
+# Python env / cache (no Python source here yet, but rule allowed)
 .venv/
 venv/
 env/
@@ -14,8 +14,29 @@ __pycache__/
 *.pyd
 *.egg-info/
 pip-wheel-metadata/
+
+# Node/Electron build artifacts
+node_modules/
 dist/
-build/
+dist-electron/
+release/
+*.log
+
+# build/ is for electron-builder resources (icon.png 등) → 추적함
+# 만약 build 산출물 디렉토리는 따로 dist-electron / release 사용
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# User data files
+chzzk-categories-user.json
+
+# Local environment files
+.env
+.env.*
 
 # Local environment files
 .env
