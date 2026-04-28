@@ -85,6 +85,8 @@
 
 `src/styles.css | .category-section-label / .category-online / .category-online-badge | stylesheet | dropdown 섹션 라벨 + 온라인 폴백 항목용 점선 스타일 + "+ 등록" 칩 | -`
 
+`src/styles.css | .category-input-spinner / .category-loading / .category-loading-spinner / .category-section-spinner | stylesheet | 폴백 검색 중 시각 표시. input 우측 12px 작은 스피너 + dropdown 안 18px 큰 스피너+안내 박스 + 결과 영역 라벨 우측 9px 스피너. category-spin keyframe 공유 | -`
+
 `electron/main.js | categories-load-user (IPC) | handler | userData/chzzk-categories-user.json 로드. 사용자가 추가한 카테고리만 영구 저장 | -> fs`
 
 `electron/main.js | categories-add-user (IPC) | handler | 새 카테고리를 user JSON에 추가 (중복 방지). 다시보기 자동감지에서 호출 예정 | -> fs`

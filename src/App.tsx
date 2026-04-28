@@ -1687,25 +1687,30 @@ function App() {
             {isNewTagHere ? (
               isCategoryColumn ? (
                 <div className="category-search-wrap">
-                  <input
-                    className="tag-inline-input"
-                    autoFocus
-                    placeholder="카테고리 검색 (직접 입력 후 Enter도 가능)"
-                    value={categorySearchQuery}
-                    onChange={(e) => setCategorySearchQuery(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        const q = categorySearchQuery.trim();
-                        if (q) {
-                          commitNewTag(row.id, column.key, q);
+                  <div className="category-input-wrap">
+                    <input
+                      className="tag-inline-input category-search-input"
+                      autoFocus
+                      placeholder="카테고리 검색 (직접 입력 후 Enter도 가능)"
+                      value={categorySearchQuery}
+                      onChange={(e) => setCategorySearchQuery(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          const q = categorySearchQuery.trim();
+                          if (q) {
+                            commitNewTag(row.id, column.key, q);
+                            setCategorySearchQuery("");
+                          }
+                        } else if (e.key === "Escape") {
+                          setNewTagCell(null);
                           setCategorySearchQuery("");
                         }
-                      } else if (e.key === "Escape") {
-                        setNewTagCell(null);
-                        setCategorySearchQuery("");
-                      }
-                    }}
-                  />
+                      }}
+                    />
+                    {onlineSearching && (
+                      <span className="category-input-spinner" aria-label="검색 중" title="치지직 검색 중" />
+                    )}
+                  </div>
                   {categorySearchQuery.trim() && (
                     <div className="category-search-dropdown">
                       {filteredCategories.length > 0 && (
@@ -1729,11 +1734,20 @@ function App() {
                         </>
                       )}
                       {filteredCategories.length === 0 && onlineSearching && (
-                        <p className="category-empty">치지직에서 검색 중…</p>
+                        <div className="category-loading" role="status" aria-live="polite">
+                          <span className="category-loading-spinner" />
+                          <div className="category-loading-text">
+                            <strong>치지직에서 검색 중…</strong>
+                            <span>활동 중인 라이브가 있는 카테고리만 찾을 수 있어요.</span>
+                          </div>
+                        </div>
                       )}
                       {onlineCategoryResults.length > 0 && (
                         <>
-                          <p className="category-section-label">치지직 라이브에서 발견 (선택 시 자동 등록)</p>
+                          <p className="category-section-label">
+                            치지직 라이브에서 발견 (선택 시 자동 등록)
+                            {onlineSearching && <span className="category-section-spinner" />}
+                          </p>
                           {onlineCategoryResults.map((cat) => (
                             <button
                               key={`online-${cat.categoryId}`}
