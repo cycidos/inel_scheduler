@@ -435,7 +435,7 @@ function App() {
   const [chzzkUptime, setChzzkUptime] = useState("");
   const [pollingInterval, setPollingInterval] = useState(3000);
   const [timelineLog, setTimelineLog] = useState<string[]>([]);
-  const [showDebugPanel, setShowDebugPanel] = useState(true);
+  const [showDebugPanel, setShowDebugPanel] = useState(false);
 
   const debugLogsRef = useRef<string[]>([]);
   const [debugLogsVersion, setDebugLogsVersion] = useState(0);
