@@ -2181,6 +2181,51 @@ tbody td.role-cell.role-editor::before {
   margin-bottom: 6px;
 }
 
+.undo-config {
+  margin-top: 12px;
+  border-top: 1px solid #fce7f3;
+  padding-top: 10px;
+}
+
+.undo-config p {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #831843;
+}
+
+.undo-size-row {
+  display: flex !important;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0 8px !important;
+  color: #6b7280 !important;
+}
+
+.undo-size-row span {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: #831843;
+  min-width: 110px;
+}
+
+.undo-size-row input[type="range"] {
+  flex: 1;
+  accent-color: #db2777;
+  margin: 0 !important;
+  height: auto !important;
+  border: none !important;
+  padding: 0 !important;
+}
+
+.undo-hint {
+  margin: 6px 0 0;
+  font-size: 11px;
+  color: #9ca3af;
+  line-height: 1.5;
+}
+
 .history-box {
   margin-top: 12px;
   border-top: 1px solid #fce7f3;

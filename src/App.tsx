@@ -406,6 +406,10 @@ function App() {
     return () => window.clearTimeout(handle);
   }, [categorySearchQuery, filteredCategories.length, allCategories]);
   const [undoStack, setUndoStack] = useState<UndoSnapshot[]>([]);
+  const [redoStack, setRedoStack] = useState<UndoSnapshot[]>([]);
+  const [maxUndoSize, setMaxUndoSize] = useState(10);
+  /** 같은 (cellKey) 연속 편집은 한 번의 history entry로 묶기 위한 ref */
+  const lastEditCellRef = useRef<string | null>(null);
   const [historyLogs, setHistoryLogs] = useState<string[]>([]);
   const [urlViewMode, setUrlViewMode] = useState<Record<string, boolean>>({});
   const [typeMenuColumnKey, setTypeMenuColumnKey] = useState<string | null>(null);
@@ -482,9 +486,25 @@ function App() {
   const hasPrevMonth = monthIndex > 0;
   const hasNextMonth = monthIndex >= 0 && monthIndex < availableMonthKeys.length - 1;
 
-  const pushHistory = (reason: string) => {
+  /**
+   * 새 변경 직전의 상태(appData)를 스택에 push.
+   * cellGroupKey가 직전과 동일하면 (같은 셀 연속 편집) 새 항목을 만들지 않고
+   * 기존 마지막 항목을 그대로 두어 셀 단위로 묶음. 다른 셀로 이동하거나 구조 변경이면 새 항목 push.
+   * 새 변경이 들어오면 redoStack은 비워진다 (분기 상실).
+   */
+  const pushHistory = (reason: string, cellGroupKey: string | null = null) => {
+    if (cellGroupKey && cellGroupKey === lastEditCellRef.current) {
+      lastEditCellRef.current = cellGroupKey;
+      return;
+    }
+    lastEditCellRef.current = cellGroupKey;
     const now = new Date().toLocaleString("ko-KR");
-    setUndoStack((prev) => [...prev, { state: cloneState(appData), reason, at: now }]);
+    setUndoStack((prev) => {
+      const next = [...prev, { state: cloneState(appData), reason, at: now }];
+      const overflow = next.length - maxUndoSize;
+      return overflow > 0 ? next.slice(overflow) : next;
+    });
+    setRedoStack([]);
     setHistoryLogs((prev) => [`${now} - ${reason}`, ...prev].slice(0, 20));
   };
 
@@ -515,6 +535,8 @@ function App() {
   };
 
   const updateCell = (rowId: string, columnKey: string, value: string, role: EditorRole | null = null) => {
+    const cellGroupKey = `${activeTab}|${rowId}|${columnKey}|${role ?? "shared"}`;
+    pushHistory(`셀 수정 (${columnKey})`, cellGroupKey);
     setAppData((prev) => {
       const nextRows = prev.rowsByTab[activeTab].map((row) => {
         if (row.id !== rowId) return row;
@@ -635,13 +657,62 @@ function App() {
     if (target) dlog(`${ROLE_LABEL[target.role]} 삭제: ${target.name}`);
   };
 
+  /** maxUndoSize 줄이면 기존 스택도 즉시 잘라냄. */
+  useEffect(() => {
+    setUndoStack((prev) => (prev.length > maxUndoSize ? prev.slice(prev.length - maxUndoSize) : prev));
+    setRedoStack((prev) => (prev.length > maxUndoSize ? prev.slice(prev.length - maxUndoSize) : prev));
+  }, [maxUndoSize]);
+
+  /**
+   * Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y 단축키.
+   * 입력 컴포넌트(input/textarea/contenteditable)에서는 OS 기본 동작이 우선하도록 위임.
+   * 그래야 셀 편집 중 한 글자 단위 OS undo가 살아있고, 셀 외부 영역에서는 앱 단위 undo가 동작한다.
+   */
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      const target = e.target as HTMLElement | null;
+      if (target) {
+        const tag = target.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || target.isContentEditable) return;
+      }
+      const lower = e.key.toLowerCase();
+      if (lower === "z" && !e.shiftKey) {
+        e.preventDefault();
+        undoLast();
+      } else if ((lower === "z" && e.shiftKey) || lower === "y") {
+        e.preventDefault();
+        redoLast();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  });
+
   const undoLast = () => {
     if (undoStack.length === 0) return;
     const snapshot = undoStack[undoStack.length - 1];
+    const now = new Date().toLocaleString("ko-KR");
+    setRedoStack((prev) => [...prev, { state: cloneState(appData), reason: snapshot.reason, at: now }]);
     setAppData(snapshot.state);
     setUndoStack((prev) => prev.slice(0, -1));
-    const now = new Date().toLocaleString("ko-KR");
+    lastEditCellRef.current = null;
     setHistoryLogs((prev) => [`${now} - 되살리기: ${snapshot.reason}`, ...prev].slice(0, 20));
+  };
+
+  const redoLast = () => {
+    if (redoStack.length === 0) return;
+    const snapshot = redoStack[redoStack.length - 1];
+    const now = new Date().toLocaleString("ko-KR");
+    setUndoStack((prev) => {
+      const next = [...prev, { state: cloneState(appData), reason: snapshot.reason, at: now }];
+      const overflow = next.length - maxUndoSize;
+      return overflow > 0 ? next.slice(overflow) : next;
+    });
+    setAppData(snapshot.state);
+    setRedoStack((prev) => prev.slice(0, -1));
+    lastEditCellRef.current = null;
+    setHistoryLogs((prev) => [`${now} - 다시실행: ${snapshot.reason}`, ...prev].slice(0, 20));
   };
 
   const toggleUrlViewMode = (cellKey: string, nextMode: boolean) => {
@@ -1011,7 +1082,8 @@ function App() {
         pollingInterval,
         statusOptions,
         showDebugPanel,
-        staffList
+        staffList,
+        maxUndoSize
       };
       localStorage.setItem("inel.settings.v1", JSON.stringify(data));
       setSheetsStatus("설정 저장 완료");
@@ -1053,6 +1125,9 @@ function App() {
       if (Array.isArray(data.statusOptions)) setStatusOptions(data.statusOptions);
       if (typeof data.showDebugPanel === "boolean") setShowDebugPanel(data.showDebugPanel);
       if (Array.isArray(data.staffList)) setStaffList(data.staffList);
+      if (typeof data.maxUndoSize === "number") {
+        setMaxUndoSize(Math.min(50, Math.max(5, data.maxUndoSize)));
+      }
     } catch {
       // ignore
     }
@@ -1958,9 +2033,21 @@ function App() {
             </div>
             <button type="button" onClick={handleImport}>구글시트 다운로드</button>
             <button type="button" onClick={handleExport}>구글시트 업로드</button>
-            <button type="button" onClick={addColumn}>열 추가</button>
-            <button type="button" onClick={undoLast} disabled={undoStack.length === 0}>
+            <button
+              type="button"
+              onClick={undoLast}
+              disabled={undoStack.length === 0}
+              title="되살리기 (Ctrl+Z)"
+            >
               되살리기
+            </button>
+            <button
+              type="button"
+              onClick={redoLast}
+              disabled={redoStack.length === 0}
+              title="다시실행 (Ctrl+Shift+Z / Ctrl+Y)"
+            >
+              다시실행
             </button>
           </div>
           <div className="action-group action-group-system" data-label="시스템">
@@ -2018,7 +2105,6 @@ function App() {
             </span>
           </span>
         )}
-        <span>치지직 타임라인 수집: {isDetecting ? "On" : "Idle"}</span>
       </section>
 
       <section className="month-nav">
@@ -2411,8 +2497,25 @@ function App() {
                   </p>
                 </div>
 
+                <div className="undo-config">
+                  <p>되살리기 / 다시실행 설정</p>
+                  <label className="undo-size-row">
+                    <span>스택 크기 ({maxUndoSize}단계)</span>
+                    <input
+                      type="range"
+                      min={5}
+                      max={50}
+                      step={1}
+                      value={maxUndoSize}
+                      onChange={(e) => setMaxUndoSize(Number(e.target.value))}
+                    />
+                  </label>
+                  <p className="undo-hint">
+                    Ctrl+Z 되살리기 / Ctrl+Shift+Z (또는 Ctrl+Y) 다시실행. 같은 셀의 연속 입력은 한 단계로 묶입니다.
+                  </p>
+                </div>
                 <div className="history-box">
-                  <p>행/열 변경 히스토리</p>
+                  <p>변경 히스토리</p>
                   <ul>
                     {historyLogs.length === 0 ? <li>기록 없음</li> : historyLogs.map((log) => <li key={log}>{log}</li>)}
                   </ul>

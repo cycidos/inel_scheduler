@@ -159,7 +159,19 @@
 
 `src/App.tsx | openSheetsSetupHelp | function | 연결 탭의 [설정 방법 자세히 보기] 버튼 클릭 시 IPC 호출 | -> electronAPI.helpOpenSheetsSetup`
 
-`src/App.tsx | settingsTab + settings-tabs UI | state+JSX | 설정 패널을 [시트 설정] / [구글 시트 연결] 두 탭으로 분리. 시트 탭=치지직 링크/작업상태/담당자 등록/방송 감지/히스토리, 연결 탭=상단 도움말 배너 + Sheets URL/Service Account JSON/연결 테스트 | -`
+`src/App.tsx | settingsTab + settings-tabs UI | state+JSX | 설정 패널을 [시트 설정] / [구글 시트 연결] 두 탭으로 분리. 시트 탭=치지직 링크/작업상태/담당자 등록/방송 감지/되살리기 설정/히스토리, 연결 탭=상단 도움말 배너 + Sheets URL/Service Account JSON/연결 테스트 | -`
+
+`src/App.tsx | undoStack / redoStack / maxUndoSize / lastEditCellRef | state+ref | undo/redo 양방향 스택. 기본 10단계, 설정에서 5~50단계 슬라이더 조정. 같은 (tab,row,col,role) 셀 연속 편집은 lastEditCellRef로 묶어 1단계로 처리 | -`
+
+`src/App.tsx | pushHistory(reason, cellGroupKey?) | function | 셀 단위 묶음 push. cellGroupKey가 직전과 같으면 추가 push 안 함, 다르면 새 entry 생성 + redoStack 비움 + maxUndoSize 초과분 trim | -> cloneState`
+
+`src/App.tsx | undoLast / redoLast | function | undoStack pop → 현재 상태를 redoStack에 push → 적용. redoLast는 그 반대. lastEditCellRef는 null로 리셋 | -> cloneState`
+
+`src/App.tsx | useEffect (Ctrl+Z/Ctrl+Shift+Z/Ctrl+Y 단축키) | hook | document keydown 리스너. INPUT/TEXTAREA/contenteditable 안에서는 OS 기본 동작 위임 (셀 편집 중 한 글자 단위 OS undo 보존), 그 외에는 앱 단위 undo/redo 호출 | -> undoLast/redoLast`
+
+`src/App.tsx | useEffect (maxUndoSize 변경) | hook | 슬라이더로 줄였을 때 기존 undo/redo 스택을 새 한도로 즉시 trim | -`
+
+`src/App.tsx | updateCell pushHistory 통합 | function | 모든 셀 편집(updateCell)이 cellGroupKey와 함께 pushHistory 호출. 같은 셀 연속 입력은 단일 entry, 다른 셀로 이동하면 새 entry | -> pushHistory`
 
 `src/styles.css | .settings-header / .settings-close-btn / .settings-tabs / .settings-tab / .connection-help-banner / .connection-help-btn | stylesheet | 설정 패널 헤더 + 우측 닫기 버튼 + 탭 스위치 + 연결 탭 상단 도움말 배너 (그라디언트 + 외부 링크 버튼) | -`
 
