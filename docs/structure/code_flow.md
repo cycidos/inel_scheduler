@@ -47,7 +47,15 @@
 
 `src/App.tsx | App | component | Work Scheduler 기본 탭(Shorts/Longform/Full Replay) 및 테이블 렌더링 | -> src/styles.css`
 
-`src/App.tsx | tableSchema | const | 탭별 기본 컬럼 정의. shorts/longform 1차 컬럼: 업로드/방송날짜/영상제목/영상카테고리(shared) + 담당자/작업시작일/납품일/납품공유(per-role). fullReplay: 모두 shared. | -`
+`src/App.tsx | tableSchema | const | 탭별 기본 컬럼 정의. shorts/longform: 업로드/방송날짜/영상제목/영상카테고리(shared) + 담당자/작업시작일/납품일/편집유형/자막/원본공유/납품공유(per-role). fullReplay: 모두 shared. 편집유형/자막은 type=preset (썸네일러 기본 "-", 영상편집자 기본 "미설정") | -`
+
+`src/App.tsx | ColumnType "preset" / ColumnDef.presetOptions / presetDefaults | type field | 옵션 dropdown + 직접 입력 가능한 단일값 셀. role별 초기값 지정 가능 (thumbnailer/editor/default) | -`
+
+`src/App.tsx | EDIT_TYPE_OPTIONS / SUBTITLE_OPTIONS | const | 편집유형(미설정/하이라이트편집/컷편집/무편집/풀편집/-), 자막(미설정/기본자막/자막X/효과자막포함/-) 후보 | -`
+
+`src/App.tsx | renderCellEditor (preset 분기) | function | preset pill 버튼 클릭 시 dropdown(옵션 + "직접 입력" Enter). 값 종류별 색 (preset-dash/unset/filled). openPresetMenuKey/presetCustomInput state로 관리, 외부 클릭 닫기 적용 | -> updateCell`
+
+`src/App.tsx | renderTaskRow (헬퍼) + 그룹 분리 렌더 | function+JSX | shorts/longform일 때 filteredData를 upload="완" 기준으로 todo/done 분리. 두 개의 group-section tbody (할 일 / 완료됨). 빈 그룹은 안내 메시지 한 줄. fullReplay는 단일 tbody | -> renderCellEditor`
 
 `src/App.tsx | ColumnDef.shared | type field | true=영상 공통(rowspan 2), false/undefined=역할별(per-role) | -`
 

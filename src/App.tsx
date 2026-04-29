@@ -57,7 +57,7 @@ type ChzzkTitleChange = {
 };
 
 type TabKey = "shorts" | "longform" | "fullReplay";
-type ColumnType = "text" | "select" | "status" | "date" | "url";
+type ColumnType = "text" | "select" | "status" | "date" | "url" | "preset";
 
 type ColumnDef = {
   key: string;
@@ -65,6 +65,10 @@ type ColumnDef = {
   type: ColumnType;
   width?: number;
   shared?: boolean;
+  /** type === "preset" 일 때 사용. dropdown 후보 옵션 (직접 입력도 허용) */
+  presetOptions?: string[];
+  /** type === "preset" 일 때 사용. 역할별 초기값 */
+  presetDefaults?: { thumbnailer?: string; editor?: string; default?: string };
 };
 
 type RowItem = {
@@ -110,6 +114,9 @@ const tabs: Array<{ key: TabKey; label: string }> = [
   { key: "fullReplay", label: "다시보기" }
 ];
 
+const EDIT_TYPE_OPTIONS = ["미설정", "하이라이트 편집", "컷편집", "무편집", "풀편집", "-"];
+const SUBTITLE_OPTIONS = ["미설정", "기본 자막", "자막X", "효과자막 포함", "-"];
+
 const tableSchema: Record<TabKey, ColumnDef[]> = {
   shorts: [
     { key: "upload", label: "업로드", type: "status", width: 90, shared: true },
@@ -119,6 +126,22 @@ const tableSchema: Record<TabKey, ColumnDef[]> = {
     { key: "assignee", label: "담당자", type: "text", width: 160 },
     { key: "editStartDate", label: "작업시작일", type: "date", width: 160 },
     { key: "deliveryDate", label: "납품일", type: "date", width: 150 },
+    {
+      key: "editType",
+      label: "편집 유형",
+      type: "preset",
+      width: 150,
+      presetOptions: EDIT_TYPE_OPTIONS,
+      presetDefaults: { thumbnailer: "-", editor: "미설정" }
+    },
+    {
+      key: "subtitle",
+      label: "자막",
+      type: "preset",
+      width: 140,
+      presetOptions: SUBTITLE_OPTIONS,
+      presetDefaults: { thumbnailer: "-", editor: "미설정" }
+    },
     { key: "sourceShare", label: "원본 공유", type: "url", width: 200 },
     { key: "deliveryShare", label: "납품 공유", type: "url", width: 200 }
   ],
@@ -130,6 +153,22 @@ const tableSchema: Record<TabKey, ColumnDef[]> = {
     { key: "assignee", label: "담당자", type: "text", width: 160 },
     { key: "editStartDate", label: "작업시작일", type: "date", width: 160 },
     { key: "deliveryDate", label: "납품일", type: "date", width: 150 },
+    {
+      key: "editType",
+      label: "편집 유형",
+      type: "preset",
+      width: 150,
+      presetOptions: EDIT_TYPE_OPTIONS,
+      presetDefaults: { thumbnailer: "-", editor: "미설정" }
+    },
+    {
+      key: "subtitle",
+      label: "자막",
+      type: "preset",
+      width: 140,
+      presetOptions: SUBTITLE_OPTIONS,
+      presetDefaults: { thumbnailer: "-", editor: "미설정" }
+    },
     { key: "sourceShare", label: "원본 공유", type: "url", width: 200 },
     { key: "deliveryShare", label: "납품 공유", type: "url", width: 200 }
   ],
@@ -141,7 +180,7 @@ const tableSchema: Record<TabKey, ColumnDef[]> = {
   ]
 };
 
-const columnTypeOptions: ColumnType[] = ["text", "select", "status", "date", "url"];
+const columnTypeOptions: ColumnType[] = ["text", "select", "status", "date", "url", "preset"];
 const categoryOptions = ["게임", "노래음악", "토크"];
 
 const initialRows: Record<TabKey, RowItem[]> = {
@@ -158,6 +197,8 @@ const initialRows: Record<TabKey, RowItem[]> = {
         assignee: "",
         editStartDate: "2026-04-13",
         deliveryDate: "2026-04-15",
+        editType: "-",
+        subtitle: "-",
         sourceShare: "https://drive.example/source-1",
         deliveryShare: ""
       },
@@ -165,6 +206,8 @@ const initialRows: Record<TabKey, RowItem[]> = {
         assignee: "",
         editStartDate: "",
         deliveryDate: "",
+        editType: "미설정",
+        subtitle: "미설정",
         sourceShare: "",
         deliveryShare: ""
       }
@@ -183,6 +226,8 @@ const initialRows: Record<TabKey, RowItem[]> = {
         assignee: "",
         editStartDate: "",
         deliveryDate: "",
+        editType: "-",
+        subtitle: "-",
         sourceShare: "",
         deliveryShare: ""
       },
@@ -190,6 +235,8 @@ const initialRows: Record<TabKey, RowItem[]> = {
         assignee: "",
         editStartDate: "",
         deliveryDate: "2026-04-18",
+        editType: "풀편집",
+        subtitle: "효과자막 포함",
         sourceShare: "https://drive.example/source-2",
         deliveryShare: ""
       }
@@ -220,11 +267,12 @@ function createEmptyRow(columns: ColumnDef[], tab: TabKey): RowItem {
   const thumbnailer: Record<string, string> = {};
   const editor: Record<string, string> = {};
   columns.forEach((column) => {
+    const defaults = column.presetDefaults;
     if (column.shared) {
-      values[column.key] = "";
+      values[column.key] = defaults?.default ?? "";
     } else {
-      thumbnailer[column.key] = "";
-      editor[column.key] = "";
+      thumbnailer[column.key] = defaults?.thumbnailer ?? "";
+      editor[column.key] = defaults?.editor ?? "";
     }
   });
   const row: RowItem = {
@@ -388,6 +436,8 @@ function App() {
   const [dropTargetColumnKey, setDropTargetColumnKey] = useState<string | null>(null);
   const dragHistoryPushedRef = useRef(false);
   const [openStatusMenuKey, setOpenStatusMenuKey] = useState<string | null>(null);
+  const [openPresetMenuKey, setOpenPresetMenuKey] = useState<string | null>(null);
+  const [presetCustomInput, setPresetCustomInput] = useState("");
   const [resizingColumnKey, setResizingColumnKey] = useState<string | null>(null);
   const [resizeStartX, setResizeStartX] = useState(0);
   const [resizeStartWidth, setResizeStartWidth] = useState(180);
@@ -670,6 +720,15 @@ function App() {
           <svg {...commonProps}>
             <path d="M10 13A5 5 0 0 0 17 13L19 11A5 5 0 0 0 12 4L11 5" />
             <path d="M14 11A5 5 0 0 0 7 11L5 13A5 5 0 0 0 12 20L13 19" />
+          </svg>
+        );
+      case "preset":
+        return (
+          <svg {...commonProps}>
+            <rect x="4" y="5" width="16" height="14" rx="2" />
+            <path d="M8 10H16" />
+            <path d="M8 14H13" />
+            <path d="M16 16L18 18L21 14" />
           </svg>
         );
       default:
@@ -1428,11 +1487,20 @@ function App() {
           setOpenAssigneeMenuKey(null);
         }
       }
+
+      if (openPresetMenuKey) {
+        const inPresetDropdown = (target as HTMLElement)?.closest?.(".preset-dropdown");
+        const onPresetPill = (target as HTMLElement)?.closest?.(".preset-pill");
+        if (!inPresetDropdown && !onPresetPill) {
+          setOpenPresetMenuKey(null);
+          setPresetCustomInput("");
+        }
+      }
     };
 
     document.addEventListener("mousedown", handleMouseDown);
     return () => document.removeEventListener("mousedown", handleMouseDown);
-  }, [isSettingsOpen, openStatusMenuKey, typeMenuColumnKey, openAssigneeMenuKey]);
+  }, [isSettingsOpen, openStatusMenuKey, typeMenuColumnKey, openAssigneeMenuKey, openPresetMenuKey]);
 
   const moveMonth = (direction: "prev" | "next") => {
     if (monthIndex < 0) return;
@@ -1634,6 +1702,77 @@ function App() {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    if (column.type === "preset") {
+      const options = column.presetOptions || [];
+      const fallback = column.presetDefaults?.[role ?? "default"] || "";
+      const display = value || fallback || "선택";
+      const isOpen = openPresetMenuKey === cellKey;
+      const isDash = display === "-";
+      const isUnset = display === "미설정";
+      const presetClass = `preset-pill ${isDash ? "preset-dash" : isUnset ? "preset-unset" : "preset-filled"}`;
+      return (
+        <div className="preset-cell-wrap" onClick={(e) => e.stopPropagation()}>
+          <button
+            type="button"
+            className={presetClass}
+            title={`${column.label} 변경`}
+            onClick={() => {
+              setOpenPresetMenuKey((prev) => (prev === cellKey ? null : cellKey));
+              setPresetCustomInput("");
+            }}
+          >
+            {display}
+          </button>
+          {isOpen && (
+            <div className="preset-dropdown">
+              {options.map((opt) => {
+                const isSelected = opt === value;
+                const optClass = `preset-option ${
+                  opt === "-" ? "preset-option-dash" : opt === "미설정" ? "preset-option-unset" : ""
+                } ${isSelected ? "preset-option-selected" : ""}`;
+                return (
+                  <button
+                    key={opt}
+                    type="button"
+                    className={optClass}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      updateCell(row.id, column.key, opt, cellRole);
+                      setOpenPresetMenuKey(null);
+                      setPresetCustomInput("");
+                    }}
+                  >
+                    {opt}
+                  </button>
+                );
+              })}
+              <div className="preset-divider" />
+              <input
+                className="preset-custom-input"
+                placeholder="직접 입력 (Enter)"
+                value={presetCustomInput}
+                onChange={(e) => setPresetCustomInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    const v = presetCustomInput.trim();
+                    if (v) {
+                      updateCell(row.id, column.key, v, cellRole);
+                      setOpenPresetMenuKey(null);
+                      setPresetCustomInput("");
+                    }
+                  } else if (e.key === "Escape") {
+                    setOpenPresetMenuKey(null);
+                    setPresetCustomInput("");
+                  }
+                }}
+                onClick={(e) => e.stopPropagation()}
+              />
             </div>
           )}
         </div>
@@ -2041,8 +2180,8 @@ function App() {
               })}
             </tr>
           </thead>
-          <tbody>
-            {filteredData.map((row) => {
+          {(() => {
+            const renderTaskRow = (row: RowItem) => {
               const isDropRow = dropTargetRowId === row.id && dragRowId && dragRowId !== row.id;
               const isDragRow = dragRowId === row.id;
               const isSelected = selectedRowByTab[activeTab] === row.id;
@@ -2128,8 +2267,44 @@ function App() {
                   </tr>
                 );
               });
-            })}
-          </tbody>
+            };
+
+            const isGroupTab = activeTab === "shorts" || activeTab === "longform";
+            if (!isGroupTab) {
+              return <tbody>{filteredData.map(renderTaskRow)}</tbody>;
+            }
+
+            const todoRows = filteredData.filter((r) => (r.values.upload || "") !== "완");
+            const doneRows = filteredData.filter((r) => (r.values.upload || "") === "완");
+            const totalCols = columns.length + 1;
+            const renderGroupHeader = (variant: "todo" | "done", label: string, count: number) => (
+              <tr className={`group-header group-header-${variant}`}>
+                <td colSpan={totalCols}>
+                  <span className="group-dot" />
+                  <span className="group-label">{label}</span>
+                  <span className="group-count">{count}</span>
+                </td>
+              </tr>
+            );
+            const emptyRow = (text: string) => (
+              <tr className="group-empty-row">
+                <td colSpan={totalCols} className="group-empty-cell">{text}</td>
+              </tr>
+            );
+
+            return (
+              <>
+                <tbody className="group-section group-section-todo">
+                  {renderGroupHeader("todo", "할 일", todoRows.length)}
+                  {todoRows.length === 0 ? emptyRow("할 일이 없습니다.") : todoRows.map(renderTaskRow)}
+                </tbody>
+                <tbody className="group-section group-section-done">
+                  {renderGroupHeader("done", "완료됨", doneRows.length)}
+                  {doneRows.length === 0 ? emptyRow("완료된 항목이 없습니다.") : doneRows.map(renderTaskRow)}
+                </tbody>
+              </>
+            );
+          })()}
           <tfoot>
             <tr>
               <td colSpan={columns.length + 1} className="add-row-footer-cell">
