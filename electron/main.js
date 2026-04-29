@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain, dialog } = require("electron");
+const { app, BrowserWindow, Menu, ipcMain, dialog, shell } = require("electron");
 const path = require("path");
 const https = require("https");
 const fs = require("fs");
@@ -397,6 +397,28 @@ function createWindow() {
   ipcMain.handle("chzzk-stop-polling", () => {
     stopPolling();
     return { ok: true };
+  });
+
+  /**
+   * Service Account 설정 가이드를 시스템 기본 브라우저로 열기.
+   * GIF 같은 풍부한 미디어를 앱 카드 안 좁은 영역이 아닌 큰 브라우저 창에서 보도록 함.
+   * dev/prod 환경에 따라 vite dev URL 또는 빌드된 정적 파일 경로를 사용.
+   */
+  ipcMain.handle("help-open-sheets-setup", async () => {
+    try {
+      const devUrl = process.env.VITE_DEV_SERVER_URL;
+      let target;
+      if (devUrl) {
+        target = `${devUrl.replace(/\/$/, "")}/help/google-sheets-setup.html`;
+      } else {
+        const filePath = path.join(__dirname, "..", "dist", "help", "google-sheets-setup.html");
+        target = `file://${filePath.replace(/\\/g, "/")}`;
+      }
+      await shell.openExternal(target);
+      return { ok: true, url: target };
+    } catch (err) {
+      return { ok: false, error: err.message || String(err) };
+    }
   });
 }
 

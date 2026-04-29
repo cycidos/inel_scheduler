@@ -149,7 +149,19 @@
 
 `src/App.tsx | testConnection | function | 시트 연결 테스트 (메타데이터 조회) | -> electronAPI.sheetsTestConnection`
 
-`src/App.tsx | HELP_STEPS | const | Service Account 설정 8단계 step UI 데이터 (제목/설명/GIF 경로) | -`
+`public/help/google-sheets-setup.html | static guide | static page | 8단계 Service Account 설정 가이드 정적 HTML. TOC + 단계 카드 + GIF + 외부링크. dev에선 vite가 public/ 그대로 서빙, 빌드 시 dist/help/로 복사 | -> public/help/gifs/*.gif`
+
+`public/help/gifs/.gitkeep | placeholder | data | 8단계 가이드용 GIF 보관 디렉터리 (01-create-project.gif ~ 08-connection-test.gif). 미등록 시 가이드 페이지가 자동 placeholder 표시 | -`
+
+`electron/main.js | help-open-sheets-setup (IPC) | handler | shell.openExternal로 시스템 기본 브라우저에 가이드 페이지 열기. dev=VITE_DEV_SERVER_URL, prod=file:// dist/help/google-sheets-setup.html | -> shell.openExternal`
+
+`electron/preload.js | helpOpenSheetsSetup | bridge | 렌더러 → main의 help-open-sheets-setup 호출 | -`
+
+`src/App.tsx | openSheetsSetupHelp | function | 연결 탭의 [설정 방법 자세히 보기] 버튼 클릭 시 IPC 호출 | -> electronAPI.helpOpenSheetsSetup`
+
+`src/App.tsx | settingsTab + settings-tabs UI | state+JSX | 설정 패널을 [시트 설정] / [구글 시트 연결] 두 탭으로 분리. 시트 탭=치지직 링크/작업상태/담당자 등록/방송 감지/히스토리, 연결 탭=상단 도움말 배너 + Sheets URL/Service Account JSON/연결 테스트 | -`
+
+`src/styles.css | .settings-header / .settings-close-btn / .settings-tabs / .settings-tab / .connection-help-banner / .connection-help-btn | stylesheet | 설정 패널 헤더 + 우측 닫기 버튼 + 탭 스위치 + 연결 탭 상단 도움말 배너 (그라디언트 + 외부 링크 버튼) | -`
 
 `src/App.tsx | useEffect (외부 클릭 닫기) | hook | 설정 패널/상태 드롭다운/타입 메뉴/담당자 메뉴를 바깥 클릭 시 닫음 | -`
 

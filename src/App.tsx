@@ -27,6 +27,7 @@ declare global {
         Promise<{ ok: boolean; added?: boolean; categories?: Array<{ categoryId: string; categoryValue: string; categoryType: string; addedAt?: string }>; error?: string }>;
       categoriesSearchOnline: (keyword: string, limit?: number) =>
         Promise<{ ok: boolean; categories?: Array<{ categoryId: string; categoryValue: string; categoryType: string }>; keyword?: string; error?: string }>;
+      helpOpenSheetsSetup: () => Promise<{ ok: boolean; url?: string; error?: string }>;
     };
   }
 }
@@ -336,10 +337,7 @@ function App() {
   const autoSyncDoneRef = useRef(false);
   const [clientEmail, setClientEmail] = useState("");
   const [isDraggingJson, setIsDraggingJson] = useState(false);
-  const [showHelpCard, setShowHelpCard] = useState(false);
-  const [helpCardPos, setHelpCardPos] = useState({ top: 0, left: 0 });
-  const [helpStep, setHelpStep] = useState(1);
-  const helpIconRef = useRef<HTMLSpanElement>(null);
+  const [settingsTab, setSettingsTab] = useState<"sheet" | "connection">("sheet");
   const settingsPanelRef = useRef<HTMLElement>(null);
   const settingsButtonRef = useRef<HTMLButtonElement>(null);
   const [chzzkLink, setChzzkLink] = useState("https://chzzk.naver.com/live/1482d68b3478d2962e9d000ed6a33167");
@@ -1164,56 +1162,19 @@ function App() {
     }
   };
 
-  const HELP_STEPS: Array<{ id: number; title: string; desc: React.ReactNode; gif: string }> = [
-    {
-      id: 1,
-      title: "프로젝트 생성",
-      desc: <><a href="https://console.cloud.google.com/" target="_blank" rel="noreferrer">Google Cloud Console</a>에 접속하여 로그인 후, 상단 메뉴에서 <strong>새 프로젝트</strong>를 만듭니다.</>,
-      gif: "/help/01-create-project.gif"
-    },
-    {
-      id: 2,
-      title: "Google Sheets API 사용 설정",
-      desc: <>좌측 메뉴 → <strong>API 및 서비스</strong> → <strong>라이브러리</strong>에서 <code>Google Sheets API</code>를 검색해 <strong>사용</strong>을 누릅니다.</>,
-      gif: "/help/02-enable-sheets-api.gif"
-    },
-    {
-      id: 3,
-      title: "서비스 계정 만들기",
-      desc: <><strong>사용자 인증 정보</strong> → <strong>+ 사용자 인증 정보 만들기</strong> → <strong>서비스 계정</strong>을 선택합니다. 이름을 입력하고 역할은 건너뛴 뒤 <strong>완료</strong>.</>,
-      gif: "/help/03-create-service-account.gif"
-    },
-    {
-      id: 4,
-      title: "JSON 키 다운로드",
-      desc: <>생성된 서비스 계정을 클릭 → <strong>키</strong> 탭 → <strong>키 추가</strong> → <strong>새 키 만들기</strong> → <strong>JSON</strong>을 선택해 다운로드합니다.</>,
-      gif: "/help/04-download-json-key.gif"
-    },
-    {
-      id: 5,
-      title: "JSON 파일 앱에 등록",
-      desc: <>다운로드 받은 <code>.json</code> 파일을 아래 <strong>드래그&드롭 영역</strong>에 끌어놓거나, <strong>파일 선택</strong>을 누릅니다.</>,
-      gif: "/help/05-register-json.gif"
-    },
-    {
-      id: 6,
-      title: "서비스 계정 이메일 복사",
-      desc: <>등록 완료 후 표시되는 <strong>이메일 복사</strong> 버튼을 클릭하면 클립보드에 복사됩니다.</>,
-      gif: "/help/06-copy-email.gif"
-    },
-    {
-      id: 7,
-      title: "Google Sheets에 권한 부여",
-      desc: <>대상 Google Sheets 문서를 열고 우측 상단 <strong>공유</strong>에 복사한 이메일을 붙여넣어 <strong>편집자</strong> 권한으로 추가합니다.</>,
-      gif: "/help/07-share-sheet.gif"
-    },
-    {
-      id: 8,
-      title: "연결 테스트",
-      desc: <><strong>연결 테스트</strong> 버튼을 눌러 시트가 정상적으로 보이는지 확인합니다. 성공하면 시트 이름과 탭 개수가 표시됩니다.</>,
-      gif: "/help/08-connection-test.gif"
+  const openSheetsSetupHelp = async () => {
+    const api = window.electronAPI;
+    if (!api?.helpOpenSheetsSetup) {
+      dlog("도움말 열기 기능 불가 (Electron 환경 아님)");
+      return;
     }
-  ];
+    const res = await api.helpOpenSheetsSetup();
+    if (res.ok) {
+      dlog(`도움말 열림: ${res.url}`);
+    } else {
+      dlog(`도움말 열기 실패: ${res.error}`);
+    }
+  };
 
   const TAB_LABELS: Record<TabKey, string> = {
     shorts: "숏폼",
@@ -1437,11 +1398,8 @@ function App() {
       if (isSettingsOpen) {
         const inPanel = settingsPanelRef.current?.contains(target);
         const onButton = settingsButtonRef.current?.contains(target);
-        const inHelpCard = (target as HTMLElement)?.closest?.(".help-card");
-        const onHelpIcon = helpIconRef.current?.contains(target);
-        if (!inPanel && !onButton && !inHelpCard && !onHelpIcon) {
+        if (!inPanel && !onButton) {
           setIsSettingsOpen(false);
-          setShowHelpCard(false);
         }
       }
 
@@ -1998,8 +1956,8 @@ function App() {
                 <span className="live-category">{chzzkCategory}</span>
               )}
             </div>
-            <button type="button" onClick={handleImport}>가져오기</button>
-            <button type="button" onClick={handleExport}>내보내기</button>
+            <button type="button" onClick={handleImport}>구글시트 다운로드</button>
+            <button type="button" onClick={handleExport}>구글시트 업로드</button>
             <button type="button" onClick={addColumn}>열 추가</button>
             <button type="button" onClick={undoLast} disabled={undoStack.length === 0}>
               되살리기
@@ -2304,197 +2262,235 @@ function App() {
 
       {isSettingsOpen && (
         <section className="settings-panel" ref={settingsPanelRef}>
-          <h2>설정</h2>
-          <label>
-            <span className="label-with-help">
-              Google Sheets 링크
-              <span className="help-icon-wrap">
-                <span
-                  className="help-icon"
-                  ref={helpIconRef}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (showHelpCard) {
-                      setShowHelpCard(false);
-                    } else {
-                      const rect = helpIconRef.current?.getBoundingClientRect();
-                      if (rect) {
-                        const cardWidth = 420;
-                        const left = Math.max(10, Math.min(window.innerWidth - cardWidth - 10, rect.left - cardWidth + 30));
-                        setHelpCardPos({ top: rect.bottom + 6, left });
-                      }
-                      setShowHelpCard(true);
-                    }
-                  }}
-                >?</span>
-              </span>
-            </span>
-            <input
-              type="text"
-              value={sheetLink}
-              onChange={(e) => setSheetLink(e.target.value)}
-              placeholder="https://docs.google.com/spreadsheets/..."
-            />
-          </label>
-          <div className="service-account-row">
-            <label>
-              Service Account JSON
-              <div className="sa-file-row">
-                <input
-                  type="text"
-                  value={serviceAccountPath}
-                  readOnly
-                  placeholder="파일을 선택하세요"
-                />
-                <button type="button" onClick={pickServiceAccount}>파일 선택</button>
-              </div>
-            </label>
-            <div
-              className={`sa-dropzone ${isDraggingJson ? "dragging" : ""}`}
-              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingJson(true); }}
-              onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingJson(true); }}
-              onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingJson(false); }}
-              onDrop={handleJsonDrop}
+          <div className="settings-header">
+            <h2>설정</h2>
+            <button
+              type="button"
+              className="settings-close-btn"
+              onClick={() => setIsSettingsOpen(false)}
+              aria-label="설정 닫기"
             >
-              <p className="sa-dropzone-text">
-                {isDraggingJson ? "여기에 놓으세요" : "JSON 파일을 여기에 드래그&드롭"}
-              </p>
-            </div>
-            {clientEmail && (
-              <div className="sa-email-row">
-                <span className="sa-email-label">서비스 계정 이메일</span>
-                <code className="sa-email-value" title={clientEmail}>{clientEmail}</code>
-                <button type="button" className="sa-email-copy" onClick={copyClientEmail}>이메일 복사</button>
-              </div>
-            )}
-            <div className="sa-action-row">
-              <button type="button" className="sa-test-btn" onClick={testConnection}>
-                연결 테스트
-              </button>
-            </div>
-            {sheetsStatus && <p className="sheets-status">{sheetsStatus}</p>}
-            <p className="sa-hint">
-              시트 이름 규칙: 숏폼_{new Date().getFullYear()} / 롱폼_{new Date().getFullYear()} / 다시보기_{new Date().getFullYear()}
-            </p>
+              ×
+            </button>
           </div>
-          <label>
-            치지직 방송 링크
-            <input
-              type="text"
-              value={chzzkLink}
-              onChange={(e) => setChzzkLink(e.target.value)}
-              placeholder="https://chzzk.naver.com/..."
-            />
-          </label>
-          <div className="status-config">
-            <p>status 타입 값 설정</p>
-            <div className="status-add-row">
-              <input
-                type="text"
-                value={newStatus}
-                onChange={(e) => setNewStatus(e.target.value)}
-                placeholder="상태 추가"
-              />
-              <button type="button" onClick={addStatusOption}>
-                추가
-              </button>
-            </div>
-            <div className="status-list">
-              {statusOptions.map((status) => (
-                <span key={status} className="status-chip">
-                  {status}
-                  <button type="button" onClick={() => removeStatusOption(status)}>
-                    x
+          <nav className="settings-tabs" role="tablist">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={settingsTab === "sheet"}
+              className={`settings-tab ${settingsTab === "sheet" ? "active" : ""}`}
+              onClick={() => setSettingsTab("sheet")}
+            >
+              시트 설정
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={settingsTab === "connection"}
+              className={`settings-tab ${settingsTab === "connection" ? "active" : ""}`}
+              onClick={() => setSettingsTab("connection")}
+            >
+              구글 시트 연결
+            </button>
+          </nav>
+
+          <div className="settings-tabpanel">
+            {settingsTab === "sheet" && (
+              <>
+                <label>
+                  치지직 방송 링크
+                  <input
+                    type="text"
+                    value={chzzkLink}
+                    onChange={(e) => setChzzkLink(e.target.value)}
+                    placeholder="https://chzzk.naver.com/..."
+                  />
+                </label>
+                <div className="status-config">
+                  <p>작업상태 옵션 (status 타입)</p>
+                  <div className="status-add-row">
+                    <input
+                      type="text"
+                      value={newStatus}
+                      onChange={(e) => setNewStatus(e.target.value)}
+                      placeholder="상태 추가"
+                    />
+                    <button type="button" onClick={addStatusOption}>
+                      추가
+                    </button>
+                  </div>
+                  <div className="status-list">
+                    {statusOptions.map((status) => (
+                      <span key={status} className="status-chip">
+                        {status}
+                        <button type="button" onClick={() => removeStatusOption(status)}>
+                          x
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="staff-config">
+                  <p>편집자 / 썸네일러 등록</p>
+                  <div className="staff-add-row">
+                    <select
+                      className="staff-role-select"
+                      value={newStaffRole}
+                      onChange={(e) => setNewStaffRole(e.target.value as EditorRole)}
+                    >
+                      <option value="thumbnailer">썸네일러</option>
+                      <option value="editor">영상편집자</option>
+                    </select>
+                    <input
+                      className="staff-name-input"
+                      type="text"
+                      value={newStaffName}
+                      onChange={(e) => setNewStaffName(e.target.value)}
+                      placeholder="이름"
+                      onKeyDown={(e) => { if (e.key === "Enter") addStaff(); }}
+                    />
+                    <button type="button" className="staff-add-btn" onClick={addStaff} title="추가">
+                      추가
+                    </button>
+                  </div>
+                  <div className="staff-list">
+                    {staffList.length === 0
+                      ? <p className="staff-empty">등록된 인원이 없습니다.</p>
+                      : staffList.map((staff) => (
+                          <span key={staff.id} className={`staff-chip role-${staff.role}`}>
+                            <span className="staff-role-tag">{ROLE_LABEL[staff.role]}</span>
+                            <span className="staff-name">{staff.name}</span>
+                            <button type="button" onClick={() => removeStaff(staff.id)}>x</button>
+                          </span>
+                        ))
+                    }
+                  </div>
+                  <p className="staff-hint">
+                    ※ 시트의 <strong>담당자</strong> 셀 클릭 시 등록된 인원 중에서 선택할 수 있습니다.
+                  </p>
+                </div>
+
+                <div className="detect-category-test">
+                  <p>방송 감지 설정</p>
+                  <label className="polling-label">
+                    감지 주기 (ms)
+                    <select
+                      value={pollingInterval}
+                      onChange={(e) => setPollingInterval(Number(e.target.value))}
+                      disabled={isDetecting}
+                    >
+                      <option value={500}>0.5초</option>
+                      <option value={1000}>1초</option>
+                      <option value={2000}>2초</option>
+                      <option value={3000}>3초 (기본)</option>
+                      <option value={5000}>5초</option>
+                      <option value={10000}>10초</option>
+                      <option value={30000}>30초</option>
+                    </select>
+                  </label>
+                  {chzzkLive && isDetecting && (
+                    <div className="live-info-box">
+                      <p><strong>방송 상태:</strong> <span className="live-badge active">LIVE</span></p>
+                      <p><strong>제목:</strong> {chzzkTitle}</p>
+                      <p><strong>카테고리:</strong> {chzzkCategory}</p>
+                      <p><strong>감지 경과:</strong> {chzzkUptime}</p>
+                    </div>
+                  )}
+                  <div className="timeline-log-box">
+                    <p>카테고리 타임라인</p>
+                    <ul>
+                      {timelineLog.length === 0
+                        ? <li>기록 없음</li>
+                        : timelineLog.map((entry, i) => <li key={i}>{entry}</li>)
+                      }
+                    </ul>
+                  </div>
+                  <p style={{ marginTop: 8, fontSize: 11, color: "#9ca3af" }}>
+                    ※ 감지 중 카테고리가 변경되면 다시보기 마지막 행에 자동 추가됩니다.
+                  </p>
+                </div>
+
+                <div className="history-box">
+                  <p>행/열 변경 히스토리</p>
+                  <ul>
+                    {historyLogs.length === 0 ? <li>기록 없음</li> : historyLogs.map((log) => <li key={log}>{log}</li>)}
+                  </ul>
+                </div>
+              </>
+            )}
+
+            {settingsTab === "connection" && (
+              <>
+                <div className="connection-help-banner">
+                  <div className="connection-help-text">
+                    <strong>설정 방법은 별도 가이드 페이지에서 확인하세요.</strong>
+                    <span>스크린샷 GIF가 큰 화면에서 잘 재생됩니다.</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="connection-help-btn"
+                    onClick={openSheetsSetupHelp}
+                  >
+                    설정 방법 자세히 보기 ↗
                   </button>
-                </span>
-              ))}
-            </div>
+                </div>
+
+                <label>
+                  Google Sheets 링크
+                  <input
+                    type="text"
+                    value={sheetLink}
+                    onChange={(e) => setSheetLink(e.target.value)}
+                    placeholder="https://docs.google.com/spreadsheets/..."
+                  />
+                </label>
+
+                <div className="service-account-row">
+                  <label>
+                    Service Account JSON
+                    <div className="sa-file-row">
+                      <input
+                        type="text"
+                        value={serviceAccountPath}
+                        readOnly
+                        placeholder="파일을 선택하세요"
+                      />
+                      <button type="button" onClick={pickServiceAccount}>파일 선택</button>
+                    </div>
+                  </label>
+                  <div
+                    className={`sa-dropzone ${isDraggingJson ? "dragging" : ""}`}
+                    onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingJson(true); }}
+                    onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingJson(true); }}
+                    onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingJson(false); }}
+                    onDrop={handleJsonDrop}
+                  >
+                    <p className="sa-dropzone-text">
+                      {isDraggingJson ? "여기에 놓으세요" : "JSON 파일을 여기에 드래그&드롭"}
+                    </p>
+                  </div>
+                  {clientEmail && (
+                    <div className="sa-email-row">
+                      <span className="sa-email-label">서비스 계정 이메일</span>
+                      <code className="sa-email-value" title={clientEmail}>{clientEmail}</code>
+                      <button type="button" className="sa-email-copy" onClick={copyClientEmail}>이메일 복사</button>
+                    </div>
+                  )}
+                  <div className="sa-action-row">
+                    <button type="button" className="sa-test-btn" onClick={testConnection}>
+                      연결 테스트
+                    </button>
+                  </div>
+                  {sheetsStatus && <p className="sheets-status">{sheetsStatus}</p>}
+                  <p className="sa-hint">
+                    시트 이름 규칙: 숏폼_{new Date().getFullYear()} / 롱폼_{new Date().getFullYear()} / 다시보기_{new Date().getFullYear()}
+                  </p>
+                </div>
+              </>
+            )}
           </div>
 
-          <div className="staff-config">
-            <p>편집자 / 썸네일러 등록</p>
-            <div className="staff-add-row">
-              <select
-                className="staff-role-select"
-                value={newStaffRole}
-                onChange={(e) => setNewStaffRole(e.target.value as EditorRole)}
-              >
-                <option value="thumbnailer">썸네일러</option>
-                <option value="editor">영상편집자</option>
-              </select>
-              <input
-                className="staff-name-input"
-                type="text"
-                value={newStaffName}
-                onChange={(e) => setNewStaffName(e.target.value)}
-                placeholder="이름"
-                onKeyDown={(e) => { if (e.key === "Enter") addStaff(); }}
-              />
-              <button type="button" className="staff-add-btn" onClick={addStaff} title="추가">
-                추가
-              </button>
-            </div>
-            <div className="staff-list">
-              {staffList.length === 0
-                ? <p className="staff-empty">등록된 인원이 없습니다.</p>
-                : staffList.map((staff) => (
-                    <span key={staff.id} className={`staff-chip role-${staff.role}`}>
-                      <span className="staff-role-tag">{ROLE_LABEL[staff.role]}</span>
-                      <span className="staff-name">{staff.name}</span>
-                      <button type="button" onClick={() => removeStaff(staff.id)}>x</button>
-                    </span>
-                  ))
-              }
-            </div>
-            <p className="staff-hint">
-              ※ 시트의 <strong>담당자</strong> 셀 클릭 시 등록된 인원 중에서 선택할 수 있습니다.
-            </p>
-          </div>
-          <div className="detect-category-test">
-            <p>방송 감지 설정</p>
-            <label className="polling-label">
-              감지 주기 (ms)
-              <select
-                value={pollingInterval}
-                onChange={(e) => setPollingInterval(Number(e.target.value))}
-                disabled={isDetecting}
-              >
-                <option value={500}>0.5초</option>
-                <option value={1000}>1초</option>
-                <option value={2000}>2초</option>
-                <option value={3000}>3초 (기본)</option>
-                <option value={5000}>5초</option>
-                <option value={10000}>10초</option>
-                <option value={30000}>30초</option>
-              </select>
-            </label>
-            {chzzkLive && isDetecting && (
-              <div className="live-info-box">
-                <p><strong>방송 상태:</strong> <span className="live-badge active">LIVE</span></p>
-                <p><strong>제목:</strong> {chzzkTitle}</p>
-                <p><strong>카테고리:</strong> {chzzkCategory}</p>
-                <p><strong>감지 경과:</strong> {chzzkUptime}</p>
-              </div>
-            )}
-            <div className="timeline-log-box">
-              <p>카테고리 타임라인</p>
-              <ul>
-                {timelineLog.length === 0
-                  ? <li>기록 없음</li>
-                  : timelineLog.map((entry, i) => <li key={i}>{entry}</li>)
-                }
-              </ul>
-            </div>
-            <p style={{ marginTop: 8, fontSize: 11, color: "#9ca3af" }}>
-              ※ 감지 중 카테고리가 변경되면 Full Replay 마지막 행에 자동 추가됩니다.
-            </p>
-          </div>
-          <div className="history-box">
-            <p>행/열 변경 히스토리</p>
-            <ul>
-              {historyLogs.length === 0 ? <li>기록 없음</li> : historyLogs.map((log) => <li key={log}>{log}</li>)}
-            </ul>
-          </div>
           <div className="settings-actions">
             <button type="button" onClick={saveSettings}>저장</button>
             <button type="button" onClick={() => setIsSettingsOpen(false)}>
@@ -2503,55 +2499,6 @@ function App() {
           </div>
         </section>
       )}
-      {showHelpCard && (() => {
-        const step = HELP_STEPS.find((s) => s.id === helpStep) ?? HELP_STEPS[0];
-        return (
-          <>
-            <div className="help-card-overlay" onClick={() => setShowHelpCard(false)} />
-            <div className="help-card help-card-step" style={{ top: helpCardPos.top, left: helpCardPos.left }}>
-              <div className="help-card-header">
-                <h4>Google Service Account 설정 가이드</h4>
-                <button type="button" className="help-card-close" onClick={() => setShowHelpCard(false)} title="닫기">×</button>
-              </div>
-              <div className="help-step-tabs">
-                {HELP_STEPS.map((s) => (
-                  <button
-                    key={s.id}
-                    type="button"
-                    className={`help-step-tab ${helpStep === s.id ? "active" : ""}`}
-                    onClick={() => setHelpStep(s.id)}
-                  >
-                    {s.id}
-                  </button>
-                ))}
-              </div>
-              <div className="help-step-body">
-                <p className="help-step-title">Step {step.id}. {step.title}</p>
-                <p className="help-step-desc">{step.desc}</p>
-                <div className="help-step-gif">
-                  <img
-                    src={step.gif}
-                    alt={`Step ${step.id} GIF`}
-                    onError={(e) => {
-                      (e.currentTarget as HTMLImageElement).style.display = "none";
-                      const next = e.currentTarget.nextElementSibling as HTMLElement | null;
-                      if (next) next.style.display = "flex";
-                    }}
-                  />
-                  <div className="help-step-gif-fallback" style={{ display: "none" }}>
-                    GIF 준비 중<br /><code>{step.gif}</code>
-                  </div>
-                </div>
-              </div>
-              <div className="help-step-nav">
-                <button type="button" disabled={helpStep === 1} onClick={() => setHelpStep((p) => Math.max(1, p - 1))}>← 이전</button>
-                <span className="help-step-indicator">{helpStep} / {HELP_STEPS.length}</span>
-                <button type="button" disabled={helpStep === HELP_STEPS.length} onClick={() => setHelpStep((p) => Math.min(HELP_STEPS.length, p + 1))}>다음 →</button>
-              </div>
-            </div>
-          </>
-        );
-      })()}
       {showDebugPanel && (
         <aside className="debug-panel">
           <div className="debug-header">

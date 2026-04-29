@@ -1,0 +1,502 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Google Sheets 연결 설정 가이드 · 이늘 스케줄러</title>
+  <link rel="icon" href="../assets/icon.png" />
+  <style>
+    :root {
+      --pink-50: #fff7fb;
+      --pink-100: #fdf2f8;
+      --pink-200: #fce7f3;
+      --pink-300: #fbcfe8;
+      --pink-400: #f9a8c5;
+      --pink-500: #f472b6;
+      --pink-600: #db2777;
+      --pink-700: #9d174d;
+      --pink-900: #500724;
+      --gray-100: #f3f4f6;
+      --gray-300: #d1d5db;
+      --gray-500: #6b7280;
+      --gray-700: #374151;
+      --gray-900: #111827;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      background: linear-gradient(180deg, var(--pink-50) 0%, #ffffff 220px);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+      color: var(--gray-900);
+      line-height: 1.55;
+      min-height: 100vh;
+    }
+
+    .layout {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 32px 24px 80px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 18px 22px;
+      border: 1px solid var(--pink-200);
+      background: #ffffff;
+      border-radius: 14px;
+      box-shadow: 0 6px 18px rgba(244, 114, 182, 0.08);
+    }
+    .topbar h1 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 800;
+      color: var(--pink-700);
+    }
+    .topbar .topbar-sub {
+      margin-left: auto;
+      font-size: 12px;
+      color: var(--gray-500);
+    }
+
+    .intro {
+      margin: 24px 0 8px;
+      padding: 22px 26px;
+      background: #ffffff;
+      border: 1px solid var(--pink-200);
+      border-radius: 14px;
+      box-shadow: 0 4px 14px rgba(244, 114, 182, 0.06);
+    }
+    .intro h2 {
+      margin: 0 0 10px;
+      font-size: 17px;
+      color: var(--gray-900);
+    }
+    .intro p {
+      margin: 4px 0;
+      color: var(--gray-700);
+      font-size: 14px;
+    }
+    .intro .checklist {
+      margin: 14px 0 0;
+      padding-left: 0;
+      list-style: none;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px 14px;
+    }
+    .intro .checklist li::before {
+      content: "✓";
+      display: inline-block;
+      width: 18px;
+      color: var(--pink-600);
+      font-weight: 800;
+    }
+
+    .toc {
+      position: sticky;
+      top: 16px;
+      margin: 24px 0;
+      padding: 14px 18px;
+      background: #ffffff;
+      border: 1px solid var(--pink-200);
+      border-radius: 12px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      z-index: 10;
+    }
+    .toc a {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: var(--pink-50);
+      color: var(--pink-700);
+      text-decoration: none;
+      font-size: 12px;
+      font-weight: 700;
+      border: 1px solid var(--pink-200);
+      transition: background 120ms ease;
+    }
+    .toc a:hover {
+      background: var(--pink-200);
+    }
+    .toc a .num {
+      width: 18px;
+      height: 18px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      background: var(--pink-600);
+      color: #ffffff;
+      font-size: 11px;
+    }
+
+    .step {
+      margin: 28px 0;
+      padding: 24px 26px;
+      background: #ffffff;
+      border: 1px solid var(--pink-200);
+      border-radius: 14px;
+      box-shadow: 0 4px 14px rgba(244, 114, 182, 0.06);
+      scroll-margin-top: 88px;
+    }
+    .step-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .step-number {
+      flex-shrink: 0;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--pink-500), var(--pink-600));
+      color: #ffffff;
+      font-weight: 800;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 10px rgba(219, 39, 119, 0.3);
+    }
+    .step-title {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 800;
+      color: var(--gray-900);
+    }
+    .step-desc {
+      margin: 6px 0 0;
+      color: var(--gray-700);
+      font-size: 14px;
+    }
+    .step-desc strong {
+      color: var(--pink-700);
+      background: var(--pink-50);
+      padding: 1px 6px;
+      border-radius: 4px;
+    }
+    .step-detail {
+      margin: 14px 0 0;
+      padding: 14px 18px;
+      background: var(--pink-50);
+      border-left: 4px solid var(--pink-400);
+      border-radius: 6px;
+      font-size: 13px;
+      color: var(--gray-700);
+    }
+    .step-detail ul {
+      margin: 6px 0 0;
+      padding-left: 20px;
+    }
+    .step-detail li {
+      margin-bottom: 4px;
+    }
+    .step-detail code {
+      background: #ffffff;
+      padding: 1px 6px;
+      border-radius: 4px;
+      border: 1px solid var(--pink-200);
+      font-family: "Cascadia Code", "Consolas", monospace;
+      font-size: 12px;
+      color: var(--pink-700);
+    }
+    .step-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      margin-top: 10px;
+      font-size: 13px;
+      color: var(--pink-600);
+      text-decoration: none;
+      font-weight: 700;
+    }
+    .step-link:hover { text-decoration: underline; }
+
+    .step-gif {
+      margin: 16px 0 0;
+      padding: 0;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid var(--pink-200);
+      background: var(--gray-100);
+      min-height: 180px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .step-gif img {
+      display: block;
+      max-width: 100%;
+      height: auto;
+    }
+    .step-gif .placeholder {
+      padding: 60px 20px;
+      text-align: center;
+      color: var(--gray-500);
+      font-size: 13px;
+      font-style: italic;
+    }
+    .step-gif .placeholder code {
+      display: inline-block;
+      margin-top: 4px;
+      padding: 2px 8px;
+      background: #ffffff;
+      border: 1px dashed var(--gray-300);
+      border-radius: 4px;
+      font-style: normal;
+      font-family: "Cascadia Code", "Consolas", monospace;
+      font-size: 11px;
+      color: var(--gray-700);
+    }
+
+    .footer {
+      margin-top: 40px;
+      padding: 20px 26px;
+      background: var(--pink-100);
+      border: 1px solid var(--pink-200);
+      border-radius: 12px;
+      text-align: center;
+      color: var(--pink-700);
+      font-size: 13px;
+    }
+    .footer a {
+      color: var(--pink-600);
+      text-decoration: none;
+      font-weight: 700;
+    }
+    .footer a:hover { text-decoration: underline; }
+  </style>
+  <script>
+    // Hide an image and show its placeholder when the GIF is missing.
+    function onGifError(img) {
+      const placeholder = img.parentElement.querySelector(".placeholder");
+      if (placeholder) placeholder.style.display = "block";
+      img.style.display = "none";
+    }
+  </script>
+</head>
+<body>
+  <div class="layout">
+    <header class="topbar">
+      <h1>Google Sheets 연결 설정 가이드</h1>
+      <span class="topbar-sub">이늘 스케줄러 · 관리자용 (1차 배포)</span>
+    </header>
+
+    <section class="intro">
+      <h2>이 가이드로 무엇이 되나요?</h2>
+      <p>Google Cloud에서 발급받은 <strong>Service Account</strong>의 JSON 키를 등록하고, 작업용 시트를 공유해 두면 앱이 시트를 자동으로 가져오고 변경 내용을 다시 올릴 수 있어요.</p>
+      <ul class="checklist">
+        <li>네이버 / 구글 계정으로 로그인하지 않아도 됨</li>
+        <li>JSON 한 번만 등록하면 PC에 영구 저장</li>
+        <li>편집자/썸네일러는 자기 시트만 공유받으면 됨</li>
+        <li>해지는 시트 공유만 끊으면 즉시 차단</li>
+      </ul>
+    </section>
+
+    <nav class="toc">
+      <a href="#step-1"><span class="num">1</span> 프로젝트 생성</a>
+      <a href="#step-2"><span class="num">2</span> Sheets API 활성화</a>
+      <a href="#step-3"><span class="num">3</span> Service Account 생성</a>
+      <a href="#step-4"><span class="num">4</span> JSON 키 다운로드</a>
+      <a href="#step-5"><span class="num">5</span> 앱에 JSON 등록</a>
+      <a href="#step-6"><span class="num">6</span> 이메일 복사</a>
+      <a href="#step-7"><span class="num">7</span> 시트 공유</a>
+      <a href="#step-8"><span class="num">8</span> 연결 테스트</a>
+    </nav>
+
+    <article class="step" id="step-1">
+      <div class="step-header">
+        <div class="step-number">1</div>
+        <h3 class="step-title">Google Cloud 프로젝트 만들기</h3>
+      </div>
+      <p class="step-desc">
+        Google Cloud Console에 접속해 <strong>새 프로젝트</strong>를 만듭니다. 프로젝트 이름은 자유 (예: <code>inel-scheduler</code>).
+      </p>
+      <div class="step-detail">
+        <ul>
+          <li>이미 사용 중인 프로젝트가 있다면 그대로 써도 됩니다.</li>
+          <li>비용은 발생하지 않습니다. (Google Sheets API 무료 할당량 내 사용)</li>
+        </ul>
+      </div>
+      <a class="step-link" href="https://console.cloud.google.com/projectcreate" target="_blank" rel="noopener">↗ Google Cloud Console 열기</a>
+      <div class="step-gif">
+        <img src="./gifs/01-create-project.gif" alt="프로젝트 생성" onerror="onGifError(this)" />
+        <div class="placeholder" style="display:none">
+          GIF 안내가 아직 등록되지 않았습니다.<br>
+          <code>public/help/gifs/01-create-project.gif</code>
+        </div>
+      </div>
+    </article>
+
+    <article class="step" id="step-2">
+      <div class="step-header">
+        <div class="step-number">2</div>
+        <h3 class="step-title">Google Sheets API 활성화</h3>
+      </div>
+      <p class="step-desc">
+        좌측 메뉴 <strong>API 및 서비스 → 라이브러리</strong>에서 <strong>Google Sheets API</strong>를 검색하고 <strong>사용</strong> 버튼을 눌러 활성화합니다.
+      </p>
+      <div class="step-detail">
+        <ul>
+          <li>이 단계가 빠지면 인증은 통과해도 시트 호출이 권한 오류로 실패합니다.</li>
+          <li>한 번만 활성화하면 됩니다.</li>
+        </ul>
+      </div>
+      <a class="step-link" href="https://console.cloud.google.com/apis/library/sheets.googleapis.com" target="_blank" rel="noopener">↗ Sheets API 라이브러리 바로가기</a>
+      <div class="step-gif">
+        <img src="./gifs/02-enable-api.gif" alt="API 활성화" onerror="onGifError(this)" />
+        <div class="placeholder" style="display:none">
+          GIF 안내가 아직 등록되지 않았습니다.<br>
+          <code>public/help/gifs/02-enable-api.gif</code>
+        </div>
+      </div>
+    </article>
+
+    <article class="step" id="step-3">
+      <div class="step-header">
+        <div class="step-number">3</div>
+        <h3 class="step-title">Service Account (서비스 계정) 만들기</h3>
+      </div>
+      <p class="step-desc">
+        <strong>API 및 서비스 → 사용자 인증 정보 → +사용자 인증 정보 만들기 → 서비스 계정</strong> 메뉴로 이동해 새 서비스 계정을 생성합니다.
+      </p>
+      <div class="step-detail">
+        <ul>
+          <li>이름: 식별 가능한 아무거나 (예: <code>inel-sheet-bot</code>)</li>
+          <li>역할 부여, 사용자 액세스 권한은 <strong>건너뛰기</strong> 가능 (Sheet 공유로 권한 부여)</li>
+        </ul>
+      </div>
+      <div class="step-gif">
+        <img src="./gifs/03-create-sa.gif" alt="서비스 계정 생성" onerror="onGifError(this)" />
+        <div class="placeholder" style="display:none">
+          GIF 안내가 아직 등록되지 않았습니다.<br>
+          <code>public/help/gifs/03-create-sa.gif</code>
+        </div>
+      </div>
+    </article>
+
+    <article class="step" id="step-4">
+      <div class="step-header">
+        <div class="step-number">4</div>
+        <h3 class="step-title">JSON 키 다운로드</h3>
+      </div>
+      <p class="step-desc">
+        생성한 서비스 계정을 클릭 → <strong>키 탭 → 키 추가 → 새 키 만들기 → JSON</strong> 선택 후 다운로드합니다.
+      </p>
+      <div class="step-detail">
+        <ul>
+          <li>다운로드된 <code>.json</code> 파일은 컴퓨터의 안전한 위치에 보관하세요.</li>
+          <li>이 파일이 곧 Sheets 접근 자격증명입니다.</li>
+        </ul>
+      </div>
+      <div class="step-gif">
+        <img src="./gifs/04-download-json.gif" alt="JSON 키 다운로드" onerror="onGifError(this)" />
+        <div class="placeholder" style="display:none">
+          GIF 안내가 아직 등록되지 않았습니다.<br>
+          <code>public/help/gifs/04-download-json.gif</code>
+        </div>
+      </div>
+    </article>
+
+    <article class="step" id="step-5">
+      <div class="step-header">
+        <div class="step-number">5</div>
+        <h3 class="step-title">앱에 JSON 키 등록</h3>
+      </div>
+      <p class="step-desc">
+        이늘 스케줄러 앱 → <strong>설정 → 구글 시트 연결</strong> 탭에서 JSON 파일을 <strong>드래그&드롭</strong>하거나 <strong>파일 선택</strong> 버튼으로 등록합니다.
+      </p>
+      <div class="step-detail">
+        <ul>
+          <li>등록되면 자동으로 <strong>서비스 계정 이메일</strong>이 표시됩니다.</li>
+          <li>JSON 파일 경로는 PC 로컬에 저장되며, 시트 외부로 전송되지 않습니다.</li>
+        </ul>
+      </div>
+      <div class="step-gif">
+        <img src="./gifs/05-drag-json.gif" alt="JSON 드래그&드롭" onerror="onGifError(this)" />
+        <div class="placeholder" style="display:none">
+          GIF 안내가 아직 등록되지 않았습니다.<br>
+          <code>public/help/gifs/05-drag-json.gif</code>
+        </div>
+      </div>
+    </article>
+
+    <article class="step" id="step-6">
+      <div class="step-header">
+        <div class="step-number">6</div>
+        <h3 class="step-title">서비스 계정 이메일 복사</h3>
+      </div>
+      <p class="step-desc">
+        등록 후 표시되는 <strong>이메일 복사</strong> 버튼을 눌러 클립보드로 복사합니다. (보통 <code>...@...iam.gserviceaccount.com</code> 형식)
+      </p>
+      <div class="step-gif">
+        <img src="./gifs/06-copy-email.gif" alt="이메일 복사" onerror="onGifError(this)" />
+        <div class="placeholder" style="display:none">
+          GIF 안내가 아직 등록되지 않았습니다.<br>
+          <code>public/help/gifs/06-copy-email.gif</code>
+        </div>
+      </div>
+    </article>
+
+    <article class="step" id="step-7">
+      <div class="step-header">
+        <div class="step-number">7</div>
+        <h3 class="step-title">Google Sheets에 권한 부여</h3>
+      </div>
+      <p class="step-desc">
+        대상 Google Sheets 문서를 열고 우측 상단 <strong>공유</strong>에서 복사한 이메일을 <strong>편집자</strong> 권한으로 추가합니다.
+      </p>
+      <div class="step-detail">
+        <ul>
+          <li>편집자가 아닌 <em>뷰어</em> 권한이면 앱에서 시트 쓰기가 실패합니다.</li>
+          <li>나중에 권한 회수를 원하면 시트 공유에서 이 이메일을 제거하면 즉시 차단됩니다.</li>
+        </ul>
+      </div>
+      <div class="step-gif">
+        <img src="./gifs/07-share-sheet.gif" alt="시트 공유" onerror="onGifError(this)" />
+        <div class="placeholder" style="display:none">
+          GIF 안내가 아직 등록되지 않았습니다.<br>
+          <code>public/help/gifs/07-share-sheet.gif</code>
+        </div>
+      </div>
+    </article>
+
+    <article class="step" id="step-8">
+      <div class="step-header">
+        <div class="step-number">8</div>
+        <h3 class="step-title">연결 테스트</h3>
+      </div>
+      <p class="step-desc">
+        앱 설정의 <strong>연결 테스트</strong> 버튼을 눌러 시트가 정상으로 보이는지 확인합니다. 성공하면 시트 이름과 탭 개수가 표시됩니다.
+      </p>
+      <div class="step-detail">
+        <ul>
+          <li>실패 시 메시지를 확인하세요. <code>403 Permission denied</code> 라면 7단계 권한 공유를 다시 점검하세요.</li>
+          <li><code>404 Not Found</code> 라면 시트 URL을 확인하세요.</li>
+        </ul>
+      </div>
+      <div class="step-gif">
+        <img src="./gifs/08-connection-test.gif" alt="연결 테스트" onerror="onGifError(this)" />
+        <div class="placeholder" style="display:none">
+          GIF 안내가 아직 등록되지 않았습니다.<br>
+          <code>public/help/gifs/08-connection-test.gif</code>
+        </div>
+      </div>
+    </article>
+
+    <div class="footer">
+      문제가 계속 생기면 앱 우측 디버그 패널의 로그를 캡처해 보내주세요.
+      <br />
+      관련 문서: <a href="https://developers.google.com/sheets/api/guides/concepts" target="_blank" rel="noopener">Google Sheets API 개념</a>
+    </div>
+  </div>
+</body>
+</html>
