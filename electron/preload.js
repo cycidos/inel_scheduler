@@ -54,5 +54,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   categoriesSearchOnline: (keyword, limit = 20) =>
     ipcRenderer.invoke("categories-search-online", { keyword, limit }),
 
-  helpOpenSheetsSetup: () => ipcRenderer.invoke("help-open-sheets-setup")
+  helpOpenSheetsSetup: () => ipcRenderer.invoke("help-open-sheets-setup"),
+  helpOpenAppGuide: () => ipcRenderer.invoke("help-open-app-guide")
 });

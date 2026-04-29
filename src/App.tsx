@@ -28,6 +28,7 @@ declare global {
       categoriesSearchOnline: (keyword: string, limit?: number) =>
         Promise<{ ok: boolean; categories?: Array<{ categoryId: string; categoryValue: string; categoryType: string }>; keyword?: string; error?: string }>;
       helpOpenSheetsSetup: () => Promise<{ ok: boolean; url?: string; error?: string }>;
+      helpOpenAppGuide: () => Promise<{ ok: boolean; url?: string; error?: string }>;
     };
   }
 }
@@ -436,6 +437,104 @@ function App() {
   const [pollingInterval, setPollingInterval] = useState(3000);
   const [timelineLog, setTimelineLog] = useState<string[]>([]);
   const [showDebugPanel, setShowDebugPanel] = useState(false);
+
+  // 숏폼/롱폼 [할 일] / [완료됨] 그룹 접힘 상태. 탭별로 보존하고 localStorage에 저장.
+  type GroupKey = "todo" | "done";
+  const [groupCollapsed, setGroupCollapsed] = useState<Record<TabKey, Record<GroupKey, boolean>>>(() => {
+    try {
+      const raw = localStorage.getItem("inel-scheduler-group-collapsed");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        return {
+          shorts: { todo: !!parsed?.shorts?.todo, done: !!parsed?.shorts?.done },
+          longform: { todo: !!parsed?.longform?.todo, done: !!parsed?.longform?.done },
+          fullReplay: { todo: !!parsed?.fullReplay?.todo, done: !!parsed?.fullReplay?.done }
+        };
+      }
+    } catch {}
+    return {
+      shorts: { todo: false, done: false },
+      longform: { todo: false, done: false },
+      fullReplay: { todo: false, done: false }
+    };
+  });
+  const toggleGroupCollapsed = (tab: TabKey, group: GroupKey) => {
+    setGroupCollapsed((prev) => {
+      const next: Record<TabKey, Record<GroupKey, boolean>> = {
+        ...prev,
+        [tab]: { ...prev[tab], [group]: !prev[tab][group] }
+      };
+      try {
+        localStorage.setItem("inel-scheduler-group-collapsed", JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  };
+
+  // 할 일 / 모두 보기 필터 (탭별 / 기본은 할일만 보기)
+  type TaskFilter = "todoOnly" | "all";
+  const [taskFilter, setTaskFilter] = useState<Record<TabKey, TaskFilter>>(() => {
+    try {
+      const raw = localStorage.getItem("inel-scheduler-task-filter");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        const norm = (v: any): TaskFilter => (v === "all" ? "all" : "todoOnly");
+        return {
+          shorts: norm(parsed?.shorts),
+          longform: norm(parsed?.longform),
+          fullReplay: norm(parsed?.fullReplay)
+        };
+      }
+    } catch {}
+    return { shorts: "todoOnly", longform: "todoOnly", fullReplay: "todoOnly" };
+  });
+  const setTaskFilterFor = (tab: TabKey, value: TaskFilter) => {
+    setTaskFilter((prev) => {
+      const next = { ...prev, [tab]: value };
+      try { localStorage.setItem("inel-scheduler-task-filter", JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
+
+  // 그룹별 표시 행 수 (기본 10, 5~30). 그룹 헤더의 컨트롤로 조절.
+  const GROUP_VISIBLE_DEFAULT = 10;
+  const GROUP_VISIBLE_MIN = 5;
+  const GROUP_VISIBLE_MAX = 30;
+  const [groupVisibleCount, setGroupVisibleCount] = useState<Record<TabKey, Record<GroupKey, number>>>(() => {
+    try {
+      const raw = localStorage.getItem("inel-scheduler-group-visible-count");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        const norm = (v: any) => {
+          const n = Math.round(Number(v));
+          if (!Number.isFinite(n)) return GROUP_VISIBLE_DEFAULT;
+          return Math.min(GROUP_VISIBLE_MAX, Math.max(GROUP_VISIBLE_MIN, n));
+        };
+        return {
+          shorts: { todo: norm(parsed?.shorts?.todo), done: norm(parsed?.shorts?.done) },
+          longform: { todo: norm(parsed?.longform?.todo), done: norm(parsed?.longform?.done) },
+          fullReplay: { todo: norm(parsed?.fullReplay?.todo), done: norm(parsed?.fullReplay?.done) }
+        };
+      }
+    } catch {}
+    return {
+      shorts: { todo: GROUP_VISIBLE_DEFAULT, done: GROUP_VISIBLE_DEFAULT },
+      longform: { todo: GROUP_VISIBLE_DEFAULT, done: GROUP_VISIBLE_DEFAULT },
+      fullReplay: { todo: GROUP_VISIBLE_DEFAULT, done: GROUP_VISIBLE_DEFAULT }
+    };
+  });
+  const adjustGroupVisible = (tab: TabKey, group: GroupKey, delta: number) => {
+    setGroupVisibleCount((prev) => {
+      const cur = prev[tab]?.[group] ?? GROUP_VISIBLE_DEFAULT;
+      const nv = Math.min(GROUP_VISIBLE_MAX, Math.max(GROUP_VISIBLE_MIN, cur + delta));
+      const next: Record<TabKey, Record<GroupKey, number>> = {
+        ...prev,
+        [tab]: { ...prev[tab], [group]: nv }
+      };
+      try { localStorage.setItem("inel-scheduler-group-visible-count", JSON.stringify(next)); } catch {}
+      return next;
+    });
+  };
 
   const debugLogsRef = useRef<string[]>([]);
   const [debugLogsVersion, setDebugLogsVersion] = useState(0);
@@ -1248,6 +1347,20 @@ function App() {
       dlog(`도움말 열림: ${res.url}`);
     } else {
       dlog(`도움말 열기 실패: ${res.error}`);
+    }
+  };
+
+  const openAppGuideHelp = async () => {
+    const api = window.electronAPI;
+    if (!api?.helpOpenAppGuide) {
+      dlog("앱 사용방법 가이드 열기 불가 (Electron 환경 아님)");
+      return;
+    }
+    const res = await api.helpOpenAppGuide();
+    if (res.ok) {
+      dlog(`앱 사용방법 가이드 열림: ${res.url}`);
+    } else {
+      dlog(`앱 사용방법 가이드 열기 실패: ${res.error}`);
     }
   };
 
@@ -2117,6 +2230,28 @@ function App() {
         <button type="button" onClick={() => moveMonth("next")} disabled={!hasNextMonth}>
           {">"}
         </button>
+        {(activeTab === "shorts" || activeTab === "longform") && (
+          <div className="task-filter-toggle" role="tablist" aria-label="작업 필터">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={(taskFilter[activeTab] ?? "todoOnly") === "todoOnly"}
+              className={`task-filter-btn ${(taskFilter[activeTab] ?? "todoOnly") === "todoOnly" ? "active" : ""}`}
+              onClick={() => setTaskFilterFor(activeTab, "todoOnly")}
+            >
+              할일만 보기
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={(taskFilter[activeTab] ?? "todoOnly") === "all"}
+              className={`task-filter-btn ${(taskFilter[activeTab] ?? "todoOnly") === "all" ? "active" : ""}`}
+              onClick={() => setTaskFilterFor(activeTab, "all")}
+            >
+              모두 보기
+            </button>
+          </div>
+        )}
       </section>
 
       <main className="table-wrap">
@@ -2213,6 +2348,7 @@ function App() {
               const isSelected = selectedRowByTab[activeTab] === row.id;
               const hasTwoRows = activeTab !== "fullReplay" && row.thumbnailer !== undefined && row.editor !== undefined;
               const subRoles: Array<EditorRole | null> = hasTwoRows ? ["thumbnailer", "editor"] : [null];
+              const isRowLocked = (row.values.upload || "") === "완";
 
               const rowDragOver = (e: React.DragEvent) => {
                 e.preventDefault();
@@ -2233,7 +2369,8 @@ function App() {
                   isSelected ? "selected-row" : "",
                   isDropRow ? "drop-target-row" : "",
                   isDragRow ? "drag-source-row" : "",
-                  hasTwoRows ? (isFirstSub ? "task-row task-row-first" : "task-row task-row-second") : ""
+                  hasTwoRows ? (isFirstSub ? "task-row task-row-first" : "task-row task-row-second") : "",
+                  isRowLocked ? "row-locked" : ""
                 ].filter(Boolean).join(" ") || undefined;
 
                 return (
@@ -2280,9 +2417,11 @@ function App() {
                       if (hasTwoRows && isShared && isFirstSub) {
                         tdProps.rowSpan = 2;
                       }
+                      const isUploadCol = column.key === "upload";
                       const cellClassName = [
                         isShared ? "shared-cell" : "role-cell",
-                        role ? `role-${role}` : ""
+                        role ? `role-${role}` : "",
+                        isRowLocked && !isUploadCol ? "is-locked" : ""
                       ].filter(Boolean).join(" ") || undefined;
                       return (
                         <td key={column.key} className={cellClassName} {...tdProps}>
@@ -2306,12 +2445,68 @@ function App() {
             const todoRows = filteredData.filter((r) => (r.values.upload || "") !== "완");
             const doneRows = filteredData.filter((r) => (r.values.upload || "") === "완");
             const totalCols = columns.length + 2;
-            const renderGroupHeader = (variant: "todo" | "done", label: string, count: number) => (
-              <tr className={`group-header group-header-${variant}`}>
+            const todoCollapsed = groupCollapsed[activeTab]?.todo ?? false;
+            const doneCollapsed = groupCollapsed[activeTab]?.done ?? false;
+            const filterMode = taskFilter[activeTab] ?? "todoOnly";
+            const showDoneGroup = filterMode === "all";
+            const todoVisible = groupVisibleCount[activeTab]?.todo ?? GROUP_VISIBLE_DEFAULT;
+            const doneVisible = groupVisibleCount[activeTab]?.done ?? GROUP_VISIBLE_DEFAULT;
+            const visibleTodoRows = todoRows.slice(0, todoVisible);
+            const visibleDoneRows = doneRows.slice(0, doneVisible);
+            const todoOverflow = todoRows.length - visibleTodoRows.length;
+            const doneOverflow = doneRows.length - visibleDoneRows.length;
+
+            const renderGroupHeader = (
+              variant: GroupKey,
+              label: string,
+              count: number,
+              collapsed: boolean,
+              visible: number,
+              overflow: number
+            ) => (
+              <tr
+                className={`group-header group-header-${variant} ${collapsed ? "is-collapsed" : ""}`}
+                title={collapsed ? `${label} 펼치기` : `${label} 접기`}
+              >
                 <td colSpan={totalCols}>
-                  <span className="group-dot" />
-                  <span className="group-label">{label}</span>
-                  <span className="group-count">{count}</span>
+                  <div className="group-header-inner">
+                    <button
+                      type="button"
+                      className="group-header-toggle"
+                      onClick={() => toggleGroupCollapsed(activeTab, variant)}
+                    >
+                      <span className={`group-caret ${collapsed ? "is-collapsed" : ""}`} aria-hidden="true">▾</span>
+                      <span className="group-dot" />
+                      <span className="group-label">{label}</span>
+                      <span className="group-count">{count}</span>
+                    </button>
+                    {!collapsed && count > 0 && (
+                      <div className="group-visible-control" onClick={(e) => e.stopPropagation()}>
+                        <span className="group-visible-label">
+                          표시 {Math.min(visible, count)} / {count}
+                          {overflow > 0 && <span className="group-visible-hidden"> · {overflow}개 더</span>}
+                        </span>
+                        <button
+                          type="button"
+                          className="group-visible-btn"
+                          onClick={() => adjustGroupVisible(activeTab, variant, -5)}
+                          disabled={visible <= GROUP_VISIBLE_MIN}
+                          title="표시 행 5개 줄이기"
+                        >
+                          −
+                        </button>
+                        <button
+                          type="button"
+                          className="group-visible-btn"
+                          onClick={() => adjustGroupVisible(activeTab, variant, +5)}
+                          disabled={visible >= GROUP_VISIBLE_MAX}
+                          title="표시 행 5개 늘리기 (최대 30)"
+                        >
+                          +
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </td>
               </tr>
             );
@@ -2320,17 +2515,51 @@ function App() {
                 <td colSpan={totalCols} className="group-empty-cell">{text}</td>
               </tr>
             );
+            const overflowRow = (visible: number, total: number) => (
+              <tr className="group-overflow-row">
+                <td colSpan={totalCols} className="group-overflow-cell">
+                  {`현재 ${visible}개 표시 중 · ${total - visible}개 숨김 (헤더의 + 버튼으로 더 보기, 최대 ${GROUP_VISIBLE_MAX})`}
+                </td>
+              </tr>
+            );
 
             return (
               <>
                 <tbody className="group-section group-section-todo">
-                  {renderGroupHeader("todo", "할 일", todoRows.length)}
-                  {todoRows.length === 0 ? emptyRow("할 일이 없습니다.") : todoRows.map(renderTaskRow)}
+                  {renderGroupHeader("todo", "할 일", todoRows.length, todoCollapsed, todoVisible, todoOverflow)}
+                  {!todoCollapsed && (
+                    todoRows.length === 0
+                      ? emptyRow("할 일이 없습니다.")
+                      : (
+                        <>
+                          {visibleTodoRows.map(renderTaskRow)}
+                          {todoOverflow > 0 && overflowRow(visibleTodoRows.length, todoRows.length)}
+                        </>
+                      )
+                  )}
                 </tbody>
-                <tbody className="group-section group-section-done">
-                  {renderGroupHeader("done", "완료됨", doneRows.length)}
-                  {doneRows.length === 0 ? emptyRow("완료된 항목이 없습니다.") : doneRows.map(renderTaskRow)}
-                </tbody>
+                {showDoneGroup && (
+                  <>
+                    <tbody className="group-spacer-tbody" aria-hidden="true">
+                      <tr className="group-spacer-row">
+                        <td colSpan={totalCols} />
+                      </tr>
+                    </tbody>
+                    <tbody className="group-section group-section-done">
+                      {renderGroupHeader("done", "완료됨", doneRows.length, doneCollapsed, doneVisible, doneOverflow)}
+                      {!doneCollapsed && (
+                        doneRows.length === 0
+                          ? emptyRow("완료된 항목이 없습니다.")
+                          : (
+                            <>
+                              {visibleDoneRows.map(renderTaskRow)}
+                              {doneOverflow > 0 && overflowRow(visibleDoneRows.length, doneRows.length)}
+                            </>
+                          )
+                      )}
+                    </tbody>
+                  </>
+                )}
               </>
             );
           })()}
@@ -2383,6 +2612,15 @@ function App() {
           <div className="settings-tabpanel">
             {settingsTab === "sheet" && (
               <>
+                <div className="connection-help-banner">
+                  <div className="connection-help-text">
+                    <strong>스케줄러 앱 사용 방법</strong>
+                    <p>시트 컬럼 기능, 행/열 다루기, 그리고 시트설정과 시트의 연계 (예: 영상편집자는 아래 [편집자/썸네일러 등록]에 추가해야 시트의 담당자 셀에서 선택할 수 있어요) 등을 자세히 안내합니다.</p>
+                  </div>
+                  <button type="button" className="connection-help-btn" onClick={openAppGuideHelp}>
+                    사용 방법 자세히 보기 ↗
+                  </button>
+                </div>
                 <label>
                   치지직 방송 링크
                   <input

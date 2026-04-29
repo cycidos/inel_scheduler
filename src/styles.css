@@ -1205,13 +1205,196 @@ th:hover .column-delete {
   border-top: 1px solid #fce7f3;
 }
 
+/* 두 그룹 사이 빈 간격 (tbody border-collapse 환경에서 안전한 spacer row) */
+.group-spacer-tbody td {
+  height: 14px;
+  padding: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  pointer-events: none;
+}
+
+.group-header {
+  user-select: none;
+}
+
 .group-header td {
-  padding: 10px 14px !important;
+  padding: 8px 14px !important;
   background: #fdf2f8;
   border-bottom: 1px solid #fbcfe8 !important;
   font-weight: 700;
   font-size: 13px;
   color: #831843;
+}
+
+.group-header.is-collapsed td {
+  border-bottom-color: transparent !important;
+}
+
+.group-header-inner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.group-header-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  padding: 4px 8px;
+  margin: -4px -8px;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 120ms ease;
+}
+
+.group-header-toggle:hover {
+  background: rgba(244, 114, 182, 0.08);
+}
+
+.group-caret {
+  display: inline-block;
+  width: 14px;
+  margin-right: 4px;
+  font-size: 11px;
+  color: inherit;
+  opacity: 0.75;
+  transform: rotate(0deg);
+  transition: transform 140ms ease;
+  text-align: center;
+}
+
+.group-caret.is-collapsed {
+  transform: rotate(-90deg);
+}
+
+.group-visible-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  padding: 2px 6px 2px 10px;
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid #fbcfe8;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #9d174d;
+}
+
+.group-section-done .group-visible-control {
+  border-color: #a7f3d0;
+  color: #065f46;
+  background: rgba(255, 255, 255, 0.75);
+}
+
+.group-visible-label {
+  letter-spacing: 0.2px;
+}
+
+.group-visible-hidden {
+  margin-left: 4px;
+  opacity: 0.7;
+}
+
+.group-visible-btn {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  background: #ffffff;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.group-visible-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.95);
+  filter: brightness(0.95);
+}
+
+.group-visible-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.group-overflow-cell {
+  padding: 8px 14px !important;
+  text-align: center;
+  background: #fffafd;
+  color: #9d174d;
+  font-size: 11px;
+  font-style: italic;
+  border-top: 1px dashed #fbcfe8;
+}
+
+/* ── 행 잠금 (업로드 = 완) ── */
+tr.row-locked > td {
+  background: #f9fafb;
+}
+
+tr.row-locked > td.row-action-col {
+  background: #f3f4f6;
+}
+
+tr.row-locked > td.spacer-col {
+  background: #f9fafb;
+}
+
+td.is-locked {
+  background: #f3f4f6 !important;
+  color: #9ca3af !important;
+  position: relative;
+}
+
+td.is-locked > * {
+  pointer-events: none !important;
+  opacity: 0.55;
+  filter: grayscale(0.6);
+}
+
+/* ── 할일/모두 보기 필터 토글 ── */
+.task-filter-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  margin-left: 16px;
+  padding: 3px;
+  background: #fff7fb;
+  border: 1px solid #fbcfe8;
+  border-radius: 999px;
+}
+
+.task-filter-btn {
+  padding: 4px 12px;
+  background: transparent;
+  border: none;
+  color: #9d174d;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  border-radius: 999px;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.task-filter-btn:hover:not(.active) {
+  background: rgba(244, 114, 182, 0.1);
+}
+
+.task-filter-btn.active {
+  background: #db2777;
+  color: #ffffff;
 }
 
 .group-header-todo td {
@@ -1495,10 +1678,13 @@ th:hover .column-delete {
   color: #831843;
 }
 
-.connection-help-text span {
+.connection-help-text span,
+.connection-help-text p {
+  margin: 0;
   font-size: 11px;
   color: #9d174d;
-  opacity: 0.8;
+  opacity: 0.85;
+  line-height: 1.5;
 }
 
 .connection-help-btn {

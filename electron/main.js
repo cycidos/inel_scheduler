@@ -405,13 +405,25 @@ function createWindow() {
    * dev/prod 환경에 따라 vite dev URL 또는 빌드된 정적 파일 경로를 사용.
    */
   ipcMain.handle("help-open-sheets-setup", async () => {
+    return openHelpPage("google-sheets-setup.html");
+  });
+
+  /**
+   * 스케줄러 앱 사용 방법 가이드 페이지를 시스템 기본 브라우저로 열기.
+   * 시트 컬럼 기능별 설명 + 시트설정 ↔ 시트 기능 연계 + 단축키 + 동기화 흐름.
+   */
+  ipcMain.handle("help-open-app-guide", async () => {
+    return openHelpPage("scheduler-app-guide.html");
+  });
+
+  async function openHelpPage(fileName) {
     try {
       const devUrl = process.env.VITE_DEV_SERVER_URL;
       let target;
       if (devUrl) {
-        target = `${devUrl.replace(/\/$/, "")}/help/google-sheets-setup.html`;
+        target = `${devUrl.replace(/\/$/, "")}/help/${fileName}`;
       } else {
-        const filePath = path.join(__dirname, "..", "dist", "help", "google-sheets-setup.html");
+        const filePath = path.join(__dirname, "..", "dist", "help", fileName);
         target = `file://${filePath.replace(/\\/g, "/")}`;
       }
       await shell.openExternal(target);
@@ -419,7 +431,7 @@ function createWindow() {
     } catch (err) {
       return { ok: false, error: err.message || String(err) };
     }
-  });
+  }
 }
 
 app.whenReady().then(() => {

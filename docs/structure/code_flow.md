@@ -159,6 +159,22 @@
 
 `src/App.tsx | openSheetsSetupHelp | function | 연결 탭의 [설정 방법 자세히 보기] 버튼 클릭 시 IPC 호출 | -> electronAPI.helpOpenSheetsSetup`
 
+`public/help/scheduler-app-guide.html | static guide | static page | 스케줄러 앱 사용 방법 가이드 정적 HTML. 8개 섹션 (상단바/탭/컬럼별 기능/행·열/다시보기 자동 누적/시트설정↔시트 연계/단축키/동기화). 시트 컬럼 카드 grid + 시트설정↔시트 연계 다이어그램 카드 + 키맵 | -`
+
+`electron/main.js | help-open-app-guide (IPC) | handler | shell.openExternal로 scheduler-app-guide.html 열기. 내부적으로 openHelpPage(fileName) 헬퍼 공용 사용 | -> shell.openExternal`
+
+`electron/preload.js | helpOpenAppGuide | bridge | 렌더러 → main의 help-open-app-guide 호출 | -`
+
+`src/App.tsx | openAppGuideHelp | function | 시트 설정 탭 상단의 [사용 방법 자세히 보기] 배너 버튼 클릭 시 IPC 호출 | -> electronAPI.helpOpenAppGuide`
+
+`src/App.tsx | groupCollapsed / toggleGroupCollapsed | state+function | 숏폼/롱폼 [할 일]/[완료됨] 그룹 접힘 상태. 탭별 + 그룹별 boolean. localStorage("inel-scheduler-group-collapsed")에 저장. 그룹 헤더 행 클릭으로 토글, ▾ caret이 회전(-90deg)으로 시각화. 두 그룹 사이에 group-spacer-tbody 한 줄(높이 14px)로 시각적 간격 | -`
+
+`src/App.tsx | taskFilter / setTaskFilterFor | state+function | 탭별 작업 필터 ("todoOnly"|"all"). 기본 "todoOnly". "todoOnly"면 [완료됨] 그룹(헤더+spacer+행) 통째로 미렌더. localStorage("inel-scheduler-task-filter")에 저장. 월 페이저 옆 .task-filter-toggle UI | -`
+
+`src/App.tsx | groupVisibleCount / adjustGroupVisible | state+function | 탭/그룹별 표시 행 수 (기본 10, 최소 5, 최대 30, 5단위 조절). 그룹 헤더 우측 .group-visible-control 컨트롤(− / + / "표시 N / 총 X · M개 더"). slice(0, count)로 자르고 초과분은 .group-overflow-cell 안내. localStorage("inel-scheduler-group-visible-count") | -`
+
+`src/App.tsx | isRowLocked (renderTaskRow 내부) | computed | row.values.upload === "완"이면 tr에 row-locked 추가, 업로드 외 모든 td에 is-locked 추가. CSS로 회색화 + pointer-events 차단. row-action-col(드래그/삭제)와 업로드 토글은 잠금 제외 → 행 정리/해제 가능 | -`
+
 `src/App.tsx | settingsTab + settings-tabs UI | state+JSX | 설정 패널을 [시트 설정] / [구글 시트 연결] 두 탭으로 분리. 시트 탭=치지직 링크/작업상태/담당자 등록/방송 감지/되살리기 설정/히스토리, 연결 탭=상단 도움말 배너 + Sheets URL/Service Account JSON/연결 테스트 | -`
 
 `src/App.tsx | undoStack / redoStack / maxUndoSize / lastEditCellRef | state+ref | undo/redo 양방향 스택. 기본 10단계, 설정에서 5~50단계 슬라이더 조정. 같은 (tab,row,col,role) 셀 연속 편집은 lastEditCellRef로 묶어 1단계로 처리 | -`
