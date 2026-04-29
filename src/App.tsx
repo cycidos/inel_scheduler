@@ -117,64 +117,41 @@ const tabs: Array<{ key: TabKey; label: string }> = [
 const EDIT_TYPE_OPTIONS = ["미설정", "하이라이트 편집", "컷편집", "무편집", "풀편집", "-"];
 const SUBTITLE_OPTIONS = ["미설정", "기본 자막", "자막X", "효과자막 포함", "-"];
 
+const buildShortLongSchema = (): ColumnDef[] => [
+  { key: "upload", label: "업로드", type: "status", width: 100, shared: true },
+  { key: "broadcastDate", label: "방송일", type: "date", width: 140, shared: true },
+  { key: "videoTitle", label: "영상제목", type: "text", width: 240, shared: true },
+  { key: "videoCategory", label: "영상 카테고리", type: "select", width: 220, shared: true },
+  { key: "assignee", label: "담당자", type: "text", width: 160 },
+  {
+    key: "editType",
+    label: "편집 유형",
+    type: "preset",
+    width: 150,
+    presetOptions: EDIT_TYPE_OPTIONS,
+    presetDefaults: { thumbnailer: "-", editor: "미설정" }
+  },
+  {
+    key: "subtitle",
+    label: "자막",
+    type: "preset",
+    width: 140,
+    presetOptions: SUBTITLE_OPTIONS,
+    presetDefaults: { thumbnailer: "-", editor: "미설정" }
+  },
+  { key: "editStartDate", label: "작업시작일", type: "date", width: 150 },
+  { key: "workStatus", label: "작업상태", type: "status", width: 140 },
+  { key: "deliveryDate", label: "납품일", type: "date", width: 140 },
+  { key: "sourceShare", label: "원본 공유", type: "url", width: 180 },
+  { key: "deliveryShare", label: "납품 공유", type: "url", width: 180 }
+];
+
 const tableSchema: Record<TabKey, ColumnDef[]> = {
-  shorts: [
-    { key: "upload", label: "업로드", type: "status", width: 90, shared: true },
-    { key: "broadcastDate", label: "방송날짜", type: "date", width: 160, shared: true },
-    { key: "videoTitle", label: "영상제목", type: "text", width: 240, shared: true },
-    { key: "videoCategory", label: "영상 카테고리", type: "select", width: 220, shared: true },
-    { key: "assignee", label: "담당자", type: "text", width: 160 },
-    { key: "editStartDate", label: "작업시작일", type: "date", width: 160 },
-    { key: "deliveryDate", label: "납품일", type: "date", width: 150 },
-    {
-      key: "editType",
-      label: "편집 유형",
-      type: "preset",
-      width: 150,
-      presetOptions: EDIT_TYPE_OPTIONS,
-      presetDefaults: { thumbnailer: "-", editor: "미설정" }
-    },
-    {
-      key: "subtitle",
-      label: "자막",
-      type: "preset",
-      width: 140,
-      presetOptions: SUBTITLE_OPTIONS,
-      presetDefaults: { thumbnailer: "-", editor: "미설정" }
-    },
-    { key: "sourceShare", label: "원본 공유", type: "url", width: 200 },
-    { key: "deliveryShare", label: "납품 공유", type: "url", width: 200 }
-  ],
-  longform: [
-    { key: "upload", label: "업로드", type: "status", width: 90, shared: true },
-    { key: "broadcastDate", label: "방송날짜", type: "date", width: 160, shared: true },
-    { key: "videoTitle", label: "영상제목", type: "text", width: 240, shared: true },
-    { key: "videoCategory", label: "영상 카테고리", type: "select", width: 220, shared: true },
-    { key: "assignee", label: "담당자", type: "text", width: 160 },
-    { key: "editStartDate", label: "작업시작일", type: "date", width: 160 },
-    { key: "deliveryDate", label: "납품일", type: "date", width: 150 },
-    {
-      key: "editType",
-      label: "편집 유형",
-      type: "preset",
-      width: 150,
-      presetOptions: EDIT_TYPE_OPTIONS,
-      presetDefaults: { thumbnailer: "-", editor: "미설정" }
-    },
-    {
-      key: "subtitle",
-      label: "자막",
-      type: "preset",
-      width: 140,
-      presetOptions: SUBTITLE_OPTIONS,
-      presetDefaults: { thumbnailer: "-", editor: "미설정" }
-    },
-    { key: "sourceShare", label: "원본 공유", type: "url", width: 200 },
-    { key: "deliveryShare", label: "납품 공유", type: "url", width: 200 }
-  ],
+  shorts: buildShortLongSchema(),
+  longform: buildShortLongSchema(),
   fullReplay: [
-    { key: "upload", label: "업로드", type: "status", width: 90, shared: true },
-    { key: "broadcastDate", label: "방송날짜", type: "date", width: 160, shared: true },
+    { key: "upload", label: "업로드", type: "status", width: 100, shared: true },
+    { key: "broadcastDate", label: "방송일", type: "date", width: 140, shared: true },
     { key: "videoTitle", label: "영상제목", type: "text", width: 280, shared: true },
     { key: "categoryTimeline", label: "카테고리 타임라인", type: "text", width: 320, shared: true }
   ]
@@ -196,6 +173,7 @@ const initialRows: Record<TabKey, RowItem[]> = {
       thumbnailer: {
         assignee: "",
         editStartDate: "2026-04-13",
+        workStatus: "",
         deliveryDate: "2026-04-15",
         editType: "-",
         subtitle: "-",
@@ -205,6 +183,7 @@ const initialRows: Record<TabKey, RowItem[]> = {
       editor: {
         assignee: "",
         editStartDate: "",
+        workStatus: "",
         deliveryDate: "",
         editType: "미설정",
         subtitle: "미설정",
@@ -225,6 +204,7 @@ const initialRows: Record<TabKey, RowItem[]> = {
       thumbnailer: {
         assignee: "",
         editStartDate: "",
+        workStatus: "",
         deliveryDate: "",
         editType: "-",
         subtitle: "-",
@@ -234,6 +214,7 @@ const initialRows: Record<TabKey, RowItem[]> = {
       editor: {
         assignee: "",
         editStartDate: "",
+        workStatus: "Wip",
         deliveryDate: "2026-04-18",
         editType: "풀편집",
         subtitle: "효과자막 포함",
@@ -2178,6 +2159,7 @@ function App() {
                 </th>
                 );
               })}
+              <th className="spacer-col" aria-hidden="true" />
             </tr>
           </thead>
           {(() => {
@@ -2264,6 +2246,9 @@ function App() {
                         </td>
                       );
                     })}
+                    {isFirstSub ? (
+                      <td className="spacer-col" rowSpan={hasTwoRows ? 2 : 1} aria-hidden="true" />
+                    ) : null}
                   </tr>
                 );
               });
@@ -2276,7 +2261,7 @@ function App() {
 
             const todoRows = filteredData.filter((r) => (r.values.upload || "") !== "완");
             const doneRows = filteredData.filter((r) => (r.values.upload || "") === "완");
-            const totalCols = columns.length + 1;
+            const totalCols = columns.length + 2;
             const renderGroupHeader = (variant: "todo" | "done", label: string, count: number) => (
               <tr className={`group-header group-header-${variant}`}>
                 <td colSpan={totalCols}>
@@ -2307,7 +2292,7 @@ function App() {
           })()}
           <tfoot>
             <tr>
-              <td colSpan={columns.length + 1} className="add-row-footer-cell">
+              <td colSpan={columns.length + 2} className="add-row-footer-cell">
                 <button type="button" className="add-row-footer" onClick={addRow}>
                   + 새 행 추가
                 </button>

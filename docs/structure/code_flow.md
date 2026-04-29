@@ -47,7 +47,9 @@
 
 `src/App.tsx | App | component | Work Scheduler 기본 탭(Shorts/Longform/Full Replay) 및 테이블 렌더링 | -> src/styles.css`
 
-`src/App.tsx | tableSchema | const | 탭별 기본 컬럼 정의. shorts/longform: 업로드/방송날짜/영상제목/영상카테고리(shared) + 담당자/작업시작일/납품일/편집유형/자막/원본공유/납품공유(per-role). fullReplay: 모두 shared. 편집유형/자막은 type=preset (썸네일러 기본 "-", 영상편집자 기본 "미설정") | -`
+`src/App.tsx | tableSchema / buildShortLongSchema | const+factory | 탭별 기본 컬럼 정의. shorts/longform: 업로드/방송일/영상제목/영상카테고리(shared) + 담당자/편집유형/자막/작업시작일/작업상태/납품일/원본공유/납품공유(per-role). fullReplay: 업로드/방송일/영상제목/카테고리타임라인 (모두 shared, 컬럼 폭 고정). 편집유형/자막은 type=preset (썸네일러 기본 "-", 영상편집자 기본 "미설정"). 작업상태는 type=status (statusOptions 사용) | -`
+
+`src/App.tsx | spacer-col (thead/tbody/tfoot) | layout | table-layout:fixed에서 컬럼 합이 화면 폭보다 작을 때 다른 컬럼이 비례 확장되지 않도록 마지막에 빈 spacer th/td 추가. width:auto + min-width:0으로 남는 공간 흡수. shared rowSpan과 호환되도록 spacer td는 isFirstSub일 때 rowSpan=hasTwoRows?2:1 | -`
 
 `src/App.tsx | ColumnType "preset" / ColumnDef.presetOptions / presetDefaults | type field | 옵션 dropdown + 직접 입력 가능한 단일값 셀. role별 초기값 지정 가능 (thumbnailer/editor/default) | -`
 

@@ -977,6 +977,23 @@ th.row-action-col {
   background: #fce7f3;
 }
 
+/* table-layout: fixed에서 컬럼 합이 100%보다 작을 때 비례 확장되는 것을 방지하기 위한 spacer.
+   마지막에 두면 남는 가로 공간을 spacer가 모두 흡수하고, 다른 컬럼의 명시 너비가 그대로 유지된다. */
+th.spacer-col,
+td.spacer-col {
+  width: auto;
+  min-width: 0;
+  padding: 0;
+  background: transparent;
+  border-bottom: 1px solid #fce7f3;
+  border-left: none;
+}
+
+th.spacer-col {
+  background: #fce7f3;
+  border-bottom: 1px solid #fbcfe8;
+}
+
 .row-hover-actions {
   display: inline-flex;
   flex-direction: column;
