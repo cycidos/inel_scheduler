@@ -3440,59 +3440,7 @@ function App() {
                       <span className="slider" />
                     </label>
                   </div>
-                  <p className="etc-card-desc">
-                    켜면 PC 부팅 시 Inel Work Scheduler 가 자동으로 실행됩니다.
-                    설치 빌드(.exe)에서만 정상 동작하며, 개발(<code>npm run dev</code>) 환경에서는 효과가 없습니다.
-                  </p>
                   {autoStartMessage && <p className="etc-card-msg">{autoStartMessage}</p>}
-                </div>
-
-                <div className="etc-card">
-                  <div className="etc-card-head">
-                    <strong>편집자/썸네일러 전용 설치 파일 만들기</strong>
-                    <span className="etc-badge">2차 배포 예정</span>
-                  </div>
-                  <p className="etc-card-desc">
-                    각 담당자 이름으로 토큰을 발급해 시트의 <code>_tokens</code> 시트에 등록하고,
-                    해당 토큰이 내장된 .exe 인스톨러를 자동 빌드하는 기능입니다.
-                    아래는 미리 보여주는 UI 만 있고 실제 빌드는 비활성화 상태입니다.
-                  </p>
-                  <div className="staff-installer-list">
-                    {staffList.length === 0 ? (
-                      <p className="etc-card-empty">
-                        먼저 [시트 설정] 탭에서 편집자/썸네일러를 등록하세요.
-                      </p>
-                    ) : (
-                      staffList.map((s) => (
-                        <div key={s.id} className="staff-installer-row">
-                          <span className={`staff-chip role-${s.role}`}>
-                            {ROLE_LABEL[s.role]} · {s.name}
-                          </span>
-                          <button
-                            type="button"
-                            className="etc-installer-btn"
-                            disabled
-                            title="2차 배포에서 활성화됩니다."
-                          >
-                            인스톨러 빌드
-                          </button>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-
-                <div className="etc-card etc-card-info">
-                  <strong>토큰(_tokens) 시트 안내</strong>
-                  <p className="etc-card-desc">
-                    편집자별 인스톨러는 빌드 시 <code>_tokens</code> 시트에 토큰을 자동 등록합니다.
-                    관리자가 해당 시트를 수동으로 만들 필요는 없으며, 처음 빌드 버튼을 누를 때
-                    앱이 시트가 없으면 자동으로 생성합니다. 권한이 회수된 편집자는 토큰 행을 삭제하면
-                    다음 실행에서 앱이 잠깁니다.
-                  </p>
-                  <p className="etc-card-desc">
-                    위 동작은 현재 설계 문서(§10-3)에 정의되어 있고, 2차 배포에서 활성화될 예정입니다.
-                  </p>
                 </div>
               </>
             )}
