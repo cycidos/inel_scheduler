@@ -9,17 +9,15 @@
 ;        - 윈도우 시작 시 자동 실행      (기본 체크)
 ;   3) 선택값에 따라 바로가기 / Run 레지스트리 등록
 ;   4) 언인스톨 시 위 항목들 함께 정리
+;
+; NSIS 빌드는 installer 와 uninstaller 를 각각 컴파일하므로
+; install 전용 변수/함수는 !ifndef BUILD_UNINSTALLER 로 감싸야
+; "warning 6010: install function ... not referenced" 가 안 난다.
 ; ───────────────────────────────────────────────────────────────
 
+!include "MUI2.nsh"
 !include "nsDialogs.nsh"
 !include "LogicLib.nsh"
-!include "MUI2.nsh"
-
-Var InelOptDialog
-Var InelDesktopShortcutCheckbox
-Var InelDesktopShortcutState
-Var InelAutoStartCheckbox
-Var InelAutoStartState
 
 ; ───────────────────────────────────────────────────────────────
 ; preInit:
@@ -33,9 +31,16 @@ Var InelAutoStartState
 !macroend
 
 ; ───────────────────────────────────────────────────────────────
-; customPageAfterChangeDir:
-;   디렉토리 선택 페이지 다음에 추가 옵션 페이지 삽입.
+; (Installer 전용) 옵션 체크박스 페이지
 ; ───────────────────────────────────────────────────────────────
+!ifndef BUILD_UNINSTALLER
+
+Var InelOptDialog
+Var InelDesktopShortcutCheckbox
+Var InelDesktopShortcutState
+Var InelAutoStartCheckbox
+Var InelAutoStartState
+
 !macro customPageAfterChangeDir
   Page custom InelOptionsPageCreate InelOptionsPageLeave
 !macroend
@@ -68,11 +73,6 @@ Function InelOptionsPageLeave
   ${NSD_GetState} $InelAutoStartCheckbox $InelAutoStartState
 FunctionEnd
 
-; ───────────────────────────────────────────────────────────────
-; customInstall:
-;   electron-builder의 기본 설치가 끝난 직후 호출.
-;   사용자가 체크한 옵션을 적용.
-; ───────────────────────────────────────────────────────────────
 !macro customInstall
   ${If} $InelDesktopShortcutState == ${BST_CHECKED}
     CreateShortCut "$DESKTOP\${PRODUCT_NAME}.lnk" "$INSTDIR\${APP_EXECUTABLE_FILENAME}"
@@ -84,6 +84,8 @@ FunctionEnd
     DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "${PRODUCT_NAME}"
   ${EndIf}
 !macroend
+
+!endif ; !BUILD_UNINSTALLER
 
 ; ───────────────────────────────────────────────────────────────
 ; customUnInstall:
