@@ -60,6 +60,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   autostartGet: () => ipcRenderer.invoke("autostart-get"),
   autostartSet: (enabled) => ipcRenderer.invoke("autostart-set", { enabled }),
+  openUserDataDir: () => ipcRenderer.invoke("open-user-data-dir"),
 
   aiListModels: (provider, apiKey) =>
     ipcRenderer.invoke("ai-list-models", { provider, apiKey }),

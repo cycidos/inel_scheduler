@@ -2,6 +2,7 @@ const { app, BrowserWindow, Menu, ipcMain, dialog, shell } = require("electron")
 const path = require("path");
 const https = require("https");
 const fs = require("fs");
+const { execFile } = require("child_process");
 const { google } = require("googleapis");
 
 let pollingTimer = null;
@@ -738,6 +739,16 @@ function createWindow() {
     }
   });
 
+  ipcMain.handle("open-user-data-dir", async () => {
+    try {
+      const dir = app.getPath("userData");
+      await shell.openPath(dir);
+      return { ok: true, path: dir };
+    } catch (err) {
+      return { ok: false, error: err.message || String(err) };
+    }
+  });
+
   ipcMain.handle("autostart-set", async (_event, { enabled }) => {
     try {
       if (process.platform !== "win32") {
@@ -872,8 +883,41 @@ function createWindow() {
   }
 }
 
+/**
+ * 인스톨러가 남긴 PendingAutoStart 값을 읽어
+ * Electron 표준 형식으로 자동실행을 등록/해제하고, 임시 키를 삭제한다.
+ *
+ * 이렇게 하면:
+ *   - 설치 시 [윈도우 시작 시 자동 실행] 체크 → 부팅 시 자동 실행
+ *   - 그리고 앱의 [기타 설정] 탭의 자동실행 토글도 정확히 ON 상태로 표시됨
+ *     (Electron 의 getLoginItemSettings 가 자기 형식으로 등록된 키만 정확히 인식)
+ */
+function applyPendingAutoStart() {
+  if (process.platform !== "win32") return;
+  if (!app.isPackaged) return;
+  try {
+    const productName = app.getName();
+    const subKey = `HKCU\\Software\\${productName}`;
+    execFile("reg.exe", ["query", subKey, "/v", "PendingAutoStart"], (err, stdout) => {
+      if (err) return;
+      const m = String(stdout || "").match(/PendingAutoStart\s+REG_SZ\s+(\d)/i);
+      if (!m) return;
+      const enabled = m[1] === "1";
+      try {
+        app.setLoginItemSettings({
+          openAtLogin: enabled,
+          path: process.execPath,
+          args: []
+        });
+      } catch (_) {}
+      execFile("reg.exe", ["delete", subKey, "/v", "PendingAutoStart", "/f"], () => {});
+    });
+  } catch (_) {}
+}
+
 app.whenReady().then(() => {
   Menu.setApplicationMenu(null);
+  applyPendingAutoStart();
   createWindow();
 
   app.on("activate", () => {

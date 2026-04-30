@@ -3449,6 +3449,35 @@ function App() {
 
                 <div className="etc-card">
                   <div className="etc-card-head">
+                    <strong>설정 데이터 폴더</strong>
+                    <button
+                      type="button"
+                      className="etc-installer-btn"
+                      style={{ background: "#ec4899", color: "#fff", borderColor: "#ec4899", cursor: "pointer" }}
+                      onClick={async () => {
+                        const api = (window as any).electronAPI;
+                        if (!api?.openUserDataDir) {
+                          dlog("[etc] openUserDataDir 사용 불가 (Electron 환경 아님)");
+                          return;
+                        }
+                        const res = await api.openUserDataDir();
+                        if (res?.ok) dlog(`[etc] 데이터 폴더 열림: ${res.path}`);
+                        else dlog(`[etc] 데이터 폴더 열기 실패: ${res?.error}`);
+                      }}
+                    >
+                      폴더 열기
+                    </button>
+                  </div>
+                  <p className="etc-card-desc">
+                    AI API 키, 시트 링크, 그룹 표시 상태 등 앱 설정과 사용자 카테고리는
+                    Windows 표준 위치인 <code>%APPDATA%\Inel Work Scheduler\</code> 에 저장됩니다.
+                    설치 폴더(내문서)와는 다른 위치이므로, 백업하거나 다른 PC 로 옮길 때
+                    이 폴더를 함께 복사하세요.
+                  </p>
+                </div>
+
+                <div className="etc-card">
+                  <div className="etc-card-head">
                     <strong>편집자/썸네일러 전용 설치 파일 만들기</strong>
                     <span className="etc-badge">2차 배포 예정</span>
                   </div>
