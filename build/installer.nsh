@@ -113,6 +113,10 @@ FunctionEnd
   RMDir /r "$APPDATA\${PRODUCT_NAME}"
   RMDir /r "$LOCALAPPDATA\${PRODUCT_NAME}"
 
+  ; electron-builder 자동 업데이트 캐시 폴더 (이름은 package.json 의 npm name + "-updater")
+  ; 우리 경우: %LOCALAPPDATA%\inel_scheduler-updater
+  RMDir /r "$LOCALAPPDATA\${APP_PACKAGE_NAME}-updater"
+
   ; 설치 폴더 자체가 비어있으면 같이 정리
   ; (사용자가 직접 만든 파일이 있으면 NSIS 가 알아서 보존)
   RMDir "$INSTDIR"
