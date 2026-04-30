@@ -78,10 +78,15 @@ FunctionEnd
     CreateShortCut "$DESKTOP\${PRODUCT_NAME}.lnk" "$INSTDIR\${APP_EXECUTABLE_FILENAME}"
   ${EndIf}
 
+  ; 자동실행은 Electron 이 자기 표준 형식(따옴표/args 포함)으로 등록해야
+  ; getLoginItemSettings 가 정확히 ON 으로 인식한다.
+  ; 따라서 여기서는 Run 키를 직접 만지지 않고, 사용자 의도만
+  ; HKCU\Software\Inel Work Scheduler 의 PendingAutoStart 값에 적어둔다.
+  ; 앱이 첫 실행될 때 main.js 가 이 값을 읽어 app.setLoginItemSettings 호출 후 키를 지운다.
   ${If} $InelAutoStartState == ${BST_CHECKED}
-    WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "${PRODUCT_NAME}" "$INSTDIR\${APP_EXECUTABLE_FILENAME}"
+    WriteRegStr HKCU "Software\${PRODUCT_NAME}" "PendingAutoStart" "1"
   ${Else}
-    DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "${PRODUCT_NAME}"
+    WriteRegStr HKCU "Software\${PRODUCT_NAME}" "PendingAutoStart" "0"
   ${EndIf}
 !macroend
 
@@ -94,4 +99,5 @@ FunctionEnd
 !macro customUnInstall
   Delete "$DESKTOP\${PRODUCT_NAME}.lnk"
   DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "${PRODUCT_NAME}"
+  DeleteRegKey HKCU "Software\${PRODUCT_NAME}"
 !macroend
