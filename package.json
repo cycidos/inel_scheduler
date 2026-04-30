@@ -92,7 +92,7 @@
       "createStartMenuShortcut": true,
       "shortcutName": "Inel Work Scheduler",
       "include": "build/installer.nsh",
-      "deleteAppDataOnUninstall": false,
+      "deleteAppDataOnUninstall": true,
       "runAfterFinish": true
     }
   }

@@ -94,10 +94,26 @@ FunctionEnd
 
 ; ───────────────────────────────────────────────────────────────
 ; customUnInstall:
-;   언인스톨 시 바탕화면 바로가기와 자동실행 등록 정리.
+;   언인스톨 시 모든 흔적을 깨끗이 정리.
+;   - 바탕화면 바로가기
+;   - 자동실행 Run 키
+;   - PendingAutoStart 임시 키
+;   - 사용자 데이터 폴더 (AppData / LocalAppData)
+;
+;   electron-builder 의 deleteAppDataOnUninstall: true 만으로는
+;   $LOCALAPPDATA 의 Chromium 캐시(GPUCache, Code Cache 등)가 남는 경우가
+;   있어 RMDir /r 로 안전망을 한 번 더 둔다.
 ; ───────────────────────────────────────────────────────────────
 !macro customUnInstall
   Delete "$DESKTOP\${PRODUCT_NAME}.lnk"
   DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "${PRODUCT_NAME}"
   DeleteRegKey HKCU "Software\${PRODUCT_NAME}"
+
+  ; 사용자 데이터/캐시 폴더 강제 삭제 (실패해도 무시됨)
+  RMDir /r "$APPDATA\${PRODUCT_NAME}"
+  RMDir /r "$LOCALAPPDATA\${PRODUCT_NAME}"
+
+  ; 설치 폴더 자체가 비어있으면 같이 정리
+  ; (사용자가 직접 만든 파일이 있으면 NSIS 가 알아서 보존)
+  RMDir "$INSTDIR"
 !macroend
