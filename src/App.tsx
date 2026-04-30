@@ -29,9 +29,48 @@ declare global {
         Promise<{ ok: boolean; categories?: Array<{ categoryId: string; categoryValue: string; categoryType: string }>; keyword?: string; error?: string }>;
       helpOpenSheetsSetup: () => Promise<{ ok: boolean; url?: string; error?: string }>;
       helpOpenAppGuide: () => Promise<{ ok: boolean; url?: string; error?: string }>;
+      helpOpenAiSetup: () => Promise<{ ok: boolean; url?: string; error?: string }>;
+      aiListModels: (provider: string, apiKey: string) => Promise<{
+        ok: boolean;
+        provider?: string;
+        models?: Array<{ id: string; label: string; created?: number | string | null }>;
+        totalCount?: number;
+        elapsedMs?: number;
+        error?: string;
+        log?: string;
+      }>;
+      aiAnalyzeCsv: (
+        provider: string,
+        apiKey: string,
+        model: string,
+        csvHeader: string[],
+        csvSample: string[][],
+        ourSchema: Array<{ key: string; label: string; type: string; options?: string[] }>
+      ) => Promise<{
+        ok: boolean;
+        mapping?: AiMapping;
+        elapsedMs?: number;
+        error?: string;
+        trace?: string[];
+      }>;
+      getFilePath: (file: File) => string;
     };
   }
 }
+
+type AiProvider = "openai" | "anthropic" | "google";
+
+type AiMapping = {
+  headerMap: Record<string, string | null>;
+  valueMaps?: Record<string, Record<string, string>>;
+  dateFormat?: Record<string, string>;
+  splitColumns?: Record<string, { delimiter: string; trim?: boolean }>;
+  ignoreColumns?: string[];
+  twoRowAssignment?: { thumbnailerColumn?: string | null; editorColumn?: string | null };
+  notes?: string;
+};
+
+type AiModelInfo = { id: string; label: string; created?: number | string | null };
 
 type ChzzkStatus = {
   live: boolean;
@@ -338,7 +377,10 @@ function App() {
   const autoSyncDoneRef = useRef(false);
   const [clientEmail, setClientEmail] = useState("");
   const [isDraggingJson, setIsDraggingJson] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<"sheet" | "connection">("sheet");
+  const [settingsTab, setSettingsTab] = useState<"sheet" | "connection" | "ai" | "etc">("sheet");
+  const [autoStartEnabled, setAutoStartEnabled] = useState(false);
+  const [autoStartLoading, setAutoStartLoading] = useState(false);
+  const [autoStartMessage, setAutoStartMessage] = useState("");
   const settingsPanelRef = useRef<HTMLElement>(null);
   const settingsButtonRef = useRef<HTMLButtonElement>(null);
   const [chzzkLink, setChzzkLink] = useState("https://chzzk.naver.com/live/1482d68b3478d2962e9d000ed6a33167");
@@ -534,6 +576,420 @@ function App() {
       try { localStorage.setItem("inel-scheduler-group-visible-count", JSON.stringify(next)); } catch {}
       return next;
     });
+  };
+
+  // AI provider/모델/API key + 임시 모달 상태
+  const [aiProvider, setAiProvider] = useState<AiProvider>(() => {
+    try {
+      const v = localStorage.getItem("inel-scheduler-ai-provider");
+      if (v === "openai" || v === "anthropic" || v === "google") return v;
+    } catch {}
+    return "google";
+  });
+  const [aiApiKey, setAiApiKey] = useState<string>(() => {
+    try { return localStorage.getItem("inel-scheduler-ai-apikey") || ""; } catch { return ""; }
+  });
+  const [aiModel, setAiModel] = useState<string>(() => {
+    try { return localStorage.getItem("inel-scheduler-ai-model") || ""; } catch { return ""; }
+  });
+  const [aiAvailableModels, setAiAvailableModels] = useState<AiModelInfo[]>(() => {
+    try {
+      const raw = localStorage.getItem("inel-scheduler-ai-models");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return parsed.slice(0, 5);
+      }
+    } catch {}
+    return [];
+  });
+  const [aiModelLoading, setAiModelLoading] = useState(false);
+  const [aiModelError, setAiModelError] = useState("");
+  const [aiKeyVisible, setAiKeyVisible] = useState(false);
+
+  const persistAiState = (
+    provider: AiProvider,
+    apiKey: string,
+    model: string,
+    models?: AiModelInfo[]
+  ) => {
+    try {
+      localStorage.setItem("inel-scheduler-ai-provider", provider);
+      localStorage.setItem("inel-scheduler-ai-apikey", apiKey);
+      localStorage.setItem("inel-scheduler-ai-model", model);
+      if (models) localStorage.setItem("inel-scheduler-ai-models", JSON.stringify(models));
+    } catch {}
+  };
+
+  const refreshAiModels = async () => {
+    setAiModelError("");
+    setAiModelLoading(true);
+    dlog(`[AI:list-models] 요청 시작 provider=${aiProvider} apiKey=${aiApiKey ? aiApiKey.slice(0, 8) + "…(" + aiApiKey.length + "자)" : "(없음)"}`);
+    try {
+      if (!window.electronAPI?.aiListModels) {
+        throw new Error("Electron API 사용 불가 (브라우저 단독 실행?)");
+      }
+      if (!aiApiKey) throw new Error("API 키를 먼저 입력해주세요");
+      const res = await window.electronAPI.aiListModels(aiProvider, aiApiKey);
+      if (!res.ok) {
+        dlog(`[AI:list-models] 실패: ${res.error || "(no error)"}`);
+        throw new Error(res.error || "모델 조회 실패");
+      }
+      const list = res.models || [];
+      dlog(`[AI:list-models] 성공: ${res.totalCount}개 중 상위 ${list.length}개 (${res.elapsedMs}ms)`);
+      list.forEach((m, i) => dlog(`  ${i + 1}. ${m.id} (${m.label})`));
+      setAiAvailableModels(list);
+      const newModel = list.find((m) => m.id === aiModel)?.id || list[0]?.id || "";
+      setAiModel(newModel);
+      persistAiState(aiProvider, aiApiKey, newModel, list);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setAiModelError(msg);
+      dlog(`[AI:list-models] FAIL: ${msg}`);
+    } finally {
+      setAiModelLoading(false);
+    }
+  };
+
+  const openAiSetupHelp = async () => {
+    const api = window.electronAPI;
+    if (!api?.helpOpenAiSetup) {
+      dlog("AI 가이드 열기 불가 (Electron 환경 아님)");
+      return;
+    }
+    const res = await api.helpOpenAiSetup();
+    if (res.ok) dlog(`[AI:help] 가이드 열림: ${res.url}`);
+    else dlog(`[AI:help] 실패: ${res.error}`);
+  };
+
+  // ── 윈도우 시작 시 자동 실행 ──
+  useEffect(() => {
+    let cancelled = false;
+    const api = (window as any).electronAPI;
+    if (!api?.autostartGet) return;
+    api.autostartGet().then((res: any) => {
+      if (cancelled) return;
+      if (res?.ok) setAutoStartEnabled(!!res.openAtLogin);
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  const toggleAutoStart = async (next: boolean) => {
+    const api = (window as any).electronAPI;
+    if (!api?.autostartSet) {
+      setAutoStartMessage("Electron 환경이 아니라 적용 불가");
+      return;
+    }
+    setAutoStartLoading(true);
+    setAutoStartMessage("");
+    try {
+      const res = await api.autostartSet(next);
+      if (res?.ok) {
+        setAutoStartEnabled(!!res.openAtLogin);
+        if (res.warning) setAutoStartMessage(res.warning);
+        else setAutoStartMessage(next ? "자동 실행 활성화됨" : "자동 실행 비활성화됨");
+        dlog(`[autostart] ${next ? "ON" : "OFF"} (effective=${res.openAtLogin})`);
+      } else {
+        setAutoStartMessage(`실패: ${res?.error || "unknown"}`);
+        dlog(`[autostart] FAIL: ${res?.error}`);
+      }
+    } catch (err: any) {
+      setAutoStartMessage(`예외: ${err?.message || String(err)}`);
+    } finally {
+      setAutoStartLoading(false);
+    }
+  };
+
+  // ── CSV 임포트 모달 ──
+  type CsvImportPhase = "idle" | "parsed" | "analyzing" | "analyzed" | "failed" | "uploading" | "uploaded";
+  const [csvModalOpen, setCsvModalOpen] = useState(false);
+  const [csvIsDragging, setCsvIsDragging] = useState(false);
+  const [csvFileName, setCsvFileName] = useState("");
+  const [csvHeader, setCsvHeader] = useState<string[]>([]);
+  const [csvRows, setCsvRows] = useState<string[][]>([]);
+  const [csvPhase, setCsvPhase] = useState<CsvImportPhase>("idle");
+  const [csvErrorMsg, setCsvErrorMsg] = useState("");
+  const [csvMapping, setCsvMapping] = useState<AiMapping | null>(null);
+  const [csvConvertedRows, setCsvConvertedRows] = useState<RowItem[]>([]);
+  const [csvTargetTab, setCsvTargetTab] = useState<TabKey>("shorts");
+
+  const resetCsvModal = () => {
+    setCsvFileName("");
+    setCsvHeader([]);
+    setCsvRows([]);
+    setCsvPhase("idle");
+    setCsvErrorMsg("");
+    setCsvMapping(null);
+    setCsvConvertedRows([]);
+  };
+
+  // RFC4180 호환 간단 CSV 파서 (UTF-8 BOM, quoted field, escaped quote, CRLF/LF)
+  const parseCSV = (text: string): string[][] => {
+    if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+    const rows: string[][] = [];
+    let row: string[] = [];
+    let field = "";
+    let inQuotes = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (inQuotes) {
+        if (c === '"') {
+          if (text[i + 1] === '"') { field += '"'; i++; }
+          else inQuotes = false;
+        } else field += c;
+      } else {
+        if (c === '"') inQuotes = true;
+        else if (c === ",") { row.push(field); field = ""; }
+        else if (c === "\r") { /* skip CR */ }
+        else if (c === "\n") { row.push(field); field = ""; rows.push(row); row = []; }
+        else field += c;
+      }
+    }
+    if (field.length || row.length) { row.push(field); rows.push(row); }
+    return rows.filter((r) => r.some((x) => (x || "").length > 0));
+  };
+
+  const handleCsvFileLoaded = async (file: File) => {
+    dlog(`[AI:csv] 파일 로드: name=${file.name} size=${file.size}B type=${file.type || "?"}`);
+    setCsvErrorMsg("");
+    setCsvFileName(file.name);
+    if (!file.name.toLowerCase().endsWith(".csv")) {
+      setCsvPhase("failed");
+      setCsvErrorMsg("CSV 파일만 가능합니다.");
+      dlog(`[AI:csv] FAIL: 확장자 .csv 아님`);
+      return;
+    }
+    try {
+      const text = await file.text();
+      dlog(`[AI:csv] 파싱 시작 chars=${text.length}`);
+      const rows = parseCSV(text);
+      if (rows.length === 0) throw new Error("CSV에 행이 없습니다");
+      const header = rows[0];
+      const data = rows.slice(1);
+      dlog(`[AI:csv] 파싱 완료: header=${header.length} cols, data=${data.length} rows`);
+      dlog(`[AI:csv] header: ${JSON.stringify(header)}`);
+      setCsvHeader(header);
+      setCsvRows(data);
+      setCsvPhase("parsed");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setCsvPhase("failed");
+      setCsvErrorMsg(`CSV 파싱 실패: ${msg}`);
+      dlog(`[AI:csv] FAIL: 파싱 ${msg}`);
+    }
+  };
+
+  const handleCsvDrop = async (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault(); e.stopPropagation();
+    setCsvIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (!file) {
+      dlog(`[AI:csv] 드롭에 파일 없음`);
+      setCsvPhase("failed");
+      setCsvErrorMsg("파일을 드롭해주세요.");
+      return;
+    }
+    await handleCsvFileLoaded(file);
+  };
+
+  const csvSchemaForAI = () => {
+    const cols = tableSchema[csvTargetTab];
+    return cols.map((c) => ({
+      key: c.key,
+      label: c.label,
+      type: c.type,
+      options: c.type === "preset" ? c.presetOptions : (c.type === "status" ? statusOptions.map((s) => s.value) : undefined)
+    }));
+  };
+
+  // 매핑 + 우리 schema에 맞춰 RowItem[] 생성
+  const applyCsvMapping = (mapping: AiMapping): RowItem[] => {
+    const SAMPLE_KEYS = new Set(tableSchema[csvTargetTab].map((c) => c.key));
+    const sharedKeys = new Set(tableSchema[csvTargetTab].filter((c) => c.shared).map((c) => c.key));
+    const headerMap = mapping.headerMap || {};
+    const valueMaps = mapping.valueMaps || {};
+    const splitColumns = mapping.splitColumns || {};
+    const dateFormat = mapping.dateFormat || {};
+
+    const ignored = new Set((mapping.ignoreColumns || []).map(String));
+    const indexByCsvHeader: Record<string, number> = {};
+    csvHeader.forEach((h, i) => { indexByCsvHeader[h] = i; });
+
+    let invalidCount = 0;
+    const out: RowItem[] = [];
+
+    for (let rIdx = 0; rIdx < csvRows.length; rIdx++) {
+      const csvRow = csvRows[rIdx];
+      const values: Record<string, string> = {};
+      const editor: Record<string, string> = {};
+      const thumb: Record<string, string> = {};
+
+      for (const csvCol of csvHeader) {
+        if (ignored.has(csvCol)) continue;
+        const ourKey = headerMap[csvCol];
+        if (!ourKey || ourKey === "null" || !SAMPLE_KEYS.has(ourKey)) continue;
+        let raw = csvRow[indexByCsvHeader[csvCol]] ?? "";
+        raw = String(raw).trim();
+
+        // value map (enum 변환)
+        if (valueMaps[ourKey] && valueMaps[ourKey][raw]) raw = valueMaps[ourKey][raw];
+
+        // date format 정규화 (YYYY-MM-DD)
+        if (dateFormat[ourKey] && raw) raw = normalizeDate(raw, dateFormat[ourKey]) || raw;
+
+        // multi-tag split
+        if (splitColumns[ourKey] && raw) {
+          const parts = raw.split(splitColumns[ourKey].delimiter)
+            .map((s) => splitColumns[ourKey].trim ? s.trim() : s)
+            .filter(Boolean);
+          raw = parts.join("|");
+        }
+
+        if (sharedKeys.has(ourKey)) {
+          values[ourKey] = raw;
+        } else {
+          // 2행 구조 — twoRowAssignment 힌트 우선
+          const twoRow = mapping.twoRowAssignment || {};
+          if (twoRow.thumbnailerColumn && csvCol === twoRow.thumbnailerColumn) thumb[ourKey] = raw;
+          else if (twoRow.editorColumn && csvCol === twoRow.editorColumn) editor[ourKey] = raw;
+          else editor[ourKey] = raw; // 기본: 영상편집자 행
+        }
+      }
+
+      if (Object.keys(values).length === 0 && Object.keys(editor).length === 0 && Object.keys(thumb).length === 0) {
+        invalidCount++;
+        continue;
+      }
+
+      const newRow: RowItem = {
+        id: `csv-${Date.now()}-${rIdx}-${Math.random().toString(36).slice(2, 7)}`,
+        values
+      };
+      if (csvTargetTab !== "fullReplay") {
+        newRow.thumbnailer = thumb;
+        newRow.editor = editor;
+      } else {
+        // 다시보기 탭은 단일 행 — editor/thumb 합치기
+        newRow.values = { ...values, ...editor, ...thumb };
+      }
+      out.push(newRow);
+    }
+
+    dlog(`[AI:apply] 변환 완료: 입력 ${csvRows.length}행 → 출력 ${out.length}행 (무효 ${invalidCount}행)`);
+    return out;
+  };
+
+  // YYYY-MM-DD로 정규화
+  const normalizeDate = (raw: string, format: string): string | null => {
+    const f = (format || "YYYY-MM-DD").toUpperCase();
+    const m = raw.match(/(\d{1,4})\D(\d{1,2})\D(\d{1,4})/);
+    if (!m) return null;
+    let y: string, mo: string, d: string;
+    if (f.startsWith("Y")) { y = m[1]; mo = m[2]; d = m[3]; }
+    else if (f.startsWith("M")) { mo = m[1]; d = m[2]; y = m[3]; }
+    else if (f.startsWith("D")) { d = m[1]; mo = m[2]; y = m[3]; }
+    else { y = m[1]; mo = m[2]; d = m[3]; }
+    if (y.length === 2) y = (Number(y) > 50 ? "19" : "20") + y;
+    const yy = y.padStart(4, "0");
+    const mm = mo.padStart(2, "0");
+    const dd = d.padStart(2, "0");
+    return `${yy}-${mm}-${dd}`;
+  };
+
+  const runCsvAnalyze = async () => {
+    setCsvErrorMsg("");
+    setCsvPhase("analyzing");
+    dlog(`[AI:analyze] CSV 분석 시작 provider=${aiProvider} model=${aiModel || "(없음)"} target=${csvTargetTab}`);
+    if (!aiApiKey) {
+      setCsvPhase("failed");
+      setCsvErrorMsg("AI API 키를 먼저 설정에서 등록해주세요.");
+      dlog(`[AI:analyze] FAIL: API 키 없음`);
+      return;
+    }
+    if (!aiModel) {
+      setCsvPhase("failed");
+      setCsvErrorMsg("AI 모델을 먼저 선택해주세요. (설정 → AI 연결 → 모델 갱신)");
+      dlog(`[AI:analyze] FAIL: 모델 없음`);
+      return;
+    }
+    try {
+      const sample = csvRows.slice(0, Math.min(8, csvRows.length));
+      dlog(`[AI:analyze] 전송: header=${csvHeader.length}컬럼, sample=${sample.length}행 (전체 ${csvRows.length}행 중)`);
+      const ourSchema = csvSchemaForAI();
+      const res = await window.electronAPI?.aiAnalyzeCsv?.(
+        aiProvider, aiApiKey, aiModel, csvHeader, sample, ourSchema
+      );
+      // trace를 디버그 패널에 그대로 흘림
+      if (res?.trace) res.trace.forEach((line) => dlog(line));
+      if (!res?.ok) {
+        setCsvPhase("failed");
+        setCsvErrorMsg(res?.error || "AI 분석 실패");
+        dlog(`[AI:analyze] FAIL: ${res?.error}`);
+        return;
+      }
+      const mapping = res.mapping!;
+      setCsvMapping(mapping);
+      dlog(`[AI:analyze] OK (${res.elapsedMs}ms)`);
+      dlog(`[AI:analyze] mapping notes: ${mapping.notes || "(없음)"}`);
+      dlog(`[AI:analyze] headerMap raw: ${JSON.stringify(mapping.headerMap)}`);
+      const converted = applyCsvMapping(mapping);
+      setCsvConvertedRows(converted);
+      if (converted.length === 0) {
+        setCsvPhase("failed");
+        setCsvErrorMsg("매핑 결과 변환된 행이 없습니다. 매핑이 너무 적을 수 있어요.");
+        return;
+      }
+      setCsvPhase("analyzed");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setCsvPhase("failed");
+      setCsvErrorMsg(`AI 분석 실패: ${msg}`);
+      dlog(`[AI:analyze] FAIL exception: ${msg}`);
+    }
+  };
+
+  const runCsvUpload = async () => {
+    if (csvConvertedRows.length === 0) return;
+    setCsvPhase("uploading");
+    dlog(`[AI:upload] ${csvConvertedRows.length}행을 ${csvTargetTab} 탭에 추가`);
+
+    // 1) 활성 데이터에 추가 (undo 가능)
+    pushHistory(`AI CSV 가져오기 (${csvTargetTab}, ${csvConvertedRows.length}행)`);
+    setAppData((prev) => {
+      const next = cloneState(prev);
+      next.rowsByTab[csvTargetTab] = [...next.rowsByTab[csvTargetTab], ...csvConvertedRows];
+      return next;
+    });
+    dlog(`[AI:upload] 로컬 상태 갱신 완료`);
+
+    // 2) 시트에 자동 업로드
+    try {
+      const ok = await runExport({ silent: true });
+      if (ok) {
+        dlog(`[AI:upload] 시트 업로드 성공`);
+        setCsvPhase("uploaded");
+      } else {
+        dlog(`[AI:upload] 시트 업로드 실패 (runExport=false). 로컬에는 추가됨.`);
+        setCsvPhase("uploaded");
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      dlog(`[AI:upload] 시트 업로드 예외: ${msg}`);
+      setCsvPhase("uploaded");
+    }
+  };
+
+  const copyDebugLogs = async () => {
+    const text = debugLogsRef.current.join("\n");
+    if (!text) {
+      dlog("디버그 로그가 비어있습니다");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      dlog(`[debug] 로그 ${debugLogsRef.current.length}줄을 클립보드에 복사`);
+    } catch (err) {
+      dlog(`[debug] 클립보드 복사 실패: ${err instanceof Error ? err.message : String(err)}`);
+    }
   };
 
   const debugLogsRef = useRef<string[]>([]);
@@ -1287,19 +1743,44 @@ function App() {
     e.preventDefault();
     e.stopPropagation();
     setIsDraggingJson(false);
-    const file = e.dataTransfer.files?.[0];
-    if (!file) return;
+
+    const items = Array.from(e.dataTransfer.items || []);
+    const files = Array.from(e.dataTransfer.files || []);
+    dlog(`JSON drop: items=${items.length}, files=${files.length}`);
+
+    const file = files[0];
+    if (!file) {
+      dlog("드롭에 파일이 없음 (텍스트 등 다른 데이터일 수 있음)");
+      setSheetsStatus("파일을 직접 드래그&드롭해주세요.");
+      return;
+    }
+
     if (!file.name.toLowerCase().endsWith(".json")) {
       dlog(`드롭한 파일이 JSON이 아님: ${file.name}`);
       setSheetsStatus("JSON 파일만 등록 가능합니다.");
       return;
     }
-    const filePath = (file as unknown as { path?: string }).path;
+
+    const api = window.electronAPI;
+    let filePath = "";
+    if (api?.getFilePath) {
+      try {
+        filePath = api.getFilePath(file) || "";
+      } catch (err) {
+        dlog(`getFilePath 호출 실패: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
     if (!filePath) {
-      dlog("Electron 환경이 아니거나 path를 얻을 수 없음");
-      setSheetsStatus("Electron 앱에서 시도하세요.");
+      filePath = (file as unknown as { path?: string }).path || "";
+    }
+
+    if (!filePath) {
+      dlog(`경로를 얻을 수 없음. 파일명='${file.name}', size=${file.size}, electronAPI=${!!api}`);
+      setSheetsStatus("파일 경로를 얻을 수 없습니다. [파일 선택] 버튼을 사용해주세요.");
       return;
     }
+
+    dlog(`드롭한 JSON 경로: ${filePath}`);
     await registerJsonByPath(filePath);
   };
 
@@ -1392,7 +1873,11 @@ function App() {
     for (let i = 0; i < tabKeys.length; i++) {
       const tabKey = tabKeys[i];
       const tabLabel = TAB_LABELS[tabKey];
-      const headers = appData.schemaByTab[tabKey].map((col) => ({ key: col.key, label: col.label }));
+      const headers = appData.schemaByTab[tabKey].map((col) => ({
+        key: col.key,
+        label: col.label,
+        shared: !!col.shared
+      }));
 
       setSyncProgress({ current: i, total: tabKeys.length, label: `${tabLabel}_${year}` });
       setSheetsStatus(`시트 내려받는 중... (${i + 1}/${tabKeys.length} ${tabLabel})`);
@@ -1445,7 +1930,11 @@ function App() {
     for (let i = 0; i < tabKeys.length; i++) {
       const tabKey = tabKeys[i];
       const tabLabel = TAB_LABELS[tabKey];
-      const headers = appData.schemaByTab[tabKey].map((col) => ({ key: col.key, label: col.label }));
+      const headers = appData.schemaByTab[tabKey].map((col) => ({
+        key: col.key,
+        label: col.label,
+        shared: !!col.shared
+      }));
       const rows = appData.rowsByTab[tabKey];
 
       setSyncProgress({ current: i, total: tabKeys.length, label: `${tabLabel}_${year}` });
@@ -2148,6 +2637,13 @@ function App() {
             <button type="button" onClick={handleExport}>구글시트 업로드</button>
             <button
               type="button"
+              onClick={() => { resetCsvModal(); setCsvTargetTab(activeTab === "fullReplay" ? "shorts" : activeTab); setCsvModalOpen(true); }}
+              title="외부 협업 툴(Monday 등)에서 내려받은 CSV를 AI로 우리 시트 형식으로 변환해 추가"
+            >
+              CSV 가져오기 (AI)
+            </button>
+            <button
+              type="button"
               onClick={undoLast}
               disabled={undoStack.length === 0}
               title="되살리기 (Ctrl+Z)"
@@ -2607,6 +3103,24 @@ function App() {
             >
               구글 시트 연결
             </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={settingsTab === "ai"}
+              className={`settings-tab ${settingsTab === "ai" ? "active" : ""}`}
+              onClick={() => setSettingsTab("ai")}
+            >
+              AI 연결
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={settingsTab === "etc"}
+              className={`settings-tab ${settingsTab === "etc" ? "active" : ""}`}
+              onClick={() => setSettingsTab("etc")}
+            >
+              기타 설정
+            </button>
           </nav>
 
           <div className="settings-tabpanel">
@@ -2830,6 +3344,158 @@ function App() {
                 </div>
               </>
             )}
+            {settingsTab === "ai" && (
+              <>
+                <div className="connection-help-banner">
+                  <div className="connection-help-text">
+                    <strong>AI 보조 CSV 변환</strong>
+                    <p>외부 협업 툴(Monday 등)의 CSV를 우리 시트 형식으로 자동 매핑합니다. provider/모델/API 키는 본인 것을 등록하세요 (BYOK). API 발급 방법은 가이드를 참고.</p>
+                  </div>
+                  <button type="button" className="connection-help-btn" onClick={openAiSetupHelp}>
+                    AI 가이드 보기 ↗
+                  </button>
+                </div>
+
+                <label className="ai-provider-label">
+                  AI
+                  <select
+                    value={aiProvider}
+                    onChange={(e) => {
+                      const v = e.target.value as AiProvider;
+                      setAiProvider(v);
+                      setAiAvailableModels([]);
+                      setAiModel("");
+                      persistAiState(v, aiApiKey, "", []);
+                    }}
+                  >
+                    <option value="google">Google (Gemini)</option>
+                    <option value="openai">OpenAI (GPT)</option>
+                    <option value="anthropic">Anthropic (Claude)</option>
+                  </select>
+                </label>
+
+                <label>
+                  API Key
+                  <div className="ai-key-row">
+                    <input
+                      type={aiKeyVisible ? "text" : "password"}
+                      value={aiApiKey}
+                      onChange={(e) => { setAiApiKey(e.target.value); persistAiState(aiProvider, e.target.value, aiModel); }}
+                      placeholder={aiProvider === "openai" ? "sk-..." : aiProvider === "anthropic" ? "sk-ant-..." : "AIza..."}
+                      autoComplete="off"
+                      spellCheck={false}
+                    />
+                    <button type="button" className="ai-key-toggle" onClick={() => setAiKeyVisible((v) => !v)} title={aiKeyVisible ? "숨기기" : "보기"}>
+                      {aiKeyVisible ? "숨김" : "보기"}
+                    </button>
+                  </div>
+                </label>
+
+                <div className="ai-model-row">
+                  <label style={{ flex: 1 }}>
+                    AI 모델 (최신 5개)
+                    <select
+                      value={aiModel}
+                      onChange={(e) => { setAiModel(e.target.value); persistAiState(aiProvider, aiApiKey, e.target.value); }}
+                      disabled={aiAvailableModels.length === 0}
+                    >
+                      {aiAvailableModels.length === 0 ? (
+                        <option value="">[모델 갱신] 버튼을 눌러주세요</option>
+                      ) : (
+                        aiAvailableModels.map((m) => (
+                          <option key={m.id} value={m.id}>{m.label}{m.id !== m.label ? ` (${m.id})` : ""}</option>
+                        ))
+                      )}
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    className="ai-model-refresh"
+                    onClick={refreshAiModels}
+                    disabled={aiModelLoading || !aiApiKey}
+                    title="provider의 최신 모델 5개를 가져옵니다"
+                  >
+                    {aiModelLoading ? "갱신 중…" : "모델 갱신"}
+                  </button>
+                </div>
+                {aiModelError && <p className="ai-error">{aiModelError}</p>}
+
+                <p className="sa-hint">
+                  키는 로컬에만 저장됩니다 (외부 서버 경유 X). AI 호출 시 헤더+샘플 5~10행만 전송됩니다.
+                </p>
+              </>
+            )}
+            {settingsTab === "etc" && (
+              <>
+                <div className="etc-card">
+                  <div className="etc-card-head">
+                    <strong>윈도우 시작 시 자동 실행</strong>
+                    <label className="switch">
+                      <input
+                        type="checkbox"
+                        checked={autoStartEnabled}
+                        disabled={autoStartLoading}
+                        onChange={(e) => toggleAutoStart(e.target.checked)}
+                      />
+                      <span className="slider" />
+                    </label>
+                  </div>
+                  <p className="etc-card-desc">
+                    켜면 PC 부팅 시 Inel Work Scheduler 가 자동으로 실행됩니다.
+                    설치 빌드(.exe)에서만 정상 동작하며, 개발(<code>npm run dev</code>) 환경에서는 효과가 없습니다.
+                  </p>
+                  {autoStartMessage && <p className="etc-card-msg">{autoStartMessage}</p>}
+                </div>
+
+                <div className="etc-card">
+                  <div className="etc-card-head">
+                    <strong>편집자/썸네일러 전용 설치 파일 만들기</strong>
+                    <span className="etc-badge">2차 배포 예정</span>
+                  </div>
+                  <p className="etc-card-desc">
+                    각 담당자 이름으로 토큰을 발급해 시트의 <code>_tokens</code> 시트에 등록하고,
+                    해당 토큰이 내장된 .exe 인스톨러를 자동 빌드하는 기능입니다.
+                    아래는 미리 보여주는 UI 만 있고 실제 빌드는 비활성화 상태입니다.
+                  </p>
+                  <div className="staff-installer-list">
+                    {staffList.length === 0 ? (
+                      <p className="etc-card-empty">
+                        먼저 [시트 설정] 탭에서 편집자/썸네일러를 등록하세요.
+                      </p>
+                    ) : (
+                      staffList.map((s) => (
+                        <div key={s.id} className="staff-installer-row">
+                          <span className={`staff-chip role-${s.role}`}>
+                            {ROLE_LABEL[s.role]} · {s.name}
+                          </span>
+                          <button
+                            type="button"
+                            className="etc-installer-btn"
+                            disabled
+                            title="2차 배포에서 활성화됩니다."
+                          >
+                            인스톨러 빌드
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                <div className="etc-card etc-card-info">
+                  <strong>토큰(_tokens) 시트 안내</strong>
+                  <p className="etc-card-desc">
+                    편집자별 인스톨러는 빌드 시 <code>_tokens</code> 시트에 토큰을 자동 등록합니다.
+                    관리자가 해당 시트를 수동으로 만들 필요는 없으며, 처음 빌드 버튼을 누를 때
+                    앱이 시트가 없으면 자동으로 생성합니다. 권한이 회수된 편집자는 토큰 행을 삭제하면
+                    다음 실행에서 앱이 잠깁니다.
+                  </p>
+                  <p className="etc-card-desc">
+                    위 동작은 현재 설계 문서(§10-3)에 정의되어 있고, 2차 배포에서 활성화될 예정입니다.
+                  </p>
+                </div>
+              </>
+            )}
           </div>
 
           <div className="settings-actions">
@@ -2843,8 +3509,9 @@ function App() {
       {showDebugPanel && (
         <aside className="debug-panel">
           <div className="debug-header">
-            <span>Debug Log</span>
+            <span>Debug Log <span className="debug-count">({debugLogs.length})</span></span>
             <div className="debug-header-actions">
+              <button type="button" onClick={copyDebugLogs} title="모든 로그를 클립보드에 복사 (개발자 전달용)">전체 복사</button>
               <button type="button" onClick={clearDebugLogs}>Clear</button>
               <button type="button" onClick={() => setShowDebugPanel(false)} title="닫기">×</button>
             </div>
@@ -2856,6 +3523,144 @@ function App() {
             }
           </div>
         </aside>
+      )}
+
+      {csvModalOpen && (
+        <div className="csv-modal-overlay" onClick={() => { if (csvPhase !== "analyzing" && csvPhase !== "uploading") { setCsvModalOpen(false); resetCsvModal(); } }}>
+          <section className="csv-modal" onClick={(e) => e.stopPropagation()}>
+            <header className="csv-modal-header">
+              <h3>CSV 가져오기 (AI 변환)</h3>
+              <button type="button" className="csv-modal-close" onClick={() => { setCsvModalOpen(false); resetCsvModal(); }} title="닫기">×</button>
+            </header>
+
+            <div className="csv-modal-body">
+              <div className="csv-target-row">
+                <label>
+                  대상 탭
+                  <select
+                    value={csvTargetTab}
+                    onChange={(e) => setCsvTargetTab(e.target.value as TabKey)}
+                    disabled={csvPhase === "analyzing" || csvPhase === "uploading"}
+                  >
+                    <option value="shorts">숏폼</option>
+                    <option value="longform">롱폼</option>
+                    <option value="fullReplay">다시보기</option>
+                  </select>
+                </label>
+                <div className="csv-ai-info">
+                  AI: <strong>{aiProvider}</strong> / <strong>{aiModel || "(모델 미선택)"}</strong>
+                </div>
+              </div>
+
+              <div
+                className={`csv-dropzone ${csvIsDragging ? "dragging" : ""} ${csvFileName ? "has-file" : ""}`}
+                onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setCsvIsDragging(true); }}
+                onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); setCsvIsDragging(true); }}
+                onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setCsvIsDragging(false); }}
+                onDrop={handleCsvDrop}
+              >
+                <p className="csv-dropzone-text">
+                  {csvIsDragging
+                    ? "여기에 놓으세요"
+                    : csvFileName
+                    ? `${csvFileName} (${csvHeader.length}컬럼 × ${csvRows.length}행)`
+                    : "CSV 파일을 여기에 드래그&드롭"}
+                </p>
+                {!csvFileName && (
+                  <label className="csv-pick-btn">
+                    파일 선택
+                    <input
+                      type="file"
+                      accept=".csv,text/csv"
+                      style={{ display: "none" }}
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) handleCsvFileLoaded(f);
+                      }}
+                    />
+                  </label>
+                )}
+              </div>
+
+              {csvHeader.length > 0 && (
+                <div className="csv-preview">
+                  <p className="csv-preview-title">CSV 미리보기 (첫 5행)</p>
+                  <div className="csv-preview-table-wrap">
+                    <table className="csv-preview-table">
+                      <thead>
+                        <tr>{csvHeader.map((h, i) => <th key={i}>{h}</th>)}</tr>
+                      </thead>
+                      <tbody>
+                        {csvRows.slice(0, 5).map((row, ri) => (
+                          <tr key={ri}>
+                            {csvHeader.map((_, ci) => <td key={ci}>{row[ci] ?? ""}</td>)}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {csvPhase === "analyzed" && csvMapping && (
+                <div className="csv-mapping">
+                  <p className="csv-mapping-title">AI 분석 결과 (변환 후 {csvConvertedRows.length}행)</p>
+                  <div className="csv-mapping-grid">
+                    {Object.entries(csvMapping.headerMap).map(([k, v]) => (
+                      <div key={k} className={`csv-mapping-row ${!v ? "ignored" : ""}`}>
+                        <span className="csv-mapping-from">{k}</span>
+                        <span className="csv-mapping-arrow">→</span>
+                        <span className="csv-mapping-to">{v || "(무시)"}</span>
+                      </div>
+                    ))}
+                  </div>
+                  {csvMapping.notes && <p className="csv-mapping-notes">메모: {csvMapping.notes}</p>}
+                </div>
+              )}
+
+              {csvPhase === "failed" && csvErrorMsg && (
+                <div className="csv-error-box">
+                  <strong>AI 분석 실패</strong>
+                  <p>{csvErrorMsg}</p>
+                  <p className="csv-error-hint">우측 디버그 패널의 [전체 복사]로 로그를 복사해 개발자에게 전달하세요.</p>
+                </div>
+              )}
+
+              {csvPhase === "uploaded" && (
+                <div className="csv-success-box">
+                  <strong>완료</strong>
+                  <p>{csvConvertedRows.length}행이 {csvTargetTab === "shorts" ? "숏폼" : csvTargetTab === "longform" ? "롱폼" : "다시보기"} 탭에 추가되고 시트에 업로드되었습니다.</p>
+                </div>
+              )}
+            </div>
+
+            <footer className="csv-modal-footer">
+              <button
+                type="button"
+                onClick={() => { setCsvModalOpen(false); resetCsvModal(); }}
+                disabled={csvPhase === "analyzing" || csvPhase === "uploading"}
+              >
+                {csvPhase === "uploaded" ? "닫기" : "취소"}
+              </button>
+              <button
+                type="button"
+                className="csv-analyze-btn"
+                onClick={runCsvAnalyze}
+                disabled={csvPhase !== "parsed" && csvPhase !== "failed" || csvHeader.length === 0 || csvPhase === "analyzing"}
+              >
+                {csvPhase === "analyzing" ? "AI 분석 중…" : "AI로 분석"}
+              </button>
+              <button
+                type="button"
+                className="csv-upload-btn"
+                onClick={runCsvUpload}
+                disabled={csvPhase !== "analyzed" || csvConvertedRows.length === 0}
+              >
+                {csvPhase === "uploading" ? "업로드 중…" : "시트에 업로드"}
+              </button>
+            </footer>
+          </section>
+        </div>
       )}
     </div>
   );

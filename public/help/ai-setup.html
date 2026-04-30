@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AI 연결 설정 · 이늘 스케줄러</title>
+  <link rel="icon" href="../assets/icon.png" />
+  <style>
+    :root {
+      --pink-50: #fff7fb;
+      --pink-100: #fdf2f8;
+      --pink-200: #fce7f3;
+      --pink-300: #fbcfe8;
+      --pink-500: #f472b6;
+      --pink-600: #db2777;
+      --pink-700: #9d174d;
+      --pink-900: #500724;
+      --gray-100: #f3f4f6;
+      --gray-300: #d1d5db;
+      --gray-500: #6b7280;
+      --gray-700: #374151;
+      --gray-900: #111827;
+      --green-100: #ecfdf5;
+      --green-700: #065f46;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      background: linear-gradient(180deg, var(--pink-50) 0%, #ffffff 220px);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+      color: var(--gray-900);
+      line-height: 1.65;
+      min-height: 100vh;
+    }
+    .layout { max-width: 980px; margin: 0 auto; padding: 32px 24px 80px; }
+    .topbar {
+      display: flex; align-items: center; gap: 12px;
+      padding: 18px 22px; border: 1px solid var(--pink-200);
+      background: #ffffff; border-radius: 14px;
+      box-shadow: 0 6px 18px rgba(244, 114, 182, 0.08);
+    }
+    .topbar h1 { margin: 0; font-size: 20px; font-weight: 800; color: var(--pink-700); }
+    .topbar .topbar-sub { margin-left: auto; font-size: 12px; color: var(--gray-500); }
+
+    .intro {
+      margin: 24px 0 8px; padding: 22px 26px;
+      background: #ffffff; border: 1px solid var(--pink-200); border-radius: 14px;
+      box-shadow: 0 4px 14px rgba(244, 114, 182, 0.06);
+    }
+    .intro h2 { margin: 0 0 10px; font-size: 17px; }
+    .intro p { margin: 4px 0; color: var(--gray-700); font-size: 14px; }
+    .intro ul { margin: 12px 0 0; padding-left: 20px; color: var(--gray-700); font-size: 14px; }
+
+    .toc {
+      position: sticky; top: 16px; margin: 24px 0;
+      padding: 14px 18px; background: #ffffff;
+      border: 1px solid var(--pink-200); border-radius: 12px;
+      display: flex; flex-wrap: wrap; gap: 6px; z-index: 10;
+    }
+    .toc a {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 12px; border-radius: 999px;
+      background: var(--pink-50); color: var(--pink-700);
+      text-decoration: none; font-size: 12px; font-weight: 700;
+      border: 1px solid var(--pink-200);
+    }
+    .toc a:hover { background: var(--pink-200); }
+
+    .section {
+      margin: 28px 0; padding: 24px 26px;
+      background: #ffffff; border: 1px solid var(--pink-200); border-radius: 14px;
+      box-shadow: 0 4px 14px rgba(244, 114, 182, 0.06);
+      scroll-margin-top: 88px;
+    }
+    .section h2 {
+      margin: 0 0 14px; font-size: 18px; color: var(--pink-700);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .section h2 .section-num {
+      width: 28px; height: 28px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--pink-500), var(--pink-600));
+      color: #ffffff; font-size: 13px;
+      display: inline-flex; align-items: center; justify-content: center; font-weight: 800;
+    }
+    .section h3 { margin: 18px 0 8px; font-size: 15px; color: var(--gray-900); }
+    .section p { margin: 6px 0; color: var(--gray-700); font-size: 14px; }
+    .section ol, .section ul { margin: 6px 0; padding-left: 22px; color: var(--gray-700); font-size: 14px; }
+    .section ol li, .section ul li { margin: 4px 0; }
+    .section a { color: var(--pink-600); }
+    .section code {
+      background: var(--pink-50); padding: 1px 6px; border-radius: 4px;
+      border: 1px solid var(--pink-200);
+      font-family: "Cascadia Code", "Consolas", monospace; font-size: 12px;
+      color: var(--pink-700);
+    }
+
+    .provider-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 14px 0;
+    }
+    .provider-card {
+      padding: 14px 16px; border: 1px solid var(--pink-200);
+      background: var(--pink-50); border-radius: 10px;
+    }
+    .provider-card h4 { margin: 0 0 4px; font-size: 14px; color: var(--pink-700); }
+    .provider-card .price { font-size: 11px; color: var(--gray-500); margin-bottom: 6px; }
+    .provider-card .openlink {
+      display: inline-block; margin-top: 6px;
+      font-size: 12px; color: var(--pink-600); text-decoration: none; font-weight: 700;
+    }
+
+    .callout {
+      margin: 14px 0; padding: 12px 16px;
+      background: var(--pink-50); border-left: 4px solid var(--pink-500);
+      border-radius: 6px; font-size: 13px; color: var(--gray-700);
+    }
+    .callout.warn { border-left-color: #ea580c; background: #fff7ed; }
+    .callout strong { color: var(--pink-700); }
+
+    .footer {
+      margin-top: 40px; padding: 20px 26px;
+      background: var(--pink-100); border: 1px solid var(--pink-200);
+      border-radius: 12px; text-align: center;
+      color: var(--pink-700); font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <header class="topbar">
+      <h1>AI 연결 설정</h1>
+      <span class="topbar-sub">이늘 스케줄러 · CSV 자동 변환용</span>
+    </header>
+
+    <section class="intro">
+      <h2>이 가이드는 무엇인가요?</h2>
+      <p>Monday.com 같은 외부 협업 툴에서 내보낸 <strong>CSV 파일을 우리 시트 형식으로 자동 변환</strong>하기 위해 AI(LLM)를 사용합니다. 헤더 이름이 다르거나 값 형식이 달라도 AI가 한 번 분석해 매핑을 만들고, 우리 코드가 그 매핑을 모든 행에 적용합니다.</p>
+      <ul>
+        <li>API 키는 <strong>관리자 본인 것</strong>을 사용합니다 (BYOK · Bring Your Own Key).</li>
+        <li>키는 앱 로컬에만 저장되고 우리 서버를 거치지 않습니다.</li>
+        <li>AI에 전송되는 건 <strong>CSV 헤더 + 샘플 5~10행</strong>뿐입니다 (전체 행 X). 매핑이 만들어지면 나머지 변환은 모두 로컬에서.</li>
+      </ul>
+    </section>
+
+    <nav class="toc">
+      <a href="#sec-which">어떤 provider를 골라야 하나?</a>
+      <a href="#sec-openai">OpenAI 키 발급</a>
+      <a href="#sec-anthropic">Claude (Anthropic) 키 발급</a>
+      <a href="#sec-google">Gemini (Google) 키 발급</a>
+      <a href="#sec-models">모델 갱신 / 권장 모델</a>
+      <a href="#sec-troubleshoot">문제 해결</a>
+    </nav>
+
+    <article class="section" id="sec-which">
+      <h2><span class="section-num">1</span>어떤 provider를 골라야 하나?</h2>
+      <div class="provider-grid">
+        <div class="provider-card">
+          <h4>OpenAI (GPT)</h4>
+          <div class="price">유료, 카드 등록 필요</div>
+          <p>가장 안정적이고 매핑 정확도가 높음. CSV 분석 1회당 비용 매우 적음 (수백~수천원 미만).</p>
+          <a class="openlink" href="https://platform.openai.com/api-keys" target="_blank">platform.openai.com ↗</a>
+        </div>
+        <div class="provider-card">
+          <h4>Anthropic (Claude)</h4>
+          <div class="price">유료, 카드 등록 필요</div>
+          <p>긴 CSV(수천 행 헤더가 복잡)일 때 강함. JSON 출력 안정성 좋음.</p>
+          <a class="openlink" href="https://console.anthropic.com/settings/keys" target="_blank">console.anthropic.com ↗</a>
+        </div>
+        <div class="provider-card">
+          <h4>Google (Gemini)</h4>
+          <div class="price">무료 한도 큼 ★</div>
+          <p>무료 한도가 가장 넓어 부담 없음. 가벼운 CSV 매핑에 충분.</p>
+          <a class="openlink" href="https://aistudio.google.com/app/apikey" target="_blank">aistudio.google.com ↗</a>
+        </div>
+      </div>
+      <div class="callout">처음 시작은 <strong>Google (Gemini)</strong>가 무료 한도가 커서 부담 없습니다. 본격 운영은 <strong>OpenAI</strong>나 <strong>Anthropic</strong>도 좋습니다.</div>
+    </article>
+
+    <article class="section" id="sec-openai">
+      <h2><span class="section-num">2</span>OpenAI 키 발급</h2>
+      <ol>
+        <li><a href="https://platform.openai.com/" target="_blank">platform.openai.com</a> 접속 후 로그인 (계정 없으면 가입)</li>
+        <li>우상단 프로필 → <strong>Billing</strong>에서 카드 등록 (사용한 만큼 청구, 보통 매우 소액)</li>
+        <li>좌측 메뉴 <strong>API keys</strong> → <strong>Create new secret key</strong></li>
+        <li>키 이름 입력 (예: <code>inel-scheduler</code>) → <strong>Create</strong></li>
+        <li>키가 화면에 한 번만 표시됨 → 복사</li>
+        <li>설정 → AI 연결 → Provider <code>OpenAI</code> 선택 → API Key 칸에 붙여넣기 → <strong>저장</strong></li>
+        <li><strong>모델 갱신</strong> 버튼 → 최신 모델 5개 자동 로드 → 가장 위 모델 선택</li>
+      </ol>
+      <div class="callout warn"><strong>주의</strong>: 키 노출 금지. 외부에 공유 X. 설정에서는 <code>sk-…</code>처럼 가려져 표시됩니다.</div>
+    </article>
+
+    <article class="section" id="sec-anthropic">
+      <h2><span class="section-num">3</span>Claude (Anthropic) 키 발급</h2>
+      <ol>
+        <li><a href="https://console.anthropic.com/" target="_blank">console.anthropic.com</a> 접속 후 로그인 (Google 계정 가능)</li>
+        <li>좌측 <strong>Settings</strong> → <strong>Billing</strong>에서 카드 등록 + 충전 ($5부터)</li>
+        <li>좌측 <strong>API keys</strong> → <strong>Create Key</strong></li>
+        <li>키 이름 입력 → <strong>Create Key</strong> → 키 복사</li>
+        <li>설정 → AI 연결 → Provider <code>Anthropic (Claude)</code> 선택 → API Key 붙여넣기 → <strong>저장</strong></li>
+        <li><strong>모델 갱신</strong> 버튼 → 최신 모델 5개 로드</li>
+      </ol>
+    </article>
+
+    <article class="section" id="sec-google">
+      <h2><span class="section-num">4</span>Gemini (Google) 키 발급</h2>
+      <ol>
+        <li><a href="https://aistudio.google.com/" target="_blank">aistudio.google.com</a> 접속 (Google 로그인)</li>
+        <li>좌측 <strong>Get API key</strong> 클릭</li>
+        <li><strong>Create API key</strong> → 새 프로젝트 자동 생성 + 키 발급 (무료 한도로 시작)</li>
+        <li>발급된 키 복사 (<code>AIza…</code> 형태)</li>
+        <li>설정 → AI 연결 → Provider <code>Google (Gemini)</code> 선택 → API Key 붙여넣기 → <strong>저장</strong></li>
+        <li><strong>모델 갱신</strong> 버튼 → 최신 모델 5개 로드</li>
+      </ol>
+      <div class="callout"><strong>무료 한도</strong>가 큰 편이라 가벼운 CSV 매핑은 <strong>비용 없이</strong> 사용 가능합니다.</div>
+    </article>
+
+    <article class="section" id="sec-models">
+      <h2><span class="section-num">5</span>모델 갱신 / 어떤 모델을 고를까</h2>
+      <ul>
+        <li>설정의 <strong>모델 갱신</strong> 버튼은 provider의 공식 모델 API를 호출해 가장 최신 5개를 다시 가져옵니다 (가장 최신 + 그 직전 버전들).</li>
+        <li>새 모델이 나올 때마다 <strong>모델 갱신</strong>을 한 번 누르면 dropdown 목록이 자동으로 갱신됩니다.</li>
+        <li>기본은 <strong>가장 위 모델</strong> (= 최신)을 선택하면 됩니다.</li>
+        <li>비용을 줄이고 싶으면 같은 세대의 <code>mini</code> / <code>flash</code> / <code>haiku</code> 같은 경량 모델을 골라도 CSV 헤더 매핑은 충분합니다.</li>
+      </ul>
+    </article>
+
+    <article class="section" id="sec-troubleshoot">
+      <h2><span class="section-num">6</span>문제 해결</h2>
+      <ul>
+        <li><strong>모델 갱신이 실패해요</strong> — API 키가 잘못됐거나 카드 등록이 안 된 경우. 디버그 패널의 <code>[AI:list-models]</code> 로그를 확인하세요.</li>
+        <li><strong>CSV 분석에서 "AI 분석 실패"</strong> — 디버그 패널의 <code>[AI:analyze]</code> 단계별 로그 확인 → 우상단 <strong>[전체 복사]</strong>로 통째로 복사해 개발자에게 전달.</li>
+        <li><strong>매핑이 어색해요</strong> — 다른 모델로 바꿔서 다시 분석, 또는 CSV 첫 줄 헤더가 한국어인지 확인.</li>
+        <li><strong>비용이 걱정돼요</strong> — Google Gemini 무료 한도부터 시작하세요.</li>
+      </ul>
+      <div class="callout"><strong>전송되는 데이터 범위</strong>: CSV 헤더 + 첫 5~10행. <strong>전체 행은 절대 AI로 보내지 않습니다</strong> (로컬에서 매핑 적용).</div>
+    </article>
+
+    <div class="footer">
+      이 가이드는 앱의 [설정 → AI 연결 → 가이드 보기] 버튼으로 언제든 다시 열 수 있습니다.
+    </div>
+  </div>
+</body>
+</html>

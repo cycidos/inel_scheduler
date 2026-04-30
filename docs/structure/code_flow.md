@@ -175,6 +175,42 @@
 
 `src/App.tsx | isRowLocked (renderTaskRow 내부) | computed | row.values.upload === "완"이면 tr에 row-locked 추가, 업로드 외 모든 td에 is-locked 추가. CSS로 회색화 + pointer-events 차단. row-action-col(드래그/삭제)와 업로드 토글은 잠금 제외 → 행 정리/해제 가능 | -`
 
+`electron/main.js | ai-list-models (IPC) | handler | provider별(openai/anthropic/google) 공식 모델 API 호출 → 채팅용 모델만 필터, 최신순 정렬, 상위 5개 반환. 응답에는 ok/models/totalCount/elapsedMs/log 포함 | -> listOpenAIModels/listAnthropicModels/listGoogleModels`
+
+`electron/main.js | ai-analyze-csv (IPC) | handler | csvHeader+sample+ourSchema → buildAnalyzePrompt → provider별 callOpenAI/callAnthropic/callGemini → extractJson → 매핑 JSON 반환. 단계별 trace[] 누적 (renderer가 dlog로 흘림) | -> buildAnalyzePrompt, callOpenAI/Anthropic/Gemini, extractJson`
+
+`electron/main.js | help-open-ai-setup (IPC) | handler | ai-setup.html을 외부 브라우저로 오픈 (openHelpPage 헬퍼 사용) | -> shell.openExternal`
+
+`electron/main.js | httpsRequest / extractJson / buildAnalyzePrompt | helper | provider 공통 https 호출, JSON 코드블록 스트립 + 첫 { ~ 마지막 } 파싱, 표준 컬럼 스키마 + 출력 JSON 형식 안내 프롬프트 | -`
+
+`public/help/ai-setup.html | static guide | static page | provider별(OpenAI/Anthropic/Google) API 키 발급 절차, 모델 갱신 안내, 비용/프라이버시/문제 해결 6섹션 | -`
+
+`electron/preload.js | aiListModels / aiAnalyzeCsv / helpOpenAiSetup | bridge | 위 IPC들의 렌더러 노출 | -`
+
+`src/App.tsx | aiProvider / aiApiKey / aiModel / aiAvailableModels (+ persistAiState) | state | AI provider/키/모델 + 캐시된 최신 5개. localStorage("inel-scheduler-ai-{provider,apikey,model,models}")에 저장 | -`
+
+`src/App.tsx | refreshAiModels | function | aiListModels IPC 호출 → top5 dropdown 갱신 + 디버그 로그 | -> electronAPI.aiListModels`
+
+`src/App.tsx | settingsTab === "ai" panel | JSX | 설정 [AI 연결] 탭. provider select / API 키(보기 토글) / 모델 dropdown(5개) + [모델 갱신] 버튼 + 가이드 배너 | -`
+
+`src/App.tsx | csvModalOpen / csvHeader / csvRows / csvPhase / csvMapping / csvConvertedRows / csvTargetTab | state | CSV 임포트 모달 전용 상태. csvPhase: idle/parsed/analyzing/analyzed/failed/uploading/uploaded | -`
+
+`src/App.tsx | parseCSV | function | RFC4180 호환 간단 CSV 파서 (UTF-8 BOM, quoted field, escaped quote, CRLF/LF). 빈 행 자동 제거 | -`
+
+`src/App.tsx | handleCsvFileLoaded / handleCsvDrop | function | CSV 파일 → text → parseCSV → header/rows 셋. 단계별 dlog([AI:csv]) | -> parseCSV`
+
+`src/App.tsx | runCsvAnalyze | function | aiAnalyzeCsv IPC 호출, 응답 trace를 그대로 dlog. 성공 시 applyCsvMapping 실행. 실패 시 csvPhase=failed + 디버그 패널 안내 | -> electronAPI.aiAnalyzeCsv, applyCsvMapping`
+
+`src/App.tsx | applyCsvMapping(mapping) | function | headerMap/valueMaps/dateFormat/splitColumns/twoRowAssignment 적용해 RowItem[] 생성. shared/ 역할별 컬럼 분리. 무효행 카운트 dlog | -> normalizeDate`
+
+`src/App.tsx | normalizeDate(raw, format) | function | 다양한 날짜 포맷(YYYY/MM/DD 등) 감지 → YYYY-MM-DD로 정규화. 2자리 연도 보정 | -`
+
+`src/App.tsx | runCsvUpload | function | pushHistory + appData에 변환행 append → runExport(silent)로 시트 즉시 업로드. 성공/실패 모두 csvPhase=uploaded | -> pushHistory, runExport`
+
+`src/App.tsx | copyDebugLogs | function | debugLogsRef.current.join("\n")을 navigator.clipboard.writeText로 복사. 디버그 [전체 복사] 버튼에서 호출 | -`
+
+`src/App.tsx | csv-modal-overlay (JSX) | modal | 대상 탭 select + AI 정보 / CSV 드롭존 + [파일 선택] / 미리보기 표 / 매핑 표시 / 실패 / 성공 / 푸터 [취소][AI로 분석][시트에 업로드] | -`
+
 `src/App.tsx | settingsTab + settings-tabs UI | state+JSX | 설정 패널을 [시트 설정] / [구글 시트 연결] 두 탭으로 분리. 시트 탭=치지직 링크/작업상태/담당자 등록/방송 감지/되살리기 설정/히스토리, 연결 탭=상단 도움말 배너 + Sheets URL/Service Account JSON/연결 테스트 | -`
 
 `src/App.tsx | undoStack / redoStack / maxUndoSize / lastEditCellRef | state+ref | undo/redo 양방향 스택. 기본 10단계, 설정에서 5~50단계 슬라이더 조정. 같은 (tab,row,col,role) 셀 연속 편집은 lastEditCellRef로 묶어 1단계로 처리 | -`
@@ -199,6 +235,10 @@
 
 `electron/main.js | sheets-test-connection (IPC) | handler | spreadsheets.get으로 시트 메타데이터 조회 → 권한 검증 | -> sheetsClient`
 
+`electron/main.js | sheets-import (IPC) | handler | 시트 → RowItem 역직렬화. headers[].shared 로 paired 모드 판별, shared 컬럼이 모두 비어있는 행은 직전 RowItem 의 editor 로 합치고, 첫 행은 thumbnailer 로 적재 (다시보기 등 비-paired 탭은 단일 행 모드) | -> sheetsClient`
+
+`electron/main.js | sheets-export (IPC) | handler | RowItem → 시트 직렬화. paired 탭은 RowItem 1개를 시트 2행(썸네일러/영상편집자)으로 펼치고, shared 컬럼은 1행에만 채움. 업로드 전 values.clear 로 잔여 행 제거 | -> sheetsClient`
+
 `electron/preload.js | sheetsTestConnection | bridge | 렌더러 → main의 sheets-test-connection 호출 | -`
 
 `public/help/ | *.gif | static asset | Service Account 도움말 카드 GIF (없으면 placeholder 자동 표시) | -`
@@ -214,6 +254,20 @@
 `src/styles.css | .sa-dropzone/.sa-email-row/.sa-test-btn | stylesheet | Service Account JSON 드래그&드롭 + 이메일 복사 + 연결 테스트 UI | -`
 
 `src/styles.css | .col-drag-handle | stylesheet | 헤더 hover 시 표시되는 열 순서 드래그 핸들 | -`
+
+`package.json | build (electron-builder) | config | NSIS 인스톨러 빌드 설정. oneClick=false / perMachine=false / allowToChangeInstallationDirectory=true. include=build/installer.nsh. 산출물 release/ | -> electron-builder`
+
+`build/installer.nsh | NSIS 커스텀 스크립트 | static | preInit 으로 기본 설치 경로를 $DOCUMENTS\\Inel Work Scheduler 로 강제. customPageAfterChangeDir 에서 [바탕화면 바로가기] / [윈도우 시작 시 자동실행] 체크박스를 nsDialogs 로 추가. customInstall 에서 선택값 적용, customUnInstall 에서 정리 | -`
+
+`electron/main.js | autostart-get / autostart-set (IPC) | handler | app.getLoginItemSettings / app.setLoginItemSettings 래퍼. dev 환경에서는 적용 효과가 없으므로 warning 반환 | -> app.setLoginItemSettings`
+
+`electron/preload.js | autostartGet / autostartSet | bridge | 렌더러 → main 의 autostart-get/set 호출 | -`
+
+`src/App.tsx | autoStartEnabled / toggleAutoStart | state+function | '기타 설정' 탭의 자동실행 토글. 시작 시 autostartGet 으로 현재 상태 조회, 토글 시 autostartSet 호출 | -> autostartGet/Set`
+
+`src/App.tsx | settingsTab='etc' panel | UI section | 기타 설정 탭. (1) 자동실행 토글 (2) 편집자/썸네일러별 인스톨러 빌드 placeholder UI (disabled, 2차 배포 예정) (3) _tokens 안내 카드 | -> staffList, toggleAutoStart`
+
+`src/styles.css | .etc-card / .switch / .staff-installer-row | stylesheet | 기타 설정 탭 카드 + iOS 스타일 토글 스위치 + 담당자별 인스톨러 행 | -`
 
 ---
 

@@ -300,13 +300,44 @@
 ## 9) 배포/설치 방식
 
 - 목표 산출물:
-  - Windows 설치 파일(Installer)
+  - Windows 설치 파일(Installer): `release/Inel Work Scheduler-Setup-<version>.exe`
   - 설치 후 exe 실행
 - 권장 빌드:
-  - Electron Builder 기반 `nsis` 설치 패키지
+  - Electron Builder 기반 `nsis` 설치 패키지 (`npm run dist`)
 - asar 암호화:
-  - `asarmor` 적용하여 리버스 엔지니어링 방지
+  - `asarmor` 적용하여 리버스 엔지니어링 방지 (2차 배포 시점)
   - 내장된 Service Account JSON 등 민감 데이터 보호
+
+### 9-1. 인스톨러 사양 (1차 배포 / 관리자용)
+
+- 빌드 명령: `npm run dist` (= `vite build` + `electron-builder --win`)
+- NSIS 옵션 (`package.json` > `build.nsis`):
+  - `oneClick: false` — 다단계 설치 마법사
+  - `perMachine: false` — 사용자별 설치 (HKCU 사용, UAC 요구 안 함)
+  - `allowToChangeInstallationDirectory: true` — 설치 위치 변경 가능
+  - `createDesktopShortcut: false` — 우리 커스텀 페이지에서 직접 처리
+  - `runAfterFinish: true` — 설치 완료 시 실행
+- 커스텀 NSIS 스크립트 (`build/installer.nsh`):
+  - `preInit`: 기본 설치 경로를 **`%USERPROFILE%\Documents\Inel Work Scheduler`** 로 강제
+  - `customPageAfterChangeDir`: 디렉토리 선택 다음에 옵션 페이지 추가
+    - [✓] 바탕화면 바로가기 만들기 (기본 체크)
+    - [✓] 윈도우 시작 시 자동 실행 (기본 체크)
+  - `customInstall`: 위 체크값에 따라
+    - `$DESKTOP\<productName>.lnk` 생성
+    - `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` 에 실행 파일 등록
+  - `customUnInstall`: 두 항목 모두 제거
+- 자동 실행은 앱 내 [기타 설정] 탭에서도 ON/OFF 가능
+  (`app.setLoginItemSettings` IPC 사용)
+
+### 9-2. 빌드 환경 요구사항
+
+- 처음 빌드 시 electron-builder가 `winCodeSign` 캐시(약 5.6 MB)를 받아 풀어야 함.
+  이 캐시 안에 macOS dylib **symlink** 가 포함되어 있어 Windows에서 추출 시
+  Windows의 심볼릭 링크 생성 권한이 필요함.
+- 다음 중 하나 충족 필요:
+  1) PowerShell을 **관리자 권한으로 실행** 후 `npm run dist`
+  2) Windows 11 [설정 > 시스템 > 개발자용]에서 **개발자 모드** 활성화
+  - 한 번 캐시가 풀리면 그 다음부터는 일반 권한으로도 빌드 가능
 
 ---
 
@@ -714,4 +745,99 @@ public/help/
 #### Placeholder 정책
 
 GIF 파일이 없을 경우 코드는 자동으로 "이미지 준비 중..." placeholder를 표시한다. GIF 추가는 파일만 위 경로에 넣으면 즉시 반영된다.
+
+---
+
+## 17) AI 보조 CSV 임포트 (Monday → 우리 시트 형식 자동 변환)
+
+### 17-1. 목적
+
+관리자는 기존에 Monday.com 같은 외부 협업 툴을 쓰고 있었고, 그 데이터를 CSV로 내려받아 우리 형식으로 옮겨야 한다. 헤더와 값 형태가 모두 다르기 때문에 단순 매핑으로는 불가. AI에게 "헤더 ↔ 우리 컬럼" 매핑 + 값 정규화 규칙을 한 번 추출시키고, 그 규칙을 우리 코드가 모든 행에 적용한다.
+
+### 17-2. 사용자 흐름
+
+1. 설정 → **AI 연결** 탭에서 provider/모델/API 키 등록
+2. 상단 바 또는 탭에서 **[CSV 가져오기 (AI)]** 버튼 클릭 → 모달 오픈
+3. CSV 드래그&드롭 → 헤더 + 첫 5행 미리보기
+4. **[AI로 분석]** 버튼 → AI 호출 → 매핑 결과(JSON) 수신
+5. 우리 코드가 모든 행에 매핑 적용 → 변환된 행 미리보기
+6. **[시트에 업로드]** 버튼 활성화 (분석 성공 시) → 활성 탭에 행 추가 + Sheets export
+
+### 17-3. AI 연결 설정
+
+| 항목 | 형태 | 비고 |
+|---|---|---|
+| Provider | dropdown | `OpenAI` / `Anthropic (Claude)` / `Google (Gemini)` |
+| API Key | password input | localStorage 저장 (Phase 2: Electron `safeStorage` 암호화 이전 예정) |
+| Model | dropdown | provider별 최신 5개 자동 갱신. 기본은 가장 최신 |
+| 모델 갱신 | button | provider의 models API를 호출해 최신 5개를 다시 가져옴. 가장 최신 + 그 직전 버전들이 정렬되어 노출 |
+| 가이드 | link | 외부 HTML 가이드 (`public/help/ai-setup.html`) — provider별 키 발급법 + 비용 안내 |
+
+### 17-4. 모델 목록 fetch
+
+| Provider | Endpoint | 인증 |
+|---|---|---|
+| OpenAI | `GET https://api.openai.com/v1/models` | `Authorization: Bearer KEY` |
+| Anthropic | `GET https://api.anthropic.com/v1/models` | `x-api-key: KEY`, `anthropic-version: 2023-06-01` |
+| Google | `GET https://generativelanguage.googleapis.com/v1beta/models?key=KEY` | URL 쿼리 |
+
+- 각 응답에서 `created` 또는 `version` 기준 내림차순 정렬 → 상위 5개를 dropdown에 표시
+- chat / generateContent를 지원하는 모델만 필터 (TTS/embedding 등 제외)
+- 로컬 캐시: `userData/ai-model-cache.json` (provider별 + 마지막 갱신 시각)
+
+### 17-5. AI 분석 요청 (CSV → 매핑 JSON)
+
+**프롬프트(요지)**:
+- 입력: CSV 헤더 + 샘플 5~10행 + 우리 표준 컬럼 스키마
+- 출력 JSON 스키마:
+  ```jsonc
+  {
+    "headerMap":   { "<csvHeader>": "<ourColumnKey or null>" },
+    "valueMaps":   { "<ourColumnKey>": { "<csvValue>": "<ourValue>" } },
+    "dateFormat":  { "<ourColumnKey>": "YYYY-MM-DD | MM/DD/YYYY | ..." },
+    "splitColumns":{ "<ourColumnKey>": { "delimiter": ",", "trim": true } },
+    "ignoreColumns": [ "<csvHeader>", ... ],
+    "twoRowAssignment": { "thumbnailerColumn": "<csvHeader|null>", "editorColumn": "<csvHeader|null>" },
+    "notes": "AI가 발견한 주의사항"
+  }
+  ```
+- provider별 JSON 강제 모드:
+  - OpenAI: `response_format: { type: "json_object" }` (chat) / `text.format.type: "json_object"` (responses)
+  - Anthropic: 시스템 프롬프트로 `JSON only` + `tools` 없이
+  - Google: `generationConfig.responseMimeType: "application/json"`
+
+### 17-6. 매핑 적용 (우리 코드)
+
+받은 JSON을 코드가 적용:
+
+1. **headerMap**으로 csv 컬럼 → 우리 컬럼 키 매칭
+2. **valueMaps**으로 enum 변환 (예: `"대기"→"Wait"`)
+3. **dateFormat**으로 날짜 정규화 (YYYY-MM-DD)
+4. **splitColumns**으로 multi-tag 분리 (`videoCategory`)
+5. **twoRowAssignment**으로 썸네일러/영상편집자 행 생성
+6. 매핑 안 된 컬럼은 ignore + 디버그 로그에 기록
+
+### 17-7. 에러 / 디버그
+
+- 분석 실패 시:
+  - 모달에 "AI 분석 실패" 빨간 배지
+  - **시트에 업로드 버튼 비활성화**
+  - 디버그 패널에 단계별 상세 로그 출력
+- 디버그 패널 우상단 **[전체 복사]** 버튼으로 클립보드 복사 → 사용자가 개발자에게 즉시 전달 가능
+- 로그 카테고리: `[AI:list-models]`, `[AI:analyze]`, `[AI:apply]`, `[AI:upload]`
+
+### 17-8. 보안 / 프라이버시
+
+- API 키: 관리자 본인 키 (BYOK). 우리 서버 경유 없음.
+- 전송 데이터: **헤더 + 샘플 5~10행만** AI에 전송 (전체 행 X). 매핑 추출 후 모든 행은 로컬에서 변환.
+- Phase 2 예정: Electron `safeStorage`로 키 암호화 저장.
+
+### 17-9. 작업 분리
+
+| 단계 | 내용 |
+|---|---|
+| 1 | 설정 [AI 연결] 탭 + 외부 가이드 페이지 + 모델 갱신 IPC |
+| 2 | CSV 임포트 모달 + AI 분석 IPC + 매핑 적용 |
+| 3 | 디버그 로그 [전체 복사] + 카테고리화 |
+| 4 (선택) | safeStorage 키 암호화 + 분석 결과 "프로필" 저장/재사용 |
 
