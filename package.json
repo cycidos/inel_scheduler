@@ -53,10 +53,14 @@
     "files": [
       "electron/**/*",
       "dist/**/*",
-      "!**/*.{md,ts,tsx,map}",
+      "!docs/**",
+      "!scripts/**",
+      "!build/**",
+      "!release/**",
+      "!**/*.{ts,tsx,map}",
       "!**/{.eslintrc,.editorconfig,.prettierrc,tsconfig*.json}",
       "!node_modules/**/*.{md,d.ts,map}",
-      "!**/{test,tests,__tests__,docs,example,examples,sample,samples}/**"
+      "!node_modules/**/{test,tests,__tests__,example,examples,sample,samples}/**"
     ],
     "extraResources": [
       {
