@@ -271,7 +271,7 @@ const initialRows: Record<TabKey, RowItem[]> = {
       values: {
         upload: "",
         broadcastDate: "2026-04-10",
-        broadcastStartTime: "21:00",
+        broadcastStartTime: "21:00:00",
         videoTitle: "풀 리플레이 #31",
         categoryTimeline: "00:00:00 - 노래음악\n01:10:30 - 토크"
       }
@@ -1576,70 +1576,112 @@ function App() {
 
   const detectRowId = useRef<string | null>(null);
   const firstCategoryRecorded = useRef(false);
+  // 같은 세션 polling 중 openDate 흔들림을 잡기 위한 검증용 ref. 디버그 로그로만 사용
+  const lastSeenOpenDate = useRef<string>("");
 
   /**
-   * 방송 감지 시 다시보기 탭에 새 행을 추가한다.
+   * 방송 감지 시 다시보기 탭의 활성 행을 보장한다.
    *
+   * 정책:
    * - 한 행 = 한 방송 세션(LIVE ON → OFF 까지). 자정을 넘겨도 같은 행 유지.
-   * - 같은 날 방송을 여러 번 하는 경우는 LIVE OFF 후 다시 ON 될 때마다 새 행 (방송시작시간으로 구분).
+   * - 같은 날 방송 여러 번 = 방송시작시간 다른 새 행.
+   * - **세션 핑거프린트(broadcastDate + broadcastStartTime[HH:MM:SS])** 매칭으로
+   *   인터넷 끊김 / 앱 재시작 / 감지 OFF→ON 같은 외부 단절 후에도 같은 행 재사용.
+   *   → 치지직의 openDate 는 방송이 켜진 그 시점에서 변하지 않으므로 안전한 키.
    *
-   * 방송일 / 방송시작시간 산정:
-   * - openDate(치지직이 주는 방송 시작 시각, 보통 KST "YYYY-MM-DD HH:mm:ss")가 있으면 그걸 우선 사용.
-   * - 없으면 PC 의 KST(Asia/Seoul) 기준 현재 시각으로 폴백.
+   * 매칭 안전장치:
+   * 1) 활성 세션(detectRowId.current) 동안에는 매칭 자체를 건너뛴다 (매 polling no-op)
+   *    → 같은 세션 내에서 openDate 가 만에 하나 흔들려도 영향 없음.
+   * 2) 매칭은 다단계: 정확(HH:MM:SS) → 분 단위(HH:MM) prefix → 실패 시 새 행.
+   *    → 1분 이내의 미세 흔들림이나 구 시트 데이터(HH:MM)와도 호환.
+   *
+   * 시작시간 산정:
+   * - openDate(KST "YYYY-MM-DD HH:mm:ss") 가 있으면 초까지 그대로 사용.
+   * - 없으면 PC 의 KST(Asia/Seoul) 현재 시각(초 포함)으로 폴백.
    */
-  const createDetectRow = useCallback((title: string, openDate?: string) => {
-    const rowId = `fr_${Date.now()}`;
-    detectRowId.current = rowId;
-    firstCategoryRecorded.current = false;
-
-    let datePart = "";
-    let timePart = "";
-    if (openDate && /^\d{4}-\d{2}-\d{2}/.test(openDate)) {
-      const m = openDate.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})/);
-      if (m) {
-        datePart = m[1];
-        timePart = m[2];
-      } else {
-        datePart = openDate.slice(0, 10);
-      }
-    }
-    if (!datePart || !timePart) {
-      // KST(Asia/Seoul) 24시 기준 폴백
-      const fmt = new Intl.DateTimeFormat("ko-KR", {
-        timeZone: "Asia/Seoul",
-        year: "numeric", month: "2-digit", day: "2-digit",
-        hour: "2-digit", minute: "2-digit", hour12: false
-      });
-      const parts = fmt.formatToParts(new Date());
-      const get = (t: string) => parts.find((p) => p.type === t)?.value || "";
-      const y = get("year"); const mo = get("month"); const d = get("day");
-      const h = get("hour").replace(/^24$/, "00"); const mi = get("minute");
-      if (!datePart) datePart = `${y}-${mo}-${d}`;
-      if (!timePart) timePart = `${h}:${mi}`;
-    }
-
-    dlog(`createDetectRow: id=${rowId}, title="${title}", date=${datePart}, start=${timePart}`);
+  const ensureDetectRow = useCallback((title: string, openDate?: string, currentCategory?: string) => {
     setAppData((prev) => {
       const tab: TabKey = "fullReplay";
+      const rows = prev.rowsByTab[tab];
+
+      // 활성 행 존재 시 매칭 자체를 건너뜀 (안전장치 1)
+      if (detectRowId.current && rows.some((r) => r.id === detectRowId.current)) {
+        return prev;
+      }
+
+      // 1) openDate 파싱 → HH:MM:SS 까지
+      let datePart = "";
+      let timePartFull = "";
+      let timePartMin = "";
+      if (openDate) {
+        const m = openDate.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}(?::\d{2})?)/);
+        if (m) {
+          datePart = m[1];
+          timePartFull = m[2].length === 5 ? `${m[2]}:00` : m[2];
+          timePartMin = timePartFull.slice(0, 5);
+        }
+      }
+
+      // 2) 다단계 매칭 (안전장치 2): 정확 → 분 단위 prefix
+      if (datePart && timePartFull) {
+        let matched = rows.find(
+          (r) => r.values.broadcastDate === datePart && r.values.broadcastStartTime === timePartFull
+        );
+        let matchKind = "exact";
+        if (!matched) {
+          matched = rows.find(
+            (r) =>
+              r.values.broadcastDate === datePart &&
+              (r.values.broadcastStartTime || "").slice(0, 5) === timePartMin
+          );
+          matchKind = "minute-fallback";
+        }
+        if (matched) {
+          detectRowId.current = matched.id;
+          const tl = matched.values.categoryTimeline || "";
+          const lastLine = tl.split("\n").filter(Boolean).pop() || "";
+          const lastCat = lastLine.includes(" - ") ? lastLine.split(" - ").slice(1).join(" - ") : "";
+          firstCategoryRecorded.current = !!currentCategory && lastCat === currentCategory;
+          dlog(`방송 재감지: 기존 행 재사용 (rowId=${matched.id}, fp=${datePart} ${timePartFull}, match=${matchKind}${firstCategoryRecorded.current ? ", same category" : ""})`);
+          return prev;
+        }
+      }
+
+      // 3) 매칭 행 없음 → 새 행. openDate 없으면 KST 현재 시각으로 폴백
+      if (!datePart || !timePartFull) {
+        const fmt = new Intl.DateTimeFormat("ko-KR", {
+          timeZone: "Asia/Seoul",
+          year: "numeric", month: "2-digit", day: "2-digit",
+          hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false
+        });
+        const parts = fmt.formatToParts(new Date());
+        const get = (t: string) => parts.find((p) => p.type === t)?.value || "";
+        if (!datePart) datePart = `${get("year")}-${get("month")}-${get("day")}`;
+        if (!timePartFull) timePartFull = `${get("hour").replace(/^24$/, "00")}:${get("minute")}:${get("second")}`;
+      }
+
+      const rowId = `fr_${Date.now()}`;
+      detectRowId.current = rowId;
+      firstCategoryRecorded.current = false;
       const newRow: RowItem = {
         id: rowId,
         values: {
           upload: "",
           broadcastDate: datePart,
-          broadcastStartTime: timePart,
+          broadcastStartTime: timePartFull,
           videoTitle: title || "",
           categoryTimeline: ""
         }
       };
+      dlog(`createDetectRow: id=${rowId}, title="${title}", date=${datePart}, start=${timePartFull}`);
       return {
         ...prev,
         rowsByTab: {
           ...prev.rowsByTab,
-          [tab]: [...prev.rowsByTab[tab], newRow]
+          [tab]: [...rows, newRow]
         }
       };
     });
-    return rowId;
   }, []);
 
   const appendTimeline = useCallback((uptime: string, category: string) => {
@@ -2018,6 +2060,7 @@ function App() {
       setChzzkUptime("");
       detectRowId.current = null;
       firstCategoryRecorded.current = false;
+      lastSeenOpenDate.current = "";
       dlog("방송감지 OFF");
     } else {
       if (!chzzkLink) {
@@ -2027,9 +2070,12 @@ function App() {
       const result = await api.startChzzkPolling(chzzkLink, pollingInterval);
       if (result.ok) {
         setIsDetecting(true);
-        // 토글 ON 시점에도 안전망으로 행 ref 초기화 → 다음 LIVE 감지 때 새 행 보장
+        // 토글 ON 시점에는 ref 만 비워둠. ensureDetectRow 가 핑거프린트(broadcastDate+broadcastStartTime)
+        // 로 다시보기 탭에서 진행 중인 세션 행을 찾아 재사용하므로,
+        // 인터넷 끊김 / 잠깐 OFF→ON 같은 단절 후에도 같은 행으로 이어서 기록된다.
         detectRowId.current = null;
         firstCategoryRecorded.current = false;
+        lastSeenOpenDate.current = "";
         setTimelineLog([]);
         dlog(`방송감지 ON (interval=${pollingInterval}ms, channel=${result.channelId})`);
       } else {
@@ -2049,11 +2095,29 @@ function App() {
         setChzzkTitle(status.title || "");
         setChzzkUptime(status.uptime || "");
 
-        // 한 세션 = 한 행. detectRowId 가 비어있으면 새 행을 만든다.
-        // (LIVE OFF 가 들어오면 아래에서 비워주므로 다음 LIVE ON 때 새 행 보장)
-        if (!detectRowId.current) {
-          createDetectRow(status.title || "", (status as any).openDate || "");
+        // openDate 일관성 검증: 같은 세션이 진행 중인데 polling 응답의 openDate 가
+        // 변하면(=치지직 측 흔들림) 디버그 로그로 즉시 경고. 매칭은 ensureDetectRow
+        // 의 활성 세션 가드 + 분 단위 fallback 으로 보호되지만, 운영 중 패턴 파악을
+        // 위해 변화 자체를 기록한다.
+        const od = (status as any).openDate || "";
+        if (od) {
+          if (!lastSeenOpenDate.current) {
+            lastSeenOpenDate.current = od;
+            dlog(`치지직 openDate 수신: "${od}"`);
+          } else if (od !== lastSeenOpenDate.current) {
+            dlog(`주의: 같은 세션 내 openDate 변경 감지 "${lastSeenOpenDate.current}" → "${od}" (분 단위 fallback 으로 같은 행 유지)`);
+            lastSeenOpenDate.current = od;
+          }
         }
+
+        // 한 세션 = 한 행. ensureDetectRow 가 핑거프린트 매칭으로
+        // 같은 방송이면 기존 행을 재사용, 새 방송이면 새 행을 만든다.
+        // (인터넷 끊김/감지 OFF→ON 후에도 같은 행으로 이어 기록)
+        ensureDetectRow(
+          status.title || "",
+          od,
+          status.category || ""
+        );
 
         if (!firstCategoryRecorded.current && status.category) {
           firstCategoryRecorded.current = true;
@@ -2067,6 +2131,7 @@ function App() {
         }
         detectRowId.current = null;
         firstCategoryRecorded.current = false;
+        lastSeenOpenDate.current = "";
         setChzzkCategory("");
         setChzzkTitle("");
         setChzzkUptime("");
@@ -2089,7 +2154,7 @@ function App() {
     });
 
     return () => { unsub1(); unsub2(); unsub3(); unsub4(); };
-  }, [createDetectRow, appendTimeline]);
+  }, [ensureDetectRow, appendTimeline]);
 
   useEffect(() => {
     if (!resizingColumnKey) return;

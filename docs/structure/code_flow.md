@@ -101,6 +101,12 @@
 
 `electron/main.js | categories-add-user (IPC) | handler | 새 카테고리를 user JSON에 추가 (중복 방지). 다시보기 자동감지에서 호출 예정 | -> fs`
 
+`electron/main.js | chzzk-status uptime 계산 | logic | poll 응답에 openDate 가 있으면 그것을 KST 기준으로 파싱(now - openDate)해 uptime 산출. polling 시작 시각 기반 fallback 보다 우선 — 인터넷 끊김/감지 OFF→ON 으로 polling 이 재시작돼도 실제 방송 경과 시간을 유지 | -`
+
+`src/App.tsx | ensureDetectRow | useCallback | (구 createDetectRow) 다시보기 탭의 활성 행을 보장. detectRowId 가 살아있으면 매칭 자체 no-op(가드1), 그렇지 않으면 (broadcastDate, broadcastStartTime[HH:MM:SS]) 핑거프린트로 다단계 매칭: 정확 매칭 → 분 단위(HH:MM) prefix fallback(가드2) → 실패 시 새 행. openDate 없으면 KST 현재시각(초까지) 폴백. 매칭 시 마지막 카테고리 줄과 status.category 비교해 firstCategoryRecorded 결정 (재진입 시 중복 라인 방지) | -`
+
+`src/App.tsx | lastSeenOpenDate (ref) + onChzzkStatus 변화 감지 dlog | ref+logic | 같은 세션 polling 중 치지직이 주는 openDate 가 변하는지 검증용. 변화 발생 시 "주의: 같은 세션 내 openDate 변경 감지 ..." 디버그 로그 출력. LIVE OFF / 방송감지 토글 시 리셋 | -`
+
 `electron/preload.js | categoriesLoadUser/categoriesAddUser | bridge | 렌더러 → main IPC 호출 래퍼 | -`
 
 `src/App.tsx | seedCategories/userCategories/allCategories | const+state | 시드(json import) + user(IPC) 합쳐서 unique 목록 생성 | -> categoriesLoadUser`
