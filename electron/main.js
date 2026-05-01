@@ -283,7 +283,15 @@ function startPolling(win, channelId, intervalMs) {
       const category = content.liveCategory || content.liveCategoryValue || "";
       const title = content.liveTitle || "";
       const openDate = content.openDate || "";
-      const elapsed = Date.now() - pollingStartTime;
+
+      // uptime 은 가능하면 openDate(방송 시작 시각, KST) 기준으로 계산
+      // → 인터넷 끊김 / 감지 OFF→ON 으로 polling 이 재시작돼도 실제 방송 경과 시간이 유지됨
+      let elapsed = Date.now() - pollingStartTime;
+      if (openDate) {
+        const iso = openDate.includes("T") ? openDate : openDate.replace(" ", "T");
+        const ts = new Date(iso + "+09:00").getTime();
+        if (!isNaN(ts)) elapsed = Date.now() - ts;
+      }
       const uptimeStr = formatUptime(elapsed);
 
       win.webContents.send("chzzk-status", {
