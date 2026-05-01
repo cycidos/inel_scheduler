@@ -193,6 +193,7 @@ const tableSchema: Record<TabKey, ColumnDef[]> = {
   fullReplay: [
     { key: "upload", label: "업로드", type: "status", width: 100, shared: true },
     { key: "broadcastDate", label: "방송일", type: "date", width: 140, shared: true },
+    { key: "broadcastStartTime", label: "방송시작시간", type: "text", width: 120, shared: true },
     { key: "videoTitle", label: "영상제목", type: "text", width: 280, shared: true },
     { key: "categoryTimeline", label: "카테고리 타임라인", type: "text", width: 320, shared: true }
   ]
@@ -270,6 +271,7 @@ const initialRows: Record<TabKey, RowItem[]> = {
       values: {
         upload: "",
         broadcastDate: "2026-04-10",
+        broadcastStartTime: "21:00",
         videoTitle: "풀 리플레이 #31",
         categoryTimeline: "00:00:00 - 노래음악\n01:10:30 - 토크"
       }
@@ -1575,19 +1577,56 @@ function App() {
   const detectRowId = useRef<string | null>(null);
   const firstCategoryRecorded = useRef(false);
 
-  const createDetectRow = useCallback((title: string) => {
+  /**
+   * 방송 감지 시 다시보기 탭에 새 행을 추가한다.
+   *
+   * - 한 행 = 한 방송 세션(LIVE ON → OFF 까지). 자정을 넘겨도 같은 행 유지.
+   * - 같은 날 방송을 여러 번 하는 경우는 LIVE OFF 후 다시 ON 될 때마다 새 행 (방송시작시간으로 구분).
+   *
+   * 방송일 / 방송시작시간 산정:
+   * - openDate(치지직이 주는 방송 시작 시각, 보통 KST "YYYY-MM-DD HH:mm:ss")가 있으면 그걸 우선 사용.
+   * - 없으면 PC 의 KST(Asia/Seoul) 기준 현재 시각으로 폴백.
+   */
+  const createDetectRow = useCallback((title: string, openDate?: string) => {
     const rowId = `fr_${Date.now()}`;
     detectRowId.current = rowId;
     firstCategoryRecorded.current = false;
-    const today = new Date().toISOString().slice(0, 10);
-    dlog(`createDetectRow: id=${rowId}, title="${title}", date=${today}`);
+
+    let datePart = "";
+    let timePart = "";
+    if (openDate && /^\d{4}-\d{2}-\d{2}/.test(openDate)) {
+      const m = openDate.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2})/);
+      if (m) {
+        datePart = m[1];
+        timePart = m[2];
+      } else {
+        datePart = openDate.slice(0, 10);
+      }
+    }
+    if (!datePart || !timePart) {
+      // KST(Asia/Seoul) 24시 기준 폴백
+      const fmt = new Intl.DateTimeFormat("ko-KR", {
+        timeZone: "Asia/Seoul",
+        year: "numeric", month: "2-digit", day: "2-digit",
+        hour: "2-digit", minute: "2-digit", hour12: false
+      });
+      const parts = fmt.formatToParts(new Date());
+      const get = (t: string) => parts.find((p) => p.type === t)?.value || "";
+      const y = get("year"); const mo = get("month"); const d = get("day");
+      const h = get("hour").replace(/^24$/, "00"); const mi = get("minute");
+      if (!datePart) datePart = `${y}-${mo}-${d}`;
+      if (!timePart) timePart = `${h}:${mi}`;
+    }
+
+    dlog(`createDetectRow: id=${rowId}, title="${title}", date=${datePart}, start=${timePart}`);
     setAppData((prev) => {
       const tab: TabKey = "fullReplay";
       const newRow: RowItem = {
         id: rowId,
         values: {
           upload: "",
-          broadcastDate: today,
+          broadcastDate: datePart,
+          broadcastStartTime: timePart,
           videoTitle: title || "",
           categoryTimeline: ""
         }
@@ -1988,6 +2027,8 @@ function App() {
       const result = await api.startChzzkPolling(chzzkLink, pollingInterval);
       if (result.ok) {
         setIsDetecting(true);
+        // 토글 ON 시점에도 안전망으로 행 ref 초기화 → 다음 LIVE 감지 때 새 행 보장
+        detectRowId.current = null;
         firstCategoryRecorded.current = false;
         setTimelineLog([]);
         dlog(`방송감지 ON (interval=${pollingInterval}ms, channel=${result.channelId})`);
@@ -2008,8 +2049,10 @@ function App() {
         setChzzkTitle(status.title || "");
         setChzzkUptime(status.uptime || "");
 
+        // 한 세션 = 한 행. detectRowId 가 비어있으면 새 행을 만든다.
+        // (LIVE OFF 가 들어오면 아래에서 비워주므로 다음 LIVE ON 때 새 행 보장)
         if (!detectRowId.current) {
-          createDetectRow(status.title || "");
+          createDetectRow(status.title || "", (status as any).openDate || "");
         }
 
         if (!firstCategoryRecorded.current && status.category) {
@@ -2017,6 +2060,16 @@ function App() {
           appendTimeline(status.uptime || "00:00:00", status.category);
           setTimelineLog((prev) => [...prev, `${status.uptime || "00:00:00"} - ${status.category}`]);
         }
+      } else {
+        // LIVE OFF: 행 닫기. 다음 LIVE ON 때 새 행이 만들어지도록 ref 들 리셋.
+        if (detectRowId.current) {
+          dlog(`방송 종료 감지 → 행 마감 (rowId=${detectRowId.current})`);
+        }
+        detectRowId.current = null;
+        firstCategoryRecorded.current = false;
+        setChzzkCategory("");
+        setChzzkTitle("");
+        setChzzkUptime("");
       }
     });
 
