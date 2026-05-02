@@ -107,6 +107,18 @@
 
 `src/App.tsx | lastSeenOpenDate (ref) + onChzzkStatus 변화 감지 dlog | ref+logic | 같은 세션 polling 중 치지직이 주는 openDate 가 변하는지 검증용. 변화 발생 시 "주의: 같은 세션 내 openDate 변경 감지 ..." 디버그 로그 출력. LIVE OFF / 방송감지 토글 시 리셋 | -`
 
+`electron/main.js | chzzk-status / chzzk-category-change payload 분리 | logic | 카테고리를 categoryId(영문 키), categoryValue(한글 표시명), categoryType(GAME/ETC/...) 셋으로 분리해서 송신. 비교/자동등록은 안정적 키 categoryId 기준. 호환 위해 category 필드(=display)도 유지 | -`
+
+`electron/main.js | sheets-patch-row (IPC) | handler | 매칭 키 쌍(matchPairs)으로 시트 한 행을 식별 → update or append. 다시보기 카테고리 변경 즉시 반영용. 행 전체 read 후 일치하는 row 인덱스 찾고 그 행만 update | -> sheetsClient.spreadsheets.values.{get,update,append}`
+
+`electron/preload.js | sheetsPatchRow | bridge | renderer → main IPC 호출 래퍼 | -`
+
+`src/App.tsx | flushPatchActiveRow + schedulePatchActiveRow + patchDebounceTimer | useCallback+ref | t12-a. detectRowId 가 가리키는 다시보기 활성 행만 sheets-patch-row IPC 로 시트에 즉시 반영. matchPairs=(broadcastDate,broadcastStartTime). 5초 디바운스로 카테고리 변경 폭주 시 호출 통합. LIVE OFF / 토글 OFF 시 즉시 flush | -> sheetsPatchRow`
+
+`src/App.tsx | appDataRef / sheetLinkRef / allCategoriesRef | ref | useEffect deps 폭증 방지용. 활성 polling 핸들러 내부에서 setAppData/sheetLink/allCategories 의 최신 값을 ref 로 참조. 매 변경마다 useEffect 동기화 | -`
+
+`src/App.tsx | onChzzkCategoryChange 자동 등록 분기 | logic | t12-b. change.nextId 가 allCategoriesRef.current 에 없으면 categoriesAddUser IPC 로 자동 등록 → setUserCategories 갱신. dlog 카테고리: [auto-register] | -> categoriesAddUser`
+
 `electron/preload.js | categoriesLoadUser/categoriesAddUser | bridge | 렌더러 → main IPC 호출 래퍼 | -`
 
 `src/App.tsx | seedCategories/userCategories/allCategories | const+state | 시드(json import) + user(IPC) 합쳐서 unique 목록 생성 | -> categoriesLoadUser`

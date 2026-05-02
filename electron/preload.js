@@ -43,6 +43,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   sheetsExport: (sheetUrl, tabKey, year, headers, rows) =>
     ipcRenderer.invoke("sheets-export", { sheetUrl, tabKey, year, headers, rows }),
 
+  sheetsPatchRow: (sheetUrl, tabKey, year, headers, matchPairs, rowValues) =>
+    ipcRenderer.invoke("sheets-patch-row", { sheetUrl, tabKey, year, headers, matchPairs, rowValues }),
+
   sheetsTestConnection: (sheetUrl) =>
     ipcRenderer.invoke("sheets-test-connection", { sheetUrl }),
 
