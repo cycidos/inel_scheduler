@@ -19,6 +19,14 @@ declare global {
         Promise<{ ok: boolean; rows?: RowItem[]; headerRow?: string[]; sheetNotFound?: boolean; error?: string }>;
       sheetsExport: (sheetUrl: string, tabKey: string, year: number, headers: Array<{ key: string; label: string }>, rows: RowItem[]) =>
         Promise<{ ok: boolean; sheetName?: string; rowCount?: number; error?: string }>;
+      sheetsPatchRow: (
+        sheetUrl: string,
+        tabKey: string,
+        year: number,
+        headers: Array<{ key: string; label: string; shared?: boolean }>,
+        matchPairs: Array<[string, string]>,
+        rowValues: Record<string, string>
+      ) => Promise<{ ok: boolean; action?: "updated" | "appended"; rowNum?: number; error?: string }>;
       sheetsTestConnection: (sheetUrl: string) =>
         Promise<{ ok: boolean; title?: string; sheets?: string[]; clientEmail?: string; error?: string }>;
       categoriesLoadUser: () =>
@@ -75,6 +83,9 @@ type AiModelInfo = { id: string; label: string; created?: number | string | null
 type ChzzkStatus = {
   live: boolean;
   category?: string;
+  categoryId?: string;
+  categoryValue?: string;
+  categoryType?: string;
   title?: string;
   openDate?: string;
   uptime?: string;
@@ -84,6 +95,9 @@ type ChzzkStatus = {
 type ChzzkCategoryChange = {
   prev: string;
   next: string;
+  nextId?: string;
+  nextValue?: string;
+  nextType?: string;
   title: string;
   uptime: string;
   timestamp: string;
@@ -1578,6 +1592,12 @@ function App() {
   const firstCategoryRecorded = useRef(false);
   // 같은 세션 polling 중 openDate 흔들림을 잡기 위한 검증용 ref. 디버그 로그로만 사용
   const lastSeenOpenDate = useRef<string>("");
+  // 카테고리 변경 즉시 시트 patch (t12-a) 디바운스 timer
+  const patchDebounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // useEffect deps 폭증 방지용. 활성 polling 핸들러 내부에서 최신 값 참조
+  const appDataRef = useRef<AppData | null>(null);
+  const sheetLinkRef = useRef<string>("");
+  const allCategoriesRef = useRef<ChzzkCategory[]>([]);
 
   /**
    * 방송 감지 시 다시보기 탭의 활성 행을 보장한다.
@@ -1684,6 +1704,73 @@ function App() {
     });
   }, []);
 
+  // useEffect deps 폭증 방지를 위해 핸들러 내부에서 ref 로 최신 값 참조
+  useEffect(() => { appDataRef.current = appData; }, [appData]);
+  useEffect(() => { sheetLinkRef.current = sheetLink; }, [sheetLink]);
+  useEffect(() => { allCategoriesRef.current = allCategories; }, [allCategories]);
+
+  /**
+   * t12-a: 활성 다시보기 행을 시트에 즉시 patch (1행만 update/append).
+   * - 매칭 키: (broadcastDate, broadcastStartTime). 이 둘이 unique 하므로 안전.
+   * - 시트에 없으면 append, 있으면 같은 행 update.
+   * - 인증/링크 누락 시 silent skip (로그만).
+   */
+  const flushPatchActiveRow = useCallback(async () => {
+    const api = window.electronAPI;
+    if (!api) return;
+    const rowId = detectRowId.current;
+    if (!rowId) return;
+    const sheetUrl = sheetLinkRef.current;
+    if (!sheetUrl) {
+      dlog(`[patch] 스킵: 시트 링크 없음`);
+      return;
+    }
+    const data = appDataRef.current;
+    if (!data) return;
+    const row = data.rowsByTab.fullReplay.find((r) => r.id === rowId);
+    if (!row) {
+      dlog(`[patch] 스킵: row 없음 (rowId=${rowId})`);
+      return;
+    }
+    const date = row.values.broadcastDate || "";
+    const time = row.values.broadcastStartTime || "";
+    if (!date || !time) {
+      dlog(`[patch] 스킵: 매칭 키 부족 (date=${date}, time=${time})`);
+      return;
+    }
+    const headers = data.schemaByTab.fullReplay;
+    const year = parseInt(date.slice(0, 4), 10) || new Date().getFullYear();
+    const matchPairs: Array<[string, string]> = [
+      ["broadcastDate", date],
+      ["broadcastStartTime", time]
+    ];
+    const tlLen = (row.values.categoryTimeline || "").length;
+    dlog(`[patch] 시도: rowId=${rowId}, ${date} ${time}, timeline길이=${tlLen}`);
+    setSheetsStatus("시트 patch...");
+    try {
+      const res = await api.sheetsPatchRow(sheetUrl, "fullReplay", year, headers, matchPairs, row.values);
+      if (res.ok) {
+        dlog(`[patch] ${res.action || "ok"} (rowNum=${res.rowNum ?? "-"})`);
+        setSheetsStatus(res.action === "appended" ? "시트 추가됨" : "시트 갱신됨");
+      } else {
+        dlog(`[patch] 실패: ${res.error}`);
+        setSheetsStatus(`시트 patch 실패: ${res.error || "오류"}`);
+      }
+    } catch (e) {
+      dlog(`[patch] 예외: ${(e as Error).message}`);
+      setSheetsStatus("시트 patch 실패");
+    }
+  }, []);
+
+  /** 5초 디바운스로 patch 예약. 같은 row 가 짧은 시간에 여러 번 갱신될 때 마지막만 1번 실행. */
+  const schedulePatchActiveRow = useCallback(() => {
+    if (patchDebounceTimer.current) clearTimeout(patchDebounceTimer.current);
+    patchDebounceTimer.current = setTimeout(() => {
+      patchDebounceTimer.current = null;
+      flushPatchActiveRow();
+    }, 5000);
+  }, [flushPatchActiveRow]);
+
   const appendTimeline = useCallback((uptime: string, category: string) => {
     const rowId = detectRowId.current;
     if (!rowId) return;
@@ -1706,7 +1793,9 @@ function App() {
         }
       };
     });
-  }, []);
+    // 카테고리 추가 후 5초 디바운스로 시트 patch (t12-a)
+    schedulePatchActiveRow();
+  }, [schedulePatchActiveRow]);
 
 
   const saveSettings = () => {
@@ -2058,6 +2147,14 @@ function App() {
       setChzzkCategory("");
       setChzzkTitle("");
       setChzzkUptime("");
+      // 대기 중인 patch 가 있으면 즉시 flush 후 ref 리셋
+      if (patchDebounceTimer.current) {
+        clearTimeout(patchDebounceTimer.current);
+        patchDebounceTimer.current = null;
+      }
+      if (detectRowId.current) {
+        await flushPatchActiveRow();
+      }
       detectRowId.current = null;
       firstCategoryRecorded.current = false;
       lastSeenOpenDate.current = "";
@@ -2128,6 +2225,12 @@ function App() {
         // LIVE OFF: 행 닫기. 다음 LIVE ON 때 새 행이 만들어지도록 ref 들 리셋.
         if (detectRowId.current) {
           dlog(`방송 종료 감지 → 행 마감 (rowId=${detectRowId.current})`);
+          // 디바운스 대기 중인 patch 가 있으면 즉시 flush (마지막 상태를 시트에 반영)
+          if (patchDebounceTimer.current) {
+            clearTimeout(patchDebounceTimer.current);
+            patchDebounceTimer.current = null;
+          }
+          flushPatchActiveRow();
         }
         detectRowId.current = null;
         firstCategoryRecorded.current = false;
@@ -2143,6 +2246,33 @@ function App() {
       dlog(`카테고리 변경: ${change.prev} → ${change.next}`);
       setTimelineLog((prev) => [...prev, entry]);
       appendTimeline(change.uptime, change.next);
+
+      // t12-b: 처음 보는 카테고리면 사용자 카테고리 목록에 자동 등록
+      const cid = change.nextId || "";
+      const cval = change.nextValue || change.next || "";
+      if (cid && cval) {
+        const exists = allCategoriesRef.current.some((c) => c.categoryId === cid);
+        if (!exists) {
+          dlog(`[auto-register] 새 카테고리 자동 등록 시도: id=${cid}, value="${cval}", type=${change.nextType || ""}`);
+          (async () => {
+            try {
+              const apiRef = window.electronAPI;
+              if (!apiRef) return;
+              const res = await apiRef.categoriesAddUser(cid, cval, change.nextType || "");
+              if (res.ok && res.added && res.categories) {
+                setUserCategories(res.categories);
+                dlog(`[auto-register] 등록 완료: ${cid} (총 user ${res.categories.length}개)`);
+              } else if (res.ok && !res.added) {
+                dlog(`[auto-register] 이미 등록되어 있음: ${cid}`);
+              } else {
+                dlog(`[auto-register] 실패: ${res.error || "원인 미상"}`);
+              }
+            } catch (e) {
+              dlog(`[auto-register] 예외: ${(e as Error).message}`);
+            }
+          })();
+        }
+      }
     });
 
     const unsub3 = api.onChzzkTitleChange((change) => {
@@ -2154,7 +2284,7 @@ function App() {
     });
 
     return () => { unsub1(); unsub2(); unsub3(); unsub4(); };
-  }, [ensureDetectRow, appendTimeline]);
+  }, [ensureDetectRow, appendTimeline, flushPatchActiveRow]);
 
   useEffect(() => {
     if (!resizingColumnKey) return;

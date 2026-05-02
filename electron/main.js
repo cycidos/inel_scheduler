@@ -280,7 +280,13 @@ function startPolling(win, channelId, intervalMs) {
         return;
       }
 
-      const category = content.liveCategory || content.liveCategoryValue || "";
+      // 카테고리는 id (영문 키) / value (한글 표시명) / type (GAME/ETC/...) 셋이 별개
+      // - 사용자에게 보이고 셀에 저장되는 값: categoryValue(한글) 우선, 없으면 categoryId
+      // - 자동 등록 / 비교에는 categoryId 가 안정적인 키
+      const categoryId = content.liveCategory || "";
+      const categoryValue = content.liveCategoryValue || "";
+      const categoryType = content.categoryType || "";
+      const categoryDisplay = categoryValue || categoryId;
       const title = content.liveTitle || "";
       const openDate = content.openDate || "";
 
@@ -296,16 +302,24 @@ function startPolling(win, channelId, intervalMs) {
 
       win.webContents.send("chzzk-status", {
         live: true,
-        category,
+        category: categoryDisplay, // 호환성: 기존 코드 path 유지
+        categoryId,
+        categoryValue,
+        categoryType,
         title,
         openDate,
         uptime: uptimeStr
       });
 
-      if (lastCategory !== null && category !== lastCategory) {
+      // 비교는 안정적인 키(categoryId)로. 빈 categoryId 면 categoryValue 로 폴백.
+      const compareKey = categoryId || categoryValue;
+      if (lastCategory !== null && compareKey !== lastCategory) {
         win.webContents.send("chzzk-category-change", {
           prev: lastCategory,
-          next: category,
+          next: categoryDisplay,
+          nextId: categoryId,
+          nextValue: categoryValue,
+          nextType: categoryType,
           title,
           uptime: uptimeStr,
           timestamp: new Date().toISOString()
@@ -322,7 +336,7 @@ function startPolling(win, channelId, intervalMs) {
         });
       }
 
-      lastCategory = category;
+      lastCategory = compareKey;
       lastTitle = title;
     } catch (err) {
       win.webContents.send("chzzk-error", { message: err.message });
@@ -692,6 +706,96 @@ function createWindow() {
       });
 
       return { ok: true, sheetName, rowCount: dataValues.length };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  // 단일 행 patch — 다시보기 카테고리 변경 즉시 반영용.
+  // matchPairs(예: [["broadcastDate","2026-05-02"],["broadcastStartTime","13:12:46"]]) 로
+  // 시트에서 해당 행을 식별 → 그 행 전체를 rowValues 로 update. 매칭 행이 없으면 append.
+  // 카테고리 변경마다 호출되므로 빠르고 가벼운 단일 행 작업만 수행.
+  ipcMain.handle("sheets-patch-row", async (_event, { sheetUrl, tabKey, year, headers, matchPairs, rowValues }) => {
+    if (!sheetsClient) return { ok: false, error: "인증되지 않음. Service Account JSON을 먼저 설정하세요." };
+    const spreadsheetId = extractSpreadsheetId(sheetUrl);
+    if (!spreadsheetId) return { ok: false, error: "잘못된 Google Sheets URL" };
+    const sheetName = getSheetName(tabKey, year);
+
+    try {
+      const spreadsheet = await sheetsClient.spreadsheets.get({ spreadsheetId });
+      const existingSheets = spreadsheet.data.sheets.map((s) => s.properties.title);
+      if (!existingSheets.includes(sheetName)) {
+        // 시트가 없으면 생성하고 헤더 행 작성 후 그 아래에 append
+        await sheetsClient.spreadsheets.batchUpdate({
+          spreadsheetId,
+          requestBody: { requests: [{ addSheet: { properties: { title: sheetName } } }] }
+        });
+        const headerLabels = headers.map((h) => h.label);
+        await sheetsClient.spreadsheets.values.update({
+          spreadsheetId,
+          range: `${sheetName}!A1`,
+          valueInputOption: "USER_ENTERED",
+          requestBody: { values: [headerLabels] }
+        });
+      }
+
+      // 1) 시트 read
+      let sheetRows = [];
+      try {
+        const res = await sheetsClient.spreadsheets.values.get({
+          spreadsheetId,
+          range: `${sheetName}!A1:Z10000`
+        });
+        sheetRows = res.data.values || [];
+      } catch (_) {
+        sheetRows = [];
+      }
+
+      const headerRow = sheetRows[0] || [];
+      // header 가 비어있으면 우리 schema 의 label 로 채워준다 (시트 새로 만든 직후)
+      const labelToIndex = new Map();
+      headerRow.forEach((label, idx) => labelToIndex.set(label, idx));
+      const keyToColIndex = new Map();
+      headers.forEach((h, idx) => {
+        const i = labelToIndex.has(h.label) ? labelToIndex.get(h.label) : idx;
+        keyToColIndex.set(h.key, i);
+      });
+
+      // 2) matchPairs 모두 일치하는 row 인덱스 찾기 (헤더는 0행이라 데이터는 1행부터)
+      let matchedRowIndex = -1;
+      for (let i = 1; i < sheetRows.length; i++) {
+        const r = sheetRows[i];
+        let allMatch = true;
+        for (const [k, v] of matchPairs) {
+          const colIdx = keyToColIndex.get(k);
+          if (colIdx === undefined || (r[colIdx] || "") !== v) { allMatch = false; break; }
+        }
+        if (allMatch) { matchedRowIndex = i; break; }
+      }
+
+      // 3) rowValues 를 시트 행 배열로 직렬화 (header 순서 따라)
+      const rowOut = headers.map((h) => (rowValues && rowValues[h.key]) || "");
+
+      // 4) update or append
+      if (matchedRowIndex >= 0) {
+        const sheetRowNum = matchedRowIndex + 1; // A1 기준 1-based
+        await sheetsClient.spreadsheets.values.update({
+          spreadsheetId,
+          range: `${sheetName}!A${sheetRowNum}`,
+          valueInputOption: "USER_ENTERED",
+          requestBody: { values: [rowOut] }
+        });
+        return { ok: true, action: "updated", rowNum: sheetRowNum };
+      } else {
+        await sheetsClient.spreadsheets.values.append({
+          spreadsheetId,
+          range: `${sheetName}!A1`,
+          valueInputOption: "USER_ENTERED",
+          insertDataOption: "INSERT_ROWS",
+          requestBody: { values: [rowOut] }
+        });
+        return { ok: true, action: "appended" };
+      }
     } catch (err) {
       return { ok: false, error: err.message };
     }
