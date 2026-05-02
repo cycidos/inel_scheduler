@@ -330,7 +330,7 @@ function startPolling(win, channelId, intervalMs) {
         win.webContents.send("chzzk-title-change", {
           prev: lastTitle,
           next: title,
-          category,
+          category: categoryDisplay,
           uptime: uptimeStr,
           timestamp: new Date().toISOString()
         });
@@ -339,7 +339,10 @@ function startPolling(win, channelId, intervalMs) {
       lastCategory = compareKey;
       lastTitle = title;
     } catch (err) {
-      win.webContents.send("chzzk-error", { message: err.message });
+      // 핸들러 안에서 예외가 나도 lastCategory/lastTitle 가 갱신될 수 있도록
+      // catch 안에서도 직전 값으로 동기화 (try 끝까지 도달했을 가능성에 대비).
+      // 그렇지 않으면 같은 이벤트가 매 polling 마다 무한 emit 된다.
+      win.webContents.send("chzzk-error", { message: err.message, stack: err.stack });
     }
   };
 
