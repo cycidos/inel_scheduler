@@ -109,7 +109,7 @@
 
 `electron/main.js | chzzk-status / chzzk-category-change payload 분리 | logic | 카테고리를 categoryId(영문 키), categoryValue(한글 표시명), categoryType(GAME/ETC/...) 셋으로 분리해서 송신. 비교/자동등록은 안정적 키 categoryId 기준. 호환 위해 category 필드(=display)도 유지 | -`
 
-`electron/main.js | sheets-patch-row (IPC) | handler | 매칭 키 쌍(matchPairs)으로 시트 한 행을 식별 → update or append. 다시보기 카테고리 변경 즉시 반영용. 행 전체 read 후 일치하는 row 인덱스 찾고 그 행만 update | -> sheetsClient.spreadsheets.values.{get,update,append}`
+`electron/main.js | sheets-patch-row (IPC) | handler | 매칭 키 쌍(matchPairs)으로 시트 한 행을 식별 → update or append. 다시보기 카테고리 변경 즉시 반영용. 1) 시트 헤더 read → 2) 우리 schema label 중 시트에 없는 것은 헤더 끝에 자동 append (RAW 모드, 누락 컬럼 보충) → 3) 시트 헤더 인덱스 기반으로 keyToColIndex 재구성 (사용자가 시트 컬럼 순서 바꿔도 안전) → 4) rowOut 을 시트 헤더 길이만큼 만든 뒤 우리 schema 의 각 key 를 정확한 시트 컬럼 위치에 배치 → 5) update or append | -> sheetsClient.spreadsheets.values.{get,update,append}`
 
 `electron/preload.js | sheetsPatchRow | bridge | renderer → main IPC 호출 래퍼 | -`
 
