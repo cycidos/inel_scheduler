@@ -751,14 +751,31 @@ function createWindow() {
         sheetRows = [];
       }
 
-      const headerRow = sheetRows[0] || [];
-      // header 가 비어있으면 우리 schema 의 label 로 채워준다 (시트 새로 만든 직후)
+      let headerRow = sheetRows[0] || [];
+
+      // 1-1) 누락된 컬럼 자동 보충 — 우리 schema 의 label 중 시트 헤더에 없는 것은
+      // 시트 헤더 끝에 append 한다. 사용자가 직접 옮긴 컬럼 순서는 보존하면서
+      // 신규 컬럼만 추가하는 안전한 방식.
+      const missingLabels = headers
+        .map((h) => h.label)
+        .filter((label) => !headerRow.includes(label));
+      if (missingLabels.length > 0) {
+        headerRow = [...headerRow, ...missingLabels];
+        await sheetsClient.spreadsheets.values.update({
+          spreadsheetId,
+          range: `${sheetName}!A1`,
+          valueInputOption: "RAW",
+          requestBody: { values: [headerRow] }
+        });
+        sheetRows[0] = headerRow;
+      }
+
+      // 1-2) keyToColIndex: 우리 schema 의 key → 시트 헤더 인덱스
       const labelToIndex = new Map();
       headerRow.forEach((label, idx) => labelToIndex.set(label, idx));
       const keyToColIndex = new Map();
-      headers.forEach((h, idx) => {
-        const i = labelToIndex.has(h.label) ? labelToIndex.get(h.label) : idx;
-        keyToColIndex.set(h.key, i);
+      headers.forEach((h) => {
+        if (labelToIndex.has(h.label)) keyToColIndex.set(h.key, labelToIndex.get(h.label));
       });
 
       // 2) matchPairs 모두 일치하는 row 인덱스 찾기 (헤더는 0행이라 데이터는 1행부터)
@@ -773,8 +790,15 @@ function createWindow() {
         if (allMatch) { matchedRowIndex = i; break; }
       }
 
-      // 3) rowValues 를 시트 행 배열로 직렬화 (header 순서 따라)
-      const rowOut = headers.map((h) => (rowValues && rowValues[h.key]) || "");
+      // 3) rowOut 생성 — 시트 헤더 컬럼 수만큼 빈 배열 만든 뒤,
+      // 우리 schema 의 각 key 를 시트 헤더 인덱스에 정확히 배치.
+      // → 사용자가 시트에서 컬럼 순서를 바꿔도, 우리 데이터가 올바른 셀에 들어감.
+      const rowOut = new Array(headerRow.length).fill("");
+      for (const h of headers) {
+        const idx = keyToColIndex.get(h.key);
+        if (idx === undefined || idx < 0) continue;
+        rowOut[idx] = (rowValues && rowValues[h.key]) || "";
+      }
 
       // 4) update or append
       if (matchedRowIndex >= 0) {
