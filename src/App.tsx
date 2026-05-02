@@ -354,24 +354,21 @@ function currentMonthKey(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
 
-function buildDefaultMonthMap(rowsByTab: Record<TabKey, RowItem[]>): Record<TabKey, string> {
-  const result: Record<TabKey, string> = {
-    shorts: currentMonthKey(),
-    longform: currentMonthKey(),
-    fullReplay: currentMonthKey()
-  };
+/** "YYYY-MM" 키를 ±delta 개월 만큼 이동시켜 다시 "YYYY-MM" 으로 반환 */
+function shiftMonthKey(monthKey: string, delta: number): string {
+  if (!/^\d{4}-\d{2}$/.test(monthKey)) return currentMonthKey();
+  const [y, m] = monthKey.split("-").map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
 
-  (Object.keys(rowsByTab) as TabKey[]).forEach((tab) => {
-    const keys = rowsByTab[tab]
-      .map((row) => parseMonthKey(row.values.broadcastDate || ""))
-      .filter((key): key is string => Boolean(key))
-      .sort();
-    if (keys.length > 0) {
-      result[tab] = keys[keys.length - 1];
-    }
-  });
-
-  return result;
+// 앱 시작 시 모든 탭을 "오늘 달"로 초기화한다.
+// (이전엔 데이터의 마지막 달로 자동 점프했지만, 사용자 입장에선 항상 현재 달이
+// 보이는 게 직관적. 행이 없는 달이면 빈 표가 보이고 사용자가 직접 이전/다음
+// 달로 이동할 수 있다.)
+function buildDefaultMonthMap(): Record<TabKey, string> {
+  const key = currentMonthKey();
+  return { shorts: key, longform: key, fullReplay: key };
 }
 
 function App() {
@@ -1037,7 +1034,7 @@ function App() {
     fullReplay: null
   });
   const [selectedMonthByTab, setSelectedMonthByTab] = useState<Record<TabKey, string>>(
-    buildDefaultMonthMap(initialRows)
+    buildDefaultMonthMap()
   );
 
   const columns = useMemo(() => appData.schemaByTab[activeTab], [activeTab, appData.schemaByTab]);
@@ -1050,12 +1047,23 @@ function App() {
   }, [data]);
   const selectedMonth = selectedMonthByTab[activeTab];
   const filteredData = useMemo(() => {
-    if (availableMonthKeys.length === 0) return data;
+    // 데이터가 한 건도 없으면 그대로 (월 필터 적용 안 함)
+    if (data.length === 0) return data;
+    // selectedMonth 에 해당하는 행만. 데이터가 다른 달에만 있어도 빈 배열 반환 (의도된 동작)
     return data.filter((row) => parseMonthKey(row.values.broadcastDate || "") === selectedMonth);
-  }, [availableMonthKeys.length, data, selectedMonth]);
-  const monthIndex = availableMonthKeys.findIndex((key) => key === selectedMonth);
-  const hasPrevMonth = monthIndex > 0;
-  const hasNextMonth = monthIndex >= 0 && monthIndex < availableMonthKeys.length - 1;
+  }, [data, selectedMonth]);
+  // 월 이동은 데이터 유무와 무관하게 ±1개월씩 자유롭게.
+  // 화살표는 항상 활성화 (사용자가 직접 조작). 데이터 있는 가장 빠른/늦은 달 ±12개월
+  // 까지만 허용해서 무한 이동을 살짝 제한한다.
+  const monthBounds = useMemo(() => {
+    const todayKey = currentMonthKey();
+    const allKeys = [...availableMonthKeys, selectedMonth, todayKey].filter(Boolean).sort();
+    const earliest = allKeys[0] || todayKey;
+    const latest = allKeys[allKeys.length - 1] || todayKey;
+    return { earliest: shiftMonthKey(earliest, -12), latest: shiftMonthKey(latest, 12) };
+  }, [availableMonthKeys, selectedMonth]);
+  const hasPrevMonth = !!selectedMonth && selectedMonth > monthBounds.earliest;
+  const hasNextMonth = !!selectedMonth && selectedMonth < monthBounds.latest;
 
   /**
    * 새 변경 직전의 상태(appData)를 스택에 push.
@@ -2306,15 +2314,9 @@ function App() {
     };
   }, [resizingColumnKey, resizeStartX, resizeStartWidth]);
 
-  useEffect(() => {
-    if (availableMonthKeys.length === 0) return;
-    if (!availableMonthKeys.includes(selectedMonth)) {
-      setSelectedMonthByTab((prev) => ({
-        ...prev,
-        [activeTab]: availableMonthKeys[availableMonthKeys.length - 1]
-      }));
-    }
-  }, [activeTab, availableMonthKeys, selectedMonth]);
+  // (이전엔 선택된 달에 데이터가 없으면 데이터의 마지막 달로 강제 이동시켰지만,
+  // 사용자가 항상 현재 달로 시작하기를 원하므로 자동 점프 로직 제거.
+  // 화살표 좌우로 자유롭게 이동 가능, 빈 달이면 빈 표가 보인다.)
 
   useEffect(() => {
     const handleMouseDown = (event: MouseEvent) => {
@@ -2367,13 +2369,13 @@ function App() {
   }, [isSettingsOpen, openStatusMenuKey, typeMenuColumnKey, openAssigneeMenuKey, openPresetMenuKey]);
 
   const moveMonth = (direction: "prev" | "next") => {
-    if (monthIndex < 0) return;
-    const nextIndex = direction === "prev" ? monthIndex - 1 : monthIndex + 1;
-    if (nextIndex < 0 || nextIndex >= availableMonthKeys.length) return;
-    setSelectedMonthByTab((prev) => ({
-      ...prev,
-      [activeTab]: availableMonthKeys[nextIndex]
-    }));
+    if (!selectedMonth) return;
+    const delta = direction === "prev" ? -1 : 1;
+    const next = shiftMonthKey(selectedMonth, delta);
+    // 경계(±12개월) 체크
+    if (direction === "prev" && next < monthBounds.earliest) return;
+    if (direction === "next" && next > monthBounds.latest) return;
+    setSelectedMonthByTab((prev) => ({ ...prev, [activeTab]: next }));
   };
 
   const renderCellEditor = (row: RowItem, column: ColumnDef, role: EditorRole | null = null) => {
