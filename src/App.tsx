@@ -485,6 +485,10 @@ function App() {
   const [newTagCell, setNewTagCell] = useState<string | null>(null);
 
   const [isDetecting, setIsDetecting] = useState(false);
+  // 앱 종료 직전 방송감지 상태(저장값). 첫 마운트에서 자동 재개 트리거에 사용.
+  const wasDetectingRef = useRef(false);
+  // 자동 재개를 한 번만 시도하기 위한 가드.
+  const autoResumeDoneRef = useRef(false);
   const [chzzkLive, setChzzkLive] = useState(false);
   const [chzzkCategory, setChzzkCategory] = useState("");
   const [chzzkTitle, setChzzkTitle] = useState("");
@@ -1896,7 +1900,9 @@ function App() {
         // 다음 앱 실행 시에도 같은 컬럼 구성을 그대로 복원한다.
         schemaByTab: appData.schemaByTab,
         // 탭별 정렬 순서 (앱 표시용)
-        sortOrderByTab
+        sortOrderByTab,
+        // 방송감지 ON 상태 — 다음 실행 시 자동 재개 마커
+        isDetecting
       };
       localStorage.setItem("inel.settings.v1", JSON.stringify(data));
       setSheetsStatus("설정 저장 완료");
@@ -1940,6 +1946,11 @@ function App() {
       if (Array.isArray(data.staffList)) setStaffList(data.staffList);
       if (typeof data.maxUndoSize === "number") {
         setMaxUndoSize(Math.min(50, Math.max(5, data.maxUndoSize)));
+      }
+      // 방송감지 ON 상태 복원 마커. 실제 폴링 시작은
+      // 별도 useEffect 에서 chzzkLink 가 준비되면 한 번만 실행한다.
+      if (typeof data.isDetecting === "boolean") {
+        wasDetectingRef.current = data.isDetecting;
       }
       // 정렬 순서 복원 (탭별)
       if (data.sortOrderByTab && typeof data.sortOrderByTab === "object") {
@@ -2009,6 +2020,56 @@ function App() {
       // ignore
     }
   }, [sortOrderByTab]);
+
+  // isDetecting 변경 자동 저장 (방송감지 토글 즉시 영구 저장)
+  const detectPersistInitRef = useRef(false);
+  useEffect(() => {
+    if (!detectPersistInitRef.current) {
+      detectPersistInitRef.current = true;
+      return;
+    }
+    try {
+      const raw = localStorage.getItem("inel.settings.v1");
+      const base = raw ? JSON.parse(raw) : {};
+      const next = { ...base, isDetecting };
+      localStorage.setItem("inel.settings.v1", JSON.stringify(next));
+    } catch {
+      // ignore
+    }
+  }, [isDetecting]);
+
+  // 앱 시작 시 방송감지 자동 재개:
+  // 종료 직전에 ON 이었고 chzzkLink 가 설정되어 있다면 한 번만 폴링을 자동 시작.
+  // chzzkLink/pollingInterval 은 loadSettings useEffect 가 비동기로 채우므로
+  // 의존성 배열에 넣어 둘 다 준비된 후 실행되도록 한다.
+  useEffect(() => {
+    if (autoResumeDoneRef.current) return;
+    if (!wasDetectingRef.current) return;
+    if (!chzzkLink) return;
+    autoResumeDoneRef.current = true;
+    const api = window.electronAPI;
+    if (!api) return;
+    (async () => {
+      try {
+        dlog("방송감지 자동 재개 시도 (이전 종료 시 ON 상태)");
+        const result = await api.startChzzkPolling(chzzkLink, pollingInterval);
+        if (result.ok) {
+          setIsDetecting(true);
+          detectRowId.current = null;
+          firstCategoryRecorded.current = false;
+          firstTitleRecorded.current = false;
+          lastSeenOpenDate.current = "";
+          setTimelineLog([]);
+          dlog(`방송감지 자동 재개 성공 (interval=${pollingInterval}ms, channel=${result.channelId})`);
+        } else {
+          dlog(`방송감지 자동 재개 실패: ${result.error}`);
+          // 실패 시에는 다음 사용자 토글에 맡김. 저장된 ON 플래그는 유지.
+        }
+      } catch (e) {
+        dlog(`방송감지 자동 재개 예외: ${(e as Error).message}`);
+      }
+    })();
+  }, [chzzkLink, pollingInterval]);
 
   useEffect(() => {
     if (autoSyncDoneRef.current) return;
