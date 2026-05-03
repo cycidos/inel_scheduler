@@ -1405,6 +1405,29 @@ td.is-locked > * {
   color: #ffffff;
 }
 
+.sort-toggle {
+  width: auto;
+  height: auto;
+  min-width: 0;
+  padding: 5px 12px;
+  background: transparent;
+  border: 1px solid #f9a8d4;
+  color: #9d174d;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 999px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-left: 6px;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.sort-toggle:hover {
+  background: rgba(244, 114, 182, 0.12);
+  border-color: #f472b6;
+}
+
 .group-header-todo td {
   background: linear-gradient(90deg, #fff7fb 0%, #fce7f3 100%);
 }

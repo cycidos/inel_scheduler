@@ -667,9 +667,29 @@ function createWindow() {
       const sharedKeys = headers.filter((h) => h.shared).map((h) => h.key);
       const isPairedTab = sharedKeys.length > 0;
 
+      // 시트는 항상 "위에서부터 예전 → 아래로 최신" 오름차순으로 고정.
+      // 앱의 표시 정렬과 무관하게 시트 측 시간 흐름을 일관되게 유지하기 위함.
+      // 키: broadcastDate ASC, 같으면 broadcastStartTime ASC (다시보기), 그 외엔 입력 순 (stable).
+      const dateKey = (row) => (row && row.values && row.values.broadcastDate) || "";
+      const timeKey = (row) => (row && row.values && row.values.broadcastStartTime) || "";
+      const indexed = rows.map((row, idx) => ({ row, idx }));
+      indexed.sort((a, b) => {
+        const da = dateKey(a.row);
+        const db = dateKey(b.row);
+        // 빈 날짜는 항상 마지막으로
+        if (!da && db) return 1;
+        if (da && !db) return -1;
+        if (da !== db) return da < db ? -1 : 1;
+        const ta = timeKey(a.row);
+        const tb = timeKey(b.row);
+        if (ta !== tb) return ta < tb ? -1 : 1;
+        return a.idx - b.idx; // stable
+      });
+      const sortedRows = indexed.map((x) => x.row);
+
       // 한 RowItem → 시트 행 1개 또는 2개로 직렬화
       const dataValues = [];
-      for (const row of rows) {
+      for (const row of sortedRows) {
         const hasRoles = !!(row.thumbnailer || row.editor);
         if (isPairedTab && hasRoles) {
           // 행1: 썸네일러 → shared 컬럼은 row.values, 역할 컬럼은 row.thumbnailer
