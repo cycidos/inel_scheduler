@@ -1816,7 +1816,10 @@ function App() {
         statusOptions,
         showDebugPanel,
         staffList,
-        maxUndoSize
+        maxUndoSize,
+        // 사용자가 헤더 드래그/추가/삭제/이름변경 한 결과를 영구 저장.
+        // 다음 앱 실행 시에도 같은 컬럼 구성을 그대로 복원한다.
+        schemaByTab: appData.schemaByTab
       };
       localStorage.setItem("inel.settings.v1", JSON.stringify(data));
       setSheetsStatus("설정 저장 완료");
@@ -1861,10 +1864,48 @@ function App() {
       if (typeof data.maxUndoSize === "number") {
         setMaxUndoSize(Math.min(50, Math.max(5, data.maxUndoSize)));
       }
+      // 저장된 컬럼 schema 복원. 단 코드의 기본 schema 가 새로 추가된 컬럼은
+      // 자동으로 끝에 보충해서 마이그레이션 안전성을 유지한다.
+      if (data.schemaByTab && typeof data.schemaByTab === "object") {
+        const merged: Record<TabKey, ColumnDef[]> = { ...tableSchema };
+        (Object.keys(tableSchema) as TabKey[]).forEach((tab) => {
+          const stored: ColumnDef[] = Array.isArray(data.schemaByTab[tab]) ? data.schemaByTab[tab] : [];
+          if (stored.length === 0) {
+            merged[tab] = tableSchema[tab];
+            return;
+          }
+          // 1) stored 의 각 컬럼은 그대로 유지 (사용자 변경 보존)
+          // 2) tableSchema 에는 있는데 stored 에 없는 키(코드가 새로 추가한 컬럼)는 끝에 append
+          const storedKeys = new Set(stored.map((c) => c.key));
+          const missing = tableSchema[tab].filter((c) => !storedKeys.has(c.key));
+          merged[tab] = [...stored, ...missing];
+        });
+        setAppData((prev) => ({ ...prev, schemaByTab: merged }));
+      }
     } catch {
       // ignore
     }
   }, []);
+
+  // schemaByTab 변경 자동 저장.
+  // 사용자가 헤더 드래그/추가/삭제/이름변경할 때마다 즉시 localStorage 에 저장 →
+  // 앱 재시작 후에도 같은 컬럼 구성을 유지. 첫 마운트 시점은 가드해서
+  // 빈 상태로 덮어쓰지 않도록 한다.
+  const schemaPersistInitRef = useRef(false);
+  useEffect(() => {
+    if (!schemaPersistInitRef.current) {
+      schemaPersistInitRef.current = true;
+      return;
+    }
+    try {
+      const raw = localStorage.getItem("inel.settings.v1");
+      const base = raw ? JSON.parse(raw) : {};
+      const next = { ...base, schemaByTab: appData.schemaByTab };
+      localStorage.setItem("inel.settings.v1", JSON.stringify(next));
+    } catch {
+      // ignore
+    }
+  }, [appData.schemaByTab]);
 
   useEffect(() => {
     if (autoSyncDoneRef.current) return;
