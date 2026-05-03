@@ -3125,52 +3125,55 @@ function App() {
         )}
       </section>
 
-      <section className="month-nav">
-        <button type="button" onClick={() => moveMonth("prev")} disabled={!hasPrevMonth}>
-          {"<"}
-        </button>
-        <strong>
-          {selectedMonth ? `${selectedMonth.slice(0, 4)}. ${selectedMonth.slice(5, 7)}` : "월 없음"}
-        </strong>
-        <button type="button" onClick={() => moveMonth("next")} disabled={!hasNextMonth}>
-          {">"}
-        </button>
-        <button
-          type="button"
-          className="sort-toggle"
-          onClick={() =>
+      <section className="toolbar-row">
+        <div className="month-nav">
+          <button type="button" onClick={() => moveMonth("prev")} disabled={!hasPrevMonth}>
+            {"<"}
+          </button>
+          <strong>
+            {selectedMonth ? `${selectedMonth.slice(0, 4)}. ${selectedMonth.slice(5, 7)}` : "월 없음"}
+          </strong>
+          <button type="button" onClick={() => moveMonth("next")} disabled={!hasNextMonth}>
+            {">"}
+          </button>
+          {(activeTab === "shorts" || activeTab === "longform") && (
+            <div className="task-filter-toggle" role="tablist" aria-label="작업 필터">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={(taskFilter[activeTab] ?? "todoOnly") === "todoOnly"}
+                className={`task-filter-btn ${(taskFilter[activeTab] ?? "todoOnly") === "todoOnly" ? "active" : ""}`}
+                onClick={() => setTaskFilterFor(activeTab, "todoOnly")}
+              >
+                할일만 보기
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={(taskFilter[activeTab] ?? "todoOnly") === "all"}
+                className={`task-filter-btn ${(taskFilter[activeTab] ?? "todoOnly") === "all" ? "active" : ""}`}
+                onClick={() => setTaskFilterFor(activeTab, "all")}
+              >
+                모두 보기
+              </button>
+            </div>
+          )}
+        </div>
+        <select
+          className="sort-select"
+          value={sortOrder}
+          onChange={(e) =>
             setSortOrderByTab((prev) => ({
               ...prev,
-              [activeTab]: prev[activeTab] === "desc" ? "asc" : "desc"
+              [activeTab]: e.target.value === "asc" ? "asc" : "desc"
             }))
           }
           title="방송일 기준 정렬 (앱 표시 전용. 시트는 항상 오래된 순으로 고정)"
-          aria-label="방송일 정렬 순서 전환"
+          aria-label="방송일 정렬 순서"
         >
-          {sortOrder === "desc" ? "최신 위 ↓" : "오래된 위 ↑"}
-        </button>
-        {(activeTab === "shorts" || activeTab === "longform") && (
-          <div className="task-filter-toggle" role="tablist" aria-label="작업 필터">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={(taskFilter[activeTab] ?? "todoOnly") === "todoOnly"}
-              className={`task-filter-btn ${(taskFilter[activeTab] ?? "todoOnly") === "todoOnly" ? "active" : ""}`}
-              onClick={() => setTaskFilterFor(activeTab, "todoOnly")}
-            >
-              할일만 보기
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={(taskFilter[activeTab] ?? "todoOnly") === "all"}
-              className={`task-filter-btn ${(taskFilter[activeTab] ?? "todoOnly") === "all" ? "active" : ""}`}
-              onClick={() => setTaskFilterFor(activeTab, "all")}
-            >
-              모두 보기
-            </button>
-          </div>
-        )}
+          <option value="desc">최신순</option>
+          <option value="asc">이전순</option>
+        </select>
       </section>
 
       <main className="table-wrap">
