@@ -1036,6 +1036,15 @@ function App() {
   const [selectedMonthByTab, setSelectedMonthByTab] = useState<Record<TabKey, string>>(
     buildDefaultMonthMap()
   );
+  // 앱 표시용 정렬 순서 (탭별). 시트 export 와는 독립.
+  // 시트는 항상 broadcastDate 오름차순으로 고정되며, 여기는 사용자가 보고 싶은 순서.
+  // 디폴트는 "최신 위" (desc). localStorage 에 저장해 재시작 후에도 유지.
+  type SortOrder = "desc" | "asc";
+  const [sortOrderByTab, setSortOrderByTab] = useState<Record<TabKey, SortOrder>>({
+    shorts: "desc",
+    longform: "desc",
+    fullReplay: "desc"
+  });
 
   const columns = useMemo(() => appData.schemaByTab[activeTab], [activeTab, appData.schemaByTab]);
   const data = useMemo(() => appData.rowsByTab[activeTab], [activeTab, appData.rowsByTab]);
@@ -1046,12 +1055,30 @@ function App() {
     return Array.from(new Set(keys)).sort();
   }, [data]);
   const selectedMonth = selectedMonthByTab[activeTab];
+  const sortOrder = sortOrderByTab[activeTab];
   const filteredData = useMemo(() => {
     // 데이터가 한 건도 없으면 그대로 (월 필터 적용 안 함)
     if (data.length === 0) return data;
     // selectedMonth 에 해당하는 행만. 데이터가 다른 달에만 있어도 빈 배열 반환 (의도된 동작)
-    return data.filter((row) => parseMonthKey(row.values.broadcastDate || "") === selectedMonth);
-  }, [data, selectedMonth]);
+    const inMonth = data.filter((row) => parseMonthKey(row.values.broadcastDate || "") === selectedMonth);
+    // 사용자가 선택한 정렬 적용 (디폴트 desc = 최신 위)
+    const sign = sortOrder === "asc" ? 1 : -1;
+    const indexed = inMonth.map((row, idx) => ({ row, idx }));
+    indexed.sort((a, b) => {
+      const da = a.row.values.broadcastDate || "";
+      const db = b.row.values.broadcastDate || "";
+      // 빈 날짜는 항상 마지막
+      if (!da && db) return 1;
+      if (da && !db) return -1;
+      if (da !== db) return da < db ? -1 * sign : 1 * sign;
+      const ta = a.row.values.broadcastStartTime || "";
+      const tb = b.row.values.broadcastStartTime || "";
+      if (ta !== tb) return ta < tb ? -1 * sign : 1 * sign;
+      // 동일 키는 입력 순 유지 (stable)
+      return a.idx - b.idx;
+    });
+    return indexed.map((x) => x.row);
+  }, [data, selectedMonth, sortOrder]);
   // 월 이동은 데이터 유무와 무관하게 ±1개월씩 자유롭게.
   // 화살표는 항상 활성화 (사용자가 직접 조작). 데이터 있는 가장 빠른/늦은 달 ±12개월
   // 까지만 허용해서 무한 이동을 살짝 제한한다.
@@ -1867,7 +1894,9 @@ function App() {
         maxUndoSize,
         // 사용자가 헤더 드래그/추가/삭제/이름변경 한 결과를 영구 저장.
         // 다음 앱 실행 시에도 같은 컬럼 구성을 그대로 복원한다.
-        schemaByTab: appData.schemaByTab
+        schemaByTab: appData.schemaByTab,
+        // 탭별 정렬 순서 (앱 표시용)
+        sortOrderByTab
       };
       localStorage.setItem("inel.settings.v1", JSON.stringify(data));
       setSheetsStatus("설정 저장 완료");
@@ -1912,6 +1941,15 @@ function App() {
       if (typeof data.maxUndoSize === "number") {
         setMaxUndoSize(Math.min(50, Math.max(5, data.maxUndoSize)));
       }
+      // 정렬 순서 복원 (탭별)
+      if (data.sortOrderByTab && typeof data.sortOrderByTab === "object") {
+        const valid = (v: unknown): v is SortOrder => v === "asc" || v === "desc";
+        setSortOrderByTab((prev) => ({
+          shorts: valid(data.sortOrderByTab.shorts) ? data.sortOrderByTab.shorts : prev.shorts,
+          longform: valid(data.sortOrderByTab.longform) ? data.sortOrderByTab.longform : prev.longform,
+          fullReplay: valid(data.sortOrderByTab.fullReplay) ? data.sortOrderByTab.fullReplay : prev.fullReplay
+        }));
+      }
       // 저장된 컬럼 schema 복원. 단 코드의 기본 schema 가 새로 추가된 컬럼은
       // 자동으로 끝에 보충해서 마이그레이션 안전성을 유지한다.
       if (data.schemaByTab && typeof data.schemaByTab === "object") {
@@ -1954,6 +1992,23 @@ function App() {
       // ignore
     }
   }, [appData.schemaByTab]);
+
+  // sortOrderByTab 변경 자동 저장 (정렬 토글 클릭 즉시 영구 저장)
+  const sortPersistInitRef = useRef(false);
+  useEffect(() => {
+    if (!sortPersistInitRef.current) {
+      sortPersistInitRef.current = true;
+      return;
+    }
+    try {
+      const raw = localStorage.getItem("inel.settings.v1");
+      const base = raw ? JSON.parse(raw) : {};
+      const next = { ...base, sortOrderByTab };
+      localStorage.setItem("inel.settings.v1", JSON.stringify(next));
+    } catch {
+      // ignore
+    }
+  }, [sortOrderByTab]);
 
   useEffect(() => {
     if (autoSyncDoneRef.current) return;
@@ -3079,6 +3134,20 @@ function App() {
         </strong>
         <button type="button" onClick={() => moveMonth("next")} disabled={!hasNextMonth}>
           {">"}
+        </button>
+        <button
+          type="button"
+          className="sort-toggle"
+          onClick={() =>
+            setSortOrderByTab((prev) => ({
+              ...prev,
+              [activeTab]: prev[activeTab] === "desc" ? "asc" : "desc"
+            }))
+          }
+          title="방송일 기준 정렬 (앱 표시 전용. 시트는 항상 오래된 순으로 고정)"
+          aria-label="방송일 정렬 순서 전환"
+        >
+          {sortOrder === "desc" ? "최신 위 ↓" : "오래된 위 ↑"}
         </button>
         {(activeTab === "shorts" || activeTab === "longform") && (
           <div className="task-filter-toggle" role="tablist" aria-label="작업 필터">
