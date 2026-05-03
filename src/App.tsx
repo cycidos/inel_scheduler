@@ -2285,6 +2285,23 @@ function App() {
   const handleImport = () => { void runImport(); };
   const handleExport = () => { void runExport(); };
 
+  const handleCopySheetLink = async () => {
+    if (!sheetLink) {
+      setSheetsStatus("복사할 시트 링크가 없습니다");
+      dlog("시트 링크 복사 실패: 링크가 비어있음");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(sheetLink);
+      setSheetsStatus("시트 링크 복사됨");
+      dlog(`시트 링크 클립보드에 복사: ${sheetLink}`);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setSheetsStatus(`복사 실패: ${msg}`);
+      dlog(`시트 링크 복사 예외: ${msg}`);
+    }
+  };
+
   const toggleDetection = async () => {
     const api = window.electronAPI;
     if (!api) {
@@ -3046,6 +3063,19 @@ function App() {
             <button type="button" onClick={handleExport}>구글시트 업로드</button>
             <button
               type="button"
+              className="icon-button"
+              onClick={handleCopySheetLink}
+              disabled={!sheetLink}
+              title={sheetLink ? "구글 시트 링크 복사" : "복사할 시트 링크가 없음 (설정에서 입력)"}
+              aria-label="구글 시트 링크 복사"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+              </svg>
+            </button>
+            <button
+              type="button"
               onClick={() => { resetCsvModal(); setCsvTargetTab(activeTab === "fullReplay" ? "shorts" : activeTab); setCsvModalOpen(true); }}
               title="외부 협업 툴(Monday 등)에서 내려받은 CSV를 AI로 우리 시트 형식으로 변환해 추가"
             >
@@ -3527,7 +3557,7 @@ function App() {
               className={`settings-tab ${settingsTab === "connection" ? "active" : ""}`}
               onClick={() => setSettingsTab("connection")}
             >
-              구글 시트 연결
+              구글 시트
             </button>
             <button
               type="button"
