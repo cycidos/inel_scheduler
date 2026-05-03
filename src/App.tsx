@@ -208,7 +208,7 @@ const tableSchema: Record<TabKey, ColumnDef[]> = {
     { key: "upload", label: "업로드", type: "status", width: 100, shared: true },
     { key: "broadcastDate", label: "방송일", type: "date", width: 140, shared: true },
     { key: "broadcastStartTime", label: "방송시작시간", type: "text", width: 120, shared: true },
-    { key: "videoTitle", label: "영상제목", type: "text", width: 280, shared: true },
+    { key: "videoTitle", label: "영상제목 타임라인", type: "text", width: 320, shared: true },
     { key: "categoryTimeline", label: "카테고리 타임라인", type: "text", width: 320, shared: true }
   ]
 };
@@ -286,7 +286,7 @@ const initialRows: Record<TabKey, RowItem[]> = {
         upload: "",
         broadcastDate: "2026-04-10",
         broadcastStartTime: "21:00:00",
-        videoTitle: "풀 리플레이 #31",
+        videoTitle: "00:00:00 - 풀 리플레이 #31\n01:30:12 - 풀 리플레이 #31 - 잡담",
         categoryTimeline: "00:00:00 - 노래음악\n01:10:30 - 토크"
       }
     }
@@ -1598,6 +1598,9 @@ function App() {
 
   const detectRowId = useRef<string | null>(null);
   const firstCategoryRecorded = useRef(false);
+  // 영상제목 타임라인 첫 누적 가드. 카테고리와 동일 패턴으로
+  // 첫 polling tick 또는 재감지 시 직전과 같은 제목이면 다시 적지 않는다.
+  const firstTitleRecorded = useRef(false);
   // 같은 세션 polling 중 openDate 흔들림을 잡기 위한 검증용 ref. 디버그 로그로만 사용
   const lastSeenOpenDate = useRef<string>("");
   // 카테고리 변경 즉시 시트 patch (t12-a) 디바운스 timer
@@ -1666,11 +1669,17 @@ function App() {
         }
         if (matched) {
           detectRowId.current = matched.id;
+          // 카테고리 타임라인 마지막 제목 비교
           const tl = matched.values.categoryTimeline || "";
           const lastLine = tl.split("\n").filter(Boolean).pop() || "";
           const lastCat = lastLine.includes(" - ") ? lastLine.split(" - ").slice(1).join(" - ") : "";
           firstCategoryRecorded.current = !!currentCategory && lastCat === currentCategory;
-          dlog(`방송 재감지: 기존 행 재사용 (rowId=${matched.id}, fp=${datePart} ${timePartFull}, match=${matchKind}${firstCategoryRecorded.current ? ", same category" : ""})`);
+          // 영상제목 타임라인 마지막 제목 비교 (카테고리와 동일 패턴)
+          const ttl = matched.values.videoTitle || "";
+          const lastTitleLine = ttl.split("\n").filter(Boolean).pop() || "";
+          const lastTitle = lastTitleLine.includes(" - ") ? lastTitleLine.split(" - ").slice(1).join(" - ") : "";
+          firstTitleRecorded.current = !!title && lastTitle === title;
+          dlog(`방송 재감지: 기존 행 재사용 (rowId=${matched.id}, fp=${datePart} ${timePartFull}, match=${matchKind}${firstCategoryRecorded.current ? ", same category" : ""}${firstTitleRecorded.current ? ", same title" : ""})`);
           return prev;
         }
       }
@@ -1691,13 +1700,16 @@ function App() {
       const rowId = `fr_${Date.now()}`;
       detectRowId.current = rowId;
       firstCategoryRecorded.current = false;
+      firstTitleRecorded.current = false;
       const newRow: RowItem = {
         id: rowId,
         values: {
           upload: "",
           broadcastDate: datePart,
           broadcastStartTime: timePartFull,
-          videoTitle: title || "",
+          // videoTitle 도 카테고리와 동일하게 timeline 형식으로 누적된다.
+          // 첫 제목 라인은 onChzzkStatus 의 firstTitleRecorded 가드에서 적힌다.
+          videoTitle: "",
           categoryTimeline: ""
         }
       };
@@ -1802,6 +1814,41 @@ function App() {
       };
     });
     // 카테고리 추가 후 5초 디바운스로 시트 patch (t12-a)
+    schedulePatchActiveRow();
+  }, [schedulePatchActiveRow]);
+
+  /**
+   * 영상제목 타임라인 누적. 카테고리 타임라인과 완전히 동일한 패턴.
+   * 한 셀(videoTitle)에 "HH:MM:SS - 제목" 라인을 줄바꿈으로 누적한다.
+   * 직전 라인과 같은 제목이면 중복 추가하지 않는다.
+   */
+  const appendTitleTimeline = useCallback((uptime: string, title: string) => {
+    const rowId = detectRowId.current;
+    if (!rowId) return;
+    if (!title) return;
+    const entry = `${uptime} - ${title}`;
+    setAppData((prev) => {
+      const tab: TabKey = "fullReplay";
+      const rows = prev.rowsByTab[tab];
+      const row = rows.find((r) => r.id === rowId);
+      if (!row) return prev;
+      const existing = row.values.videoTitle || "";
+      const lastLine = existing.split("\n").filter(Boolean).pop() || "";
+      const lastTitle = lastLine.includes(" - ") ? lastLine.split(" - ").slice(1).join(" - ") : "";
+      // 같은 제목 연달아 들어오면 중복 누적 방지
+      if (lastTitle && lastTitle === title) return prev;
+      const updated = existing ? `${existing}\n${entry}` : entry;
+      dlog(`appendTitleTimeline: row=${rowId}, entry="${entry}"`);
+      return {
+        ...prev,
+        rowsByTab: {
+          ...prev.rowsByTab,
+          [tab]: rows.map((r) =>
+            r.id === rowId ? { ...r, values: { ...r.values, videoTitle: updated } } : r
+          )
+        }
+      };
+    });
     schedulePatchActiveRow();
   }, [schedulePatchActiveRow]);
 
@@ -2206,6 +2253,7 @@ function App() {
       }
       detectRowId.current = null;
       firstCategoryRecorded.current = false;
+      firstTitleRecorded.current = false;
       lastSeenOpenDate.current = "";
       dlog("방송감지 OFF");
     } else {
@@ -2221,6 +2269,7 @@ function App() {
         // 인터넷 끊김 / 잠깐 OFF→ON 같은 단절 후에도 같은 행으로 이어서 기록된다.
         detectRowId.current = null;
         firstCategoryRecorded.current = false;
+        firstTitleRecorded.current = false;
         lastSeenOpenDate.current = "";
         setTimelineLog([]);
         dlog(`방송감지 ON (interval=${pollingInterval}ms, channel=${result.channelId})`);
@@ -2270,6 +2319,11 @@ function App() {
           appendTimeline(status.uptime || "00:00:00", status.category);
           setTimelineLog((prev) => [...prev, `${status.uptime || "00:00:00"} - ${status.category}`]);
         }
+        // 영상제목 첫 누적 (카테고리와 동일 패턴)
+        if (!firstTitleRecorded.current && status.title) {
+          firstTitleRecorded.current = true;
+          appendTitleTimeline(status.uptime || "00:00:00", status.title);
+        }
       } else {
         // LIVE OFF: 행 닫기. 다음 LIVE ON 때 새 행이 만들어지도록 ref 들 리셋.
         if (detectRowId.current) {
@@ -2283,6 +2337,7 @@ function App() {
         }
         detectRowId.current = null;
         firstCategoryRecorded.current = false;
+        firstTitleRecorded.current = false;
         lastSeenOpenDate.current = "";
         setChzzkCategory("");
         setChzzkTitle("");
@@ -2326,6 +2381,8 @@ function App() {
 
     const unsub3 = api.onChzzkTitleChange((change) => {
       dlog(`제목 변경: "${change.prev}" → "${change.next}"`);
+      // 카테고리 변경과 동일하게 영상제목 타임라인에 누적
+      appendTitleTimeline(change.uptime, change.next);
     });
 
     const unsub4 = api.onChzzkError((err) => {
@@ -2333,7 +2390,7 @@ function App() {
     });
 
     return () => { unsub1(); unsub2(); unsub3(); unsub4(); };
-  }, [ensureDetectRow, appendTimeline, flushPatchActiveRow]);
+  }, [ensureDetectRow, appendTimeline, appendTitleTimeline, flushPatchActiveRow]);
 
   useEffect(() => {
     if (!resizingColumnKey) return;
