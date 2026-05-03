@@ -1765,7 +1765,8 @@ function App() {
       ["broadcastStartTime", time]
     ];
     const tlLen = (row.values.categoryTimeline || "").length;
-    dlog(`[patch] 시도: rowId=${rowId}, ${date} ${time}, timeline길이=${tlLen}`);
+    const ttlLen = (row.values.videoTitle || "").length;
+    dlog(`[patch] 시도: rowId=${rowId}, ${date} ${time}, 카테고리=${tlLen}, 제목=${ttlLen}`);
     setSheetsStatus("시트 patch...");
     try {
       const res = await api.sheetsPatchRow(sheetUrl, "fullReplay", year, headers, matchPairs, row.values);
@@ -2488,7 +2489,12 @@ function App() {
     const cellRole = column.shared ? null : role;
     const cellKey = `${activeTab}-${row.id}-${column.key}-${cellRole ?? "shared"}`;
 
-    if (column.key === "categoryTimeline") {
+    // 다시보기 탭의 타임라인 셀(영상제목/카테고리)은 자동 누적되는 로그라
+    // 사용자가 직접 편집하지 못하도록 readonly 텍스트로만 표시한다.
+    const isReplayTimelineCell =
+      activeTab === "fullReplay" &&
+      (column.key === "categoryTimeline" || column.key === "videoTitle");
+    if (isReplayTimelineCell) {
       return (
         <div className="timeline-cell">
           {value.split("\n").map((line, i) => (
