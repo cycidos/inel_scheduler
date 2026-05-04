@@ -2,7 +2,7 @@ const { app, BrowserWindow, Menu, ipcMain, dialog, shell } = require("electron")
 const path = require("path");
 const https = require("https");
 const fs = require("fs");
-const { execFile } = require("child_process");
+const { execFile, spawn } = require("child_process");
 const { google } = require("googleapis");
 
 let pollingTimer = null;
@@ -903,6 +903,43 @@ function createWindow() {
       const dir = app.getPath("userData");
       await shell.openPath(dir);
       return { ok: true, path: dir };
+    } catch (err) {
+      return { ok: false, error: err.message || String(err) };
+    }
+  });
+
+  // ───────────────────────────────────────────────────────────────
+  // 앱 자체 삭제 — 설정 → 기타 의 "앱 삭제하기" 에서 호출.
+  // 사용자가 모달에서 정확한 확인 문구를 입력했음을 가정한다.
+  // NSIS uninstaller 를 silent 모드로 spawn 하고 우리 앱은 즉시 종료한다.
+  // ───────────────────────────────────────────────────────────────
+  ipcMain.handle("app-uninstall", async () => {
+    try {
+      if (process.platform !== "win32") {
+        return { ok: false, error: "현재 Windows 만 지원" };
+      }
+      if (!app.isPackaged) {
+        return { ok: false, error: "개발 모드에서는 사용 불가 (설치된 빌드에서만 동작)" };
+      }
+      const installDir = path.dirname(process.execPath);
+      // electron-builder NSIS 디폴트 패턴: "Uninstall <productName>.exe"
+      const uninstallerPath = path.join(installDir, "Uninstall Inel Work Scheduler.exe");
+      if (!fs.existsSync(uninstallerPath)) {
+        return { ok: false, error: `uninstaller 를 찾을 수 없음: ${uninstallerPath}` };
+      }
+      // /S = silent, --force-run = 앱이 실행 중이어도 진행
+      const child = spawn(uninstallerPath, ["/S", "--force-run"], {
+        detached: true,
+        stdio: "ignore",
+        cwd: installDir,
+        windowsHide: true
+      });
+      child.unref();
+      // 약간의 시간 차로 앱 종료 → uninstaller 가 lock 파일 충돌 없이 진행
+      setTimeout(() => {
+        try { app.quit(); } catch (_) { /* ignore */ }
+      }, 600);
+      return { ok: true };
     } catch (err) {
       return { ok: false, error: err.message || String(err) };
     }

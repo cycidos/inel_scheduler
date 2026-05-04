@@ -397,6 +397,11 @@ function App() {
     rowsByTab: loadInitialRows()
   }));
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  // 앱 삭제 다이얼로그 — 사용자가 정확한 확인 문구를 입력해야 진행되도록 가드
+  const [uninstallModalOpen, setUninstallModalOpen] = useState(false);
+  const [uninstallConfirmText, setUninstallConfirmText] = useState("");
+  const [uninstalling, setUninstalling] = useState(false);
+  const UNINSTALL_CONFIRM_PHRASE = "이늘 스케쥴러 삭제합니다";
   const [sheetLink, setSheetLink] = useState("");
   const [serviceAccountPath, setServiceAccountPath] = useState("");
   const [sheetsStatus, setSheetsStatus] = useState("");
@@ -4035,6 +4040,26 @@ function App() {
                     이 폴더를 함께 복사하세요.
                   </p>
                 </div>
+
+                <div className="etc-card etc-danger-card">
+                  <div className="etc-card-head">
+                    <strong>앱 삭제</strong>
+                    <button
+                      type="button"
+                      className="etc-danger-btn"
+                      onClick={() => {
+                        setUninstallConfirmText("");
+                        setUninstallModalOpen(true);
+                      }}
+                    >
+                      앱 삭제하기
+                    </button>
+                  </div>
+                  <p className="etc-card-desc">
+                    설치된 Inel Work Scheduler 와 모든 사용자 데이터(설정, 행, 카테고리)를 삭제합니다.
+                    이 작업은 되돌릴 수 없습니다. 시트에 업로드된 데이터는 그대로 유지됩니다.
+                  </p>
+                </div>
               </>
             )}
           </div>
@@ -4064,6 +4089,84 @@ function App() {
             }
           </div>
         </aside>
+      )}
+
+      {uninstallModalOpen && (
+        <div
+          className="uninstall-modal-overlay"
+          onClick={() => { if (!uninstalling) setUninstallModalOpen(false); }}
+        >
+          <section className="uninstall-modal" onClick={(e) => e.stopPropagation()}>
+            <header className="uninstall-modal-header">
+              <h3>앱 삭제</h3>
+              <button
+                type="button"
+                className="uninstall-modal-close"
+                onClick={() => { if (!uninstalling) setUninstallModalOpen(false); }}
+                disabled={uninstalling}
+                title="닫기"
+              >
+                ×
+              </button>
+            </header>
+            <div className="uninstall-modal-body">
+              <p className="uninstall-warning">
+                이 작업은 <strong>되돌릴 수 없습니다.</strong> 설치된 앱과 모든 사용자 데이터(설정, 행, 카테고리)가 삭제됩니다.
+                시트에 업로드된 데이터는 영향받지 않습니다.
+              </p>
+              <p className="uninstall-confirm-label">
+                계속하려면 아래 문구를 정확히 입력하세요:
+              </p>
+              <code className="uninstall-confirm-phrase">{UNINSTALL_CONFIRM_PHRASE}</code>
+              <input
+                type="text"
+                className="uninstall-confirm-input"
+                value={uninstallConfirmText}
+                onChange={(e) => setUninstallConfirmText(e.target.value)}
+                placeholder="확인 문구를 입력하세요"
+                disabled={uninstalling}
+                autoFocus
+              />
+            </div>
+            <footer className="uninstall-modal-actions">
+              <button
+                type="button"
+                onClick={() => setUninstallModalOpen(false)}
+                disabled={uninstalling}
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                className="uninstall-confirm-btn"
+                disabled={uninstallConfirmText !== UNINSTALL_CONFIRM_PHRASE || uninstalling}
+                onClick={async () => {
+                  const api = (window as any).electronAPI;
+                  if (!api?.uninstallApp) {
+                    dlog("[uninstall] uninstallApp API 사용 불가 (Electron 환경 아님)");
+                    return;
+                  }
+                  setUninstalling(true);
+                  dlog("[uninstall] 앱 삭제 시작");
+                  try {
+                    const res = await api.uninstallApp();
+                    if (res?.ok) {
+                      dlog("[uninstall] uninstaller 실행됨. 곧 앱이 종료됩니다.");
+                    } else {
+                      dlog(`[uninstall] 실패: ${res?.error || "원인 미상"}`);
+                      setUninstalling(false);
+                    }
+                  } catch (err: unknown) {
+                    dlog(`[uninstall] 예외: ${err instanceof Error ? err.message : String(err)}`);
+                    setUninstalling(false);
+                  }
+                }}
+              >
+                {uninstalling ? "삭제 중..." : "삭제 진행"}
+              </button>
+            </footer>
+          </section>
+        </div>
       )}
 
       {csvModalOpen && (
