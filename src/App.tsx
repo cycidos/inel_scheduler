@@ -371,12 +371,31 @@ function buildDefaultMonthMap(): Record<TabKey, string> {
   return { shorts: key, longform: key, fullReplay: key };
 }
 
+// 사용자 행 데이터 복원: localStorage 에 저장된 게 있으면 그것을, 없으면 mock data 사용.
+// 마운트 시 단 한 번 동기적으로 평가되어 첫 렌더부터 정확한 데이터를 보여준다.
+function loadInitialRows(): Record<TabKey, RowItem[]> {
+  try {
+    const raw = localStorage.getItem("inel.rowsByTab.v1");
+    if (!raw) return initialRows;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return initialRows;
+    const result: Record<TabKey, RowItem[]> = {
+      shorts: Array.isArray(parsed.shorts) ? parsed.shorts : initialRows.shorts,
+      longform: Array.isArray(parsed.longform) ? parsed.longform : initialRows.longform,
+      fullReplay: Array.isArray(parsed.fullReplay) ? parsed.fullReplay : initialRows.fullReplay
+    };
+    return result;
+  } catch {
+    return initialRows;
+  }
+}
+
 function App() {
   const [activeTab, setActiveTab] = useState<TabKey>("shorts");
-  const [appData, setAppData] = useState<AppDataState>({
+  const [appData, setAppData] = useState<AppDataState>(() => ({
     schemaByTab: tableSchema,
-    rowsByTab: initialRows
-  });
+    rowsByTab: loadInitialRows()
+  }));
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [sheetLink, setSheetLink] = useState("");
   const [serviceAccountPath, setServiceAccountPath] = useState("");
@@ -2020,6 +2039,34 @@ function App() {
       // ignore
     }
   }, [sortOrderByTab]);
+
+  // rowsByTab 변경 자동 저장 (디바운스 500ms).
+  // 매 키 입력마다 디스크에 쓰지 않고 입력이 잠깐 멈추면 한 번 저장.
+  // 시트 미연결 환경에서도 앱 종료 → 재실행 시 데이터가 보존된다.
+  // 시트 연결되어 있으면 자동 import 가 별도로 덮어쓰기 → 동일 흐름으로 다시 저장.
+  const rowsPersistInitRef = useRef(false);
+  const rowsPersistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!rowsPersistInitRef.current) {
+      rowsPersistInitRef.current = true;
+      return;
+    }
+    if (rowsPersistTimer.current) clearTimeout(rowsPersistTimer.current);
+    rowsPersistTimer.current = setTimeout(() => {
+      try {
+        localStorage.setItem("inel.rowsByTab.v1", JSON.stringify(appData.rowsByTab));
+      } catch (err) {
+        // 용량 초과 등 실패 시 디버그 로그만 남기고 무시 (앱 동작은 계속)
+        dlog(`행 데이터 로컬 저장 실패: ${(err as Error).message}`);
+      }
+    }, 500);
+    return () => {
+      if (rowsPersistTimer.current) {
+        clearTimeout(rowsPersistTimer.current);
+        rowsPersistTimer.current = null;
+      }
+    };
+  }, [appData.rowsByTab]);
 
   // isDetecting 변경 자동 저장 (방송감지 토글 즉시 영구 저장)
   const detectPersistInitRef = useRef(false);
