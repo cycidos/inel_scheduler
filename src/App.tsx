@@ -3189,8 +3189,8 @@ function App() {
             </button>
             <button
               type="button"
-              onClick={() => { resetCsvModal(); setCsvTargetTab(activeTab === "fullReplay" ? "shorts" : activeTab); setCsvModalOpen(true); }}
-              title="외부 협업 툴(Monday 등)에서 내려받은 CSV를 AI로 우리 시트 형식으로 변환해 추가"
+              disabled
+              title="기능 테스트 중 — 다음 업데이트에서 활성화됩니다."
             >
               CSV 가져오기 (AI)
             </button>
@@ -3915,6 +3915,12 @@ function App() {
             )}
             {settingsTab === "ai" && (
               <>
+                <div className="ai-locked-banner">
+                  <strong>⚠ 기능 테스트 중</strong>
+                  <p>AI 연결 / CSV 가져오기 기능은 내부 테스트 단계로 일시 비활성화되어 있습니다. 다음 업데이트에서 활성화될 예정입니다.</p>
+                </div>
+
+                <fieldset className="ai-fieldset-locked" disabled>
                 <div className="connection-help-banner">
                   <div className="connection-help-text">
                     <strong>AI 보조 CSV 변환</strong>
@@ -3992,6 +3998,7 @@ function App() {
                 <p className="sa-hint">
                   키는 로컬에만 저장됩니다 (외부 서버 경유 X). AI 호출 시 헤더+샘플 5~10행만 전송됩니다.
                 </p>
+                </fieldset>
               </>
             )}
             {settingsTab === "etc" && (
