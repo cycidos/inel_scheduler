@@ -417,6 +417,65 @@
 
 ---
 
+## 추가 항목 (phase2 - edition 분기 시스템 도입)
+
+> 편집자 / 썸네일러 인스톨러를 위한 role(edition) 시점 분기. 빌드 시점 상수로 dead-code 제거 보장.
+
+### 빌드 타임 상수
+
+`vite.config.ts | __IWS_EDITION__ define | config | process.env.IWS_EDITION ("admin" | "editor" | "thumbnailer", 기본 admin) 를 빌드 시 JSON 문자열로 inline. 잘못된 값이면 즉시 throw. | -> process.env`
+
+`src/App.tsx | declare const __IWS_EDITION__ | type | TypeScript 가 인식하도록 ambient declaration. Edition 타입과 BUILD_EDITION const 도 함께 정의 | -`
+
+`src/App.tsx | IS_ADMIN (모듈 const) | bool | __IWS_EDITION__ === "admin" 의 boolean literal. 모듈 최상위라 Rollup/esbuild 가 inline → JSX 의 `{IS_ADMIN && (...)}` 가 editor/thumbnailer 빌드에서 통째로 dead-code 제거 | -`
+
+`src/App.tsx | LABEL_SYNC_DOWNLOAD / UPLOAD / DOWNLOADING / UPLOADING | 모듈 const | "구글시트 다운로드" ↔ "일정 새로고침" 같은 라벨을 모듈 const 로 분기 → 양쪽 문자열이 산출물에 같이 남는 ternary 함정을 회피 | -`
+
+### 런타임 edition (dev 토글)
+
+`src/App.tsx | devEdition / setDevEdition | state | dev 모드에서만 admin/editor/thumbnailer 시점 즉시 전환. localStorage("inel.devEdition.v1") 영구 저장. production 빌드에는 BUILD_EDITION 그대로 사용 (import.meta.env.DEV 조건으로 코드 자체가 dead) | -`
+
+`src/App.tsx | edition / isAdmin / isStaff | const | edition = DEV ? devEdition : BUILD_EDITION. isAdmin = IS_ADMIN && edition === "admin" (모듈 상수 곱해서 dead-code 가능성 ↑). JSX 조건은 `{IS_ADMIN && isAdmin && (...)}` 형태로 빌드 + runtime 두 단계 가드 | -`
+
+`src/App.tsx | settingsTab 보정 useEffect | hook | staff(editor/thumbnailer) 시점일 때 settingsTab 이 admin 전용 탭(sheet/connection/ai)이면 자동 "etc" 로 보정. dev 시점 토글 직후 빈 패널 표시 방지 | -`
+
+### 디버그 패널 시점 드롭다운
+
+`src/App.tsx | .debug-edition-row | UI | 디버그 패널 헤더 아래 dev 전용 행. admin/editor/thumbnailer 드롭다운 + 현재 BUILD_EDITION 표시. production 빌드에선 import.meta.env.DEV === false 라 코드 자체가 dead | -> devEdition`
+
+`src/styles.css | .debug-edition-row | stylesheet | 다크 톤 행 (배경 #1f2937, 좌측 라벨/우측 BUILD = 힌트) | -`
+
+### admin only 가드 적용 위치
+
+`src/App.tsx | 상단바 admin only | UI | 시트 링크 복사 버튼, CSV 가져오기 (AI) 버튼, 디버그 토글 모두 {IS_ADMIN && isAdmin && (...)} 가드. editor 빌드 산출물에서 코드 자체 제거 | -`
+
+`src/App.tsx | 설정 패널 admin only | UI | 설정 탭 "시트 설정" / "구글 시트" / "AI 연결" 탭 버튼 + 본문 패널 모두 IS_ADMIN gate. staff 시점은 "기타 설정" 한 탭만 노출 | -`
+
+`src/App.tsx | 디버그 패널 + CSV 모달 admin only | UI | aside.debug-panel 과 .csv-modal-overlay 둘 다 {IS_ADMIN && (...)} 로 감싸 dead-code 제거. CSV 모달은 진입점 버튼이 admin only 라도 코드 자체 제거를 위해 별도 가드 필요 | -`
+
+`src/App.tsx | app-shell with-debug 클래스 가드 | UI | className 도 IS_ADMIN && isAdmin && showDebugPanel 로 합성. editor 빌드는 항상 no-debug → 레이아웃 정합 | -`
+
+### 빌드 산출물 검증 (1차 측정)
+
+`(검증) admin 빌드 | 296.07 kB | admin 문자열 6 (UI), staff 문자열 0 | -`
+
+`(검증) editor 빌드 | 269.88 kB | admin UI 문자열 0, 함수 body dlog 잔존 2 (Service Account hint, 호출 안 됨), staff 문자열 4 (UI) | -`
+
+`(검증) thumbnailer 빌드 | 269.88 kB | editor 빌드와 동일 패턴 | -`
+
+> 차이 ~26 kB / 9%. admin 전용 UI/JSX 가 staff 빌드 산출물에 없음을 확인. 함수 body 내부 일부 dlog 문자열은 향후 admin 전용 함수 모듈 분리로 추가 제거 가능 (현재는 호출 경로 자체가 없어 노출 위험 없음).
+
+### 라벨 매핑 (admin ↔ staff)
+
+| 위치 | admin | staff |
+|---|---|---|
+| 상단바 다운로드 | 구글시트 다운로드 | 일정 새로고침 |
+| 상단바 업로드 | 구글시트 업로드 | 변경사항 저장 |
+| 동기화 상태 (downloading) | 시트 내려받는 중 | 새로고침 중 |
+| 동기화 상태 (uploading) | 시트 올리는 중 | 저장 중 |
+
+---
+
 ## 업데이트 템플릿
 
 아래 형식으로 항목을 추가:

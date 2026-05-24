@@ -3,6 +3,26 @@ import settingsIcon from "./assets/settings-gear.svg";
 import logoImage from "./assets/logo.png";
 import chzzkCategoriesSeed from "./data/chzzk-categories.seed.json";
 
+// Vite define 으로 빌드 시점에 "admin" / "editor" / "thumbnailer" 중 하나로 inline 치환된다.
+// editor / thumbnailer 빌드에서는 if (__IWS_EDITION__ === "admin") 블록이 Rollup 에 의해
+// dead code 로 제거되어 산출물 .asar 에 admin 전용 UI 코드가 남지 않는다.
+declare const __IWS_EDITION__: "admin" | "editor" | "thumbnailer";
+
+type Edition = "admin" | "editor" | "thumbnailer";
+const BUILD_EDITION: Edition = __IWS_EDITION__;
+
+// 모듈 최상위 const → Rollup/esbuild 가 boolean literal 로 inline 시켜
+// `{IS_ADMIN && (...)}` JSX 가 editor/thumbnailer 빌드 산출물에서 통째로 제거된다.
+// runtime dev 토글용 `isAdmin` 과 별도. JSX 조건은 두 가지를 합쳐 사용.
+const IS_ADMIN: boolean = __IWS_EDITION__ === "admin";
+
+// 라벨도 모듈 레벨 상수로 분기 → 빌드 시점에 한쪽 문자열만 산출물에 남는다.
+// (ternary 를 JSX 안에 쓰면 양쪽 문자열이 모두 코드에 남으므로 모듈 const 사용)
+const LABEL_SYNC_DOWNLOAD = IS_ADMIN ? "구글시트 다운로드" : "일정 새로고침";
+const LABEL_SYNC_UPLOAD = IS_ADMIN ? "구글시트 업로드" : "변경사항 저장";
+const LABEL_SYNC_DOWNLOADING = IS_ADMIN ? "시트 내려받는 중" : "새로고침 중";
+const LABEL_SYNC_UPLOADING = IS_ADMIN ? "시트 올리는 중" : "저장 중";
+
 declare global {
   interface Window {
     electronAPI?: {
@@ -391,6 +411,28 @@ function loadInitialRows(): Record<TabKey, RowItem[]> {
 }
 
 function App() {
+  // ── role(edition) 시점 ──
+  // production 빌드: BUILD_EDITION 그대로 사용 (dead-code elimination 의 핵심)
+  // dev (npm run dev): 디버그 패널 드롭다운으로 시점 전환 가능 → localStorage 영구화
+  const [devEdition, setDevEdition] = useState<Edition>(() => {
+    if (!import.meta.env.DEV) return BUILD_EDITION;
+    try {
+      const saved = localStorage.getItem("inel.devEdition.v1");
+      if (saved === "admin" || saved === "editor" || saved === "thumbnailer") return saved;
+    } catch (_e) { /* ignore */ }
+    return BUILD_EDITION;
+  });
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    try { localStorage.setItem("inel.devEdition.v1", devEdition); } catch (_e) { /* ignore */ }
+  }, [devEdition]);
+  const edition: Edition = import.meta.env.DEV ? devEdition : BUILD_EDITION;
+  // IS_ADMIN 을 곱해두면 prod editor 빌드에서 isAdmin = false 가 보장되고,
+  // const-propagation 으로 그 아래 JSX 의 `{IS_ADMIN && isAdmin && ...}` 조건이 함께 dead-code 처리된다.
+  const isAdmin = IS_ADMIN && edition === "admin";
+  const isStaff = !isAdmin;
+  void isStaff; // 향후 staff 공통 분기에 사용. 현재 미사용 경고 회피.
+
   const [activeTab, setActiveTab] = useState<TabKey>("shorts");
   const [appData, setAppData] = useState<AppDataState>(() => ({
     schemaByTab: tableSchema,
@@ -414,7 +456,14 @@ function App() {
   const autoSyncDoneRef = useRef(false);
   const [clientEmail, setClientEmail] = useState("");
   const [isDraggingJson, setIsDraggingJson] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<"sheet" | "connection" | "ai" | "etc">("sheet");
+  const [settingsTab, setSettingsTab] = useState<"sheet" | "connection" | "ai" | "etc">(
+    isAdmin ? "sheet" : "etc"
+  );
+  // staff 시점이면 admin 전용 설정 탭에 들어가 있지 않도록 보정 (dev 토글 케이스 대비)
+  useEffect(() => {
+    if (edition === "admin") return;
+    if (settingsTab !== "etc") setSettingsTab("etc");
+  }, [edition, settingsTab]);
   const [autoStartEnabled, setAutoStartEnabled] = useState(false);
   const [autoStartLoading, setAutoStartLoading] = useState(false);
   const [autoStartMessage, setAutoStartMessage] = useState("");
@@ -2315,7 +2364,7 @@ function App() {
       }));
 
       setSyncProgress({ current: i, total: tabKeys.length, label: `${tabLabel}_${year}` });
-      setSheetsStatus(`시트 내려받는 중... (${i + 1}/${tabKeys.length} ${tabLabel})`);
+      setSheetsStatus(`${LABEL_SYNC_DOWNLOADING}... (${i + 1}/${tabKeys.length} ${tabLabel})`);
       dlog(`가져오기: ${tabKey} (${year})`);
 
       const result = await api.sheetsImport(sheetLink, tabKey, year, headers);
@@ -2373,7 +2422,7 @@ function App() {
       const rows = appData.rowsByTab[tabKey];
 
       setSyncProgress({ current: i, total: tabKeys.length, label: `${tabLabel}_${year}` });
-      setSheetsStatus(`시트 올리는 중... (${i + 1}/${tabKeys.length} ${tabLabel})`);
+      setSheetsStatus(`${LABEL_SYNC_UPLOADING}... (${i + 1}/${tabKeys.length} ${tabLabel})`);
       dlog(`내보내기: ${tabKey} (${rows.length}행)`);
 
       const result = await api.sheetsExport(sheetLink, tabKey, year, headers, rows);
@@ -3151,7 +3200,7 @@ function App() {
   };
 
   return (
-    <div className={`app-shell ${showDebugPanel ? "with-debug" : "no-debug"}`}>
+    <div className={`app-shell ${IS_ADMIN && isAdmin && showDebugPanel ? "with-debug" : "no-debug"}`}>
       <header className="topbar">
         <div className="brand-area">
           <img className="brand-logo" src={logoImage} alt="logo" />
@@ -3172,28 +3221,32 @@ function App() {
                 <span className="live-category">{chzzkCategory}</span>
               )}
             </div>
-            <button type="button" onClick={handleImport}>구글시트 다운로드</button>
-            <button type="button" onClick={handleExport}>구글시트 업로드</button>
-            <button
-              type="button"
-              className="icon-button"
-              onClick={handleCopySheetLink}
-              disabled={!sheetLink}
-              title={sheetLink ? "구글 시트 링크 복사" : "복사할 시트 링크가 없음 (설정에서 입력)"}
-              aria-label="구글 시트 링크 복사"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              disabled
-              title="기능 테스트 중 — 다음 업데이트에서 활성화됩니다."
-            >
-              CSV 가져오기 (AI)
-            </button>
+            <button type="button" onClick={handleImport}>{LABEL_SYNC_DOWNLOAD}</button>
+            <button type="button" onClick={handleExport}>{LABEL_SYNC_UPLOAD}</button>
+            {IS_ADMIN && isAdmin && (
+              <button
+                type="button"
+                className="icon-button"
+                onClick={handleCopySheetLink}
+                disabled={!sheetLink}
+                title={sheetLink ? "구글 시트 링크 복사" : "복사할 시트 링크가 없음 (설정에서 입력)"}
+                aria-label="구글 시트 링크 복사"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                </svg>
+              </button>
+            )}
+            {IS_ADMIN && isAdmin && (
+              <button
+                type="button"
+                disabled
+                title="기능 테스트 중 — 다음 업데이트에서 활성화됩니다."
+              >
+                CSV 가져오기 (AI)
+              </button>
+            )}
             <button
               type="button"
               onClick={undoLast}
@@ -3212,15 +3265,17 @@ function App() {
             </button>
           </div>
           <div className="action-group action-group-system" data-label="시스템">
-            <button
-              type="button"
-              className={`debug-toggle ${showDebugPanel ? "on" : "off"}`}
-              onClick={() => setShowDebugPanel((prev) => !prev)}
-              title={showDebugPanel ? "디버그 패널 숨기기" : "디버그 패널 보이기"}
-              aria-label="디버그 패널 토글"
-            >
-              {showDebugPanel ? "디버그 ▶" : "◀ 디버그"}
-            </button>
+            {IS_ADMIN && isAdmin && (
+              <button
+                type="button"
+                className={`debug-toggle ${showDebugPanel ? "on" : "off"}`}
+                onClick={() => setShowDebugPanel((prev) => !prev)}
+                title={showDebugPanel ? "디버그 패널 숨기기" : "디버그 패널 보이기"}
+                aria-label="디버그 패널 토글"
+              >
+                {showDebugPanel ? "디버그 ▶" : "◀ 디버그"}
+              </button>
+            )}
             <button
               ref={settingsButtonRef}
               type="button"
@@ -3250,8 +3305,8 @@ function App() {
       <section className="meta">
         <span className={`sync-indicator sync-${syncPhase}`}>
           {syncPhase === "idle" && "동기화 대기 중"}
-          {syncPhase === "downloading" && `시트 내려받는 중... ${syncProgress.label}`}
-          {syncPhase === "uploading" && `시트 올리는 중... ${syncProgress.label}`}
+          {syncPhase === "downloading" && `${LABEL_SYNC_DOWNLOADING}... ${syncProgress.label}`}
+          {syncPhase === "uploading" && `${LABEL_SYNC_UPLOADING}... ${syncProgress.label}`}
           {syncPhase === "success" && (sheetsStatus || "동기화 완료")}
           {syncPhase === "error" && (sheetsStatus || "동기화 실패")}
         </span>
@@ -3654,33 +3709,39 @@ function App() {
             </button>
           </div>
           <nav className="settings-tabs" role="tablist">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={settingsTab === "sheet"}
-              className={`settings-tab ${settingsTab === "sheet" ? "active" : ""}`}
-              onClick={() => setSettingsTab("sheet")}
-            >
-              시트 설정
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={settingsTab === "connection"}
-              className={`settings-tab ${settingsTab === "connection" ? "active" : ""}`}
-              onClick={() => setSettingsTab("connection")}
-            >
-              구글 시트
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={settingsTab === "ai"}
-              className={`settings-tab ${settingsTab === "ai" ? "active" : ""}`}
-              onClick={() => setSettingsTab("ai")}
-            >
-              AI 연결
-            </button>
+            {IS_ADMIN && isAdmin && (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={settingsTab === "sheet"}
+                className={`settings-tab ${settingsTab === "sheet" ? "active" : ""}`}
+                onClick={() => setSettingsTab("sheet")}
+              >
+                시트 설정
+              </button>
+            )}
+            {IS_ADMIN && isAdmin && (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={settingsTab === "connection"}
+                className={`settings-tab ${settingsTab === "connection" ? "active" : ""}`}
+                onClick={() => setSettingsTab("connection")}
+              >
+                구글 시트
+              </button>
+            )}
+            {IS_ADMIN && isAdmin && (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={settingsTab === "ai"}
+                className={`settings-tab ${settingsTab === "ai" ? "active" : ""}`}
+                onClick={() => setSettingsTab("ai")}
+              >
+                AI 연결
+              </button>
+            )}
             <button
               type="button"
               role="tab"
@@ -3693,7 +3754,7 @@ function App() {
           </nav>
 
           <div className="settings-tabpanel">
-            {settingsTab === "sheet" && (
+            {IS_ADMIN && isAdmin && settingsTab === "sheet" && (
               <>
                 <div className="connection-help-banner">
                   <div className="connection-help-text">
@@ -3844,7 +3905,7 @@ function App() {
               </>
             )}
 
-            {settingsTab === "connection" && (
+            {IS_ADMIN && isAdmin && settingsTab === "connection" && (
               <>
                 <div className="connection-help-banner">
                   <div className="connection-help-text">
@@ -3913,7 +3974,7 @@ function App() {
                 </div>
               </>
             )}
-            {settingsTab === "ai" && (
+            {IS_ADMIN && isAdmin && settingsTab === "ai" && (
               <>
                 <div className="ai-locked-banner">
                   <strong>⚠ 기능 테스트 중</strong>
@@ -4131,7 +4192,7 @@ function App() {
           </div>
         </section>
       )}
-      {showDebugPanel && (
+      {IS_ADMIN && isAdmin && showDebugPanel && (
         <aside className="debug-panel">
           <div className="debug-header">
             <span>Debug Log <span className="debug-count">({debugLogs.length})</span></span>
@@ -4141,6 +4202,22 @@ function App() {
               <button type="button" onClick={() => setShowDebugPanel(false)} title="닫기">×</button>
             </div>
           </div>
+          {import.meta.env.DEV && (
+            <div className="debug-edition-row" title="dev 모드 전용 — 빌드 산출물에는 영향 없음">
+              <label>
+                시점 (dev)
+                <select
+                  value={devEdition}
+                  onChange={(e) => setDevEdition(e.target.value as Edition)}
+                >
+                  <option value="admin">admin (관리자)</option>
+                  <option value="editor">editor (영상 편집자)</option>
+                  <option value="thumbnailer">thumbnailer (썸네일러)</option>
+                </select>
+              </label>
+              <span className="debug-edition-hint">BUILD = {BUILD_EDITION}</span>
+            </div>
+          )}
           <div className="debug-body" ref={debugPanelRef}>
             {debugLogs.length === 0
               ? <p className="debug-empty">로그 없음</p>
@@ -4228,7 +4305,7 @@ function App() {
         </div>
       )}
 
-      {csvModalOpen && (
+      {IS_ADMIN && csvModalOpen && (
         <div className="csv-modal-overlay" onClick={() => { if (csvPhase !== "analyzing" && csvPhase !== "uploading") { setCsvModalOpen(false); resetCsvModal(); } }}>
           <section className="csv-modal" onClick={(e) => e.stopPropagation()}>
             <header className="csv-modal-header">
