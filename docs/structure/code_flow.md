@@ -698,6 +698,20 @@
 
 ---
 
+## 추가 항목 (편집자 인스톨러 빌드 문서화 + 모달 안내 보강)
+
+`public/help/scheduler-app-guide.html | §10 편집자/썸네일러 전용 인스톨러 만들기 | static guide | 6단계 안내 (① 사전 조건 ② 빌드 절차 ③ _tokens 시트 ④ 편집자 실행 ⑤ 권한 회수/재발급/영구 차단 ⑥ 흔한 에러). 사용자가 모달의 에러 "Service Account JSON 이 없습니다" 만 보고 어디서 등록해야 할지 모르는 케이스 대응 | -`
+
+`public/help/scheduler-app-guide.html | §9 동기화 흐름 - _settings 자동 동기화 항목 추가 | static guide | 시트가 진실의 단일 소스, 다른 PC 에서 자동 복원 흐름 명시 | -`
+
+`src/App.tsx | _tokens 안내 카드 텍스트 갱신 | UI | 옛 "2차 배포에서 활성화될 예정" 문구 제거. 일시 회수 / 재발급 / 영구 차단 3가지 절차 명시 | -`
+
+`src/App.tsx | 인스톨러 빌드 모달 - [도움말 ↗] 버튼 + .installer-prereq-warn | UI | 헤더에 [도움말] 버튼 (openAppGuideHelp). sheetLink / serviceAccountPath 미설정 시 노란 경고 박스로 어떤 항목이 빠졌고 어디서 설정해야 하는지 명시. "도움말 §10 참조" 인라인 링크 | -> openAppGuideHelp`
+
+`src/styles.css | .installer-modal-actions / .installer-help-btn / .installer-prereq-warn / .installer-help-inline | stylesheet | 헤더 액션 그룹, 도움말 버튼 (밝은 핑크 outline), 사전조건 경고 박스 (yellow), 인라인 텍스트 링크 | -`
+
+---
+
 ## 업데이트 템플릿
 
 아래 형식으로 항목을 추가:

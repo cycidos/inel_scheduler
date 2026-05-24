@@ -4509,15 +4509,17 @@ function App() {
                 </div>
 
                 <div className="etc-card etc-card-info">
-                  <strong>토큰(_tokens) 시트 안내</strong>
+                  <strong>토큰(_tokens) 시트 / 권한 회수 안내</strong>
                   <p className="etc-card-desc">
-                    편집자별 인스톨러는 빌드 시 <code>_tokens</code> 시트에 토큰을 자동 등록합니다.
-                    관리자가 해당 시트를 수동으로 만들 필요는 없으며, 처음 빌드 버튼을 누를 때
-                    앱이 시트가 없으면 자동으로 생성합니다. 권한이 회수된 편집자는 토큰 행을 삭제하면
-                    다음 실행에서 앱이 잠깁니다.
+                    편집자별 인스톨러는 빌드 시 <code>_tokens</code> 시트에 토큰을 <code>active</code> 로 자동 등록합니다.
+                    시트가 없으면 첫 빌드 시 자동으로 만들어져요. 헤더는
+                    <code> name | role | token | issuedAt | status | lastSeen </code>.
                   </p>
                   <p className="etc-card-desc">
-                    위 동작은 현재 설계 문서(§10-3)에 정의되어 있고, 2차 배포에서 활성화될 예정입니다.
+                    <strong>일시 회수</strong>: 시트의 해당 행 <code>status</code> 를 <code>revoked</code> 로 변경 →
+                    편집자 앱은 10분 주기 재검증 또는 재시작 시 자동 잠금 화면.
+                    <strong> 재발급</strong>: 같은 이름으로 다시 [인스톨러 빌드] 누르면 토큰 갱신(rotate) + 새 .exe.
+                    <strong> 영구 차단</strong>: 시트 공유 권한에서 해당 SA 이메일 제거 (Google Cloud Console).
                   </p>
                 </div>
 
@@ -4595,18 +4597,31 @@ function App() {
           <section className="installer-modal" onClick={(e) => e.stopPropagation()}>
             <header className="installer-modal-header">
               <h3>편집자 인스톨러 빌드</h3>
-              <button
-                type="button"
-                className="installer-modal-close"
-                onClick={closeInstallerModal}
-                disabled={installerBuilding}
-                aria-label="닫기"
-              >×</button>
+              <div className="installer-modal-actions">
+                <button
+                  type="button"
+                  className="installer-help-btn"
+                  onClick={openAppGuideHelp}
+                  title="자세한 절차 / 사전 조건 / 권한 회수 방법"
+                >
+                  도움말 ↗
+                </button>
+                <button
+                  type="button"
+                  className="installer-modal-close"
+                  onClick={closeInstallerModal}
+                  disabled={installerBuilding}
+                  aria-label="닫기"
+                >×</button>
+              </div>
             </header>
             <div className="installer-modal-body">
               {(() => {
                 const target = staffList.find((s) => s.id === installerTargetStaffId);
                 if (!target) return <p>편집자 정보 없음</p>;
+                const prereqMissing: string[] = [];
+                if (!sheetLink) prereqMissing.push("Sheet URL 미입력 ([설정] → [구글 시트])");
+                if (!serviceAccountPath) prereqMissing.push("Service Account JSON 미등록 ([설정] → [구글 시트])");
                 return (
                   <>
                     <div className="installer-target">
@@ -4614,6 +4629,13 @@ function App() {
                         {ROLE_LABEL[target.role]} · {target.name}
                       </span>
                     </div>
+                    {prereqMissing.length > 0 && (
+                      <div className="installer-prereq-warn">
+                        <strong>사전 조건이 충족되지 않았습니다</strong>
+                        <ul>{prereqMissing.map((m, i) => <li key={i}>{m}</li>)}</ul>
+                        <p>해당 항목을 먼저 등록한 뒤 다시 시도하세요. <button type="button" className="installer-help-inline" onClick={openAppGuideHelp}>도움말 §10 참조</button></p>
+                      </div>
+                    )}
                     <div className="installer-field">
                       <label>출력 폴더</label>
                       <div className="installer-pick-row">
