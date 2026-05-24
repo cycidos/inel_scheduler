@@ -1496,8 +1496,13 @@ function createWindow() {
       if (devUrl) {
         target = `${devUrl.replace(/\/$/, "")}/help/${fileName}`;
       } else {
-        const filePath = path.join(__dirname, "..", "dist", "help", fileName);
-        target = `file://${filePath.replace(/\\/g, "/")}`;
+        // packaged 빌드: __dirname 이 app.asar 안을 가리킴. shell.openExternal 은 OS
+        // 핸들러로 가서 .asar 안의 파일을 file:// 로 못 연다. 그래서 package.json 의
+        // asarUnpack 으로 dist/help/** 를 .asar 밖에 풀어두고, 경로를 .asar.unpacked
+        // 로 치환해서 OS 가 실제 파일을 찾을 수 있게 한다.
+        const raw = path.join(__dirname, "..", "dist", "help", fileName);
+        const unpacked = raw.replace(/app\.asar([\\/])/, "app.asar.unpacked$1");
+        target = `file://${unpacked.replace(/\\/g, "/")}`;
       }
       await shell.openExternal(target);
       return { ok: true, url: target };

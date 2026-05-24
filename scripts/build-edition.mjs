@@ -73,10 +73,19 @@ if (!pkg.build) {
   process.exit(1);
 }
 
+// 출력 폴더는 기본 package.json 의 directories.output ("release") 를 따른다.
+// 단, 보안 SW 가 .asar 를 잡고 있어 release 가 잠겨 풀리지 않을 때 우회를 위해
+// IWS_OUTPUT_DIR 환경변수로 임시 폴더에 빌드할 수 있다.
+const outputDir = process.env.IWS_OUTPUT_DIR || (pkg.build.directories && pkg.build.directories.output) || "release";
+
 const builderConfig = {
   ...pkg.build,
   appId: cfg.appId,
   productName: cfg.productName,
+  directories: {
+    ...(pkg.build.directories || {}),
+    output: outputDir
+  },
   win: {
     ...pkg.build.win,
     artifactName: cfg.artifactName
@@ -95,6 +104,7 @@ console.log(`  productName   : ${cfg.productName}`);
 console.log(`  appId         : ${cfg.appId}`);
 console.log(`  artifactName  : ${cfg.artifactName}`);
 console.log(`  shortcutName  : ${cfg.shortcutName}`);
+console.log(`  outputDir     : ${outputDir}`);
 console.log("──────────────────────────────────────────");
 
 // ── electron-builder 실행 ──────────────────────────────────────

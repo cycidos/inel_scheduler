@@ -20,6 +20,8 @@ node_modules/
 dist/
 dist-electron/
 release/
+release-*/
+release.old.*/
 *.log
 
 # build/ is for electron-builder resources (icon.png 등) → 추적함
