@@ -511,6 +511,111 @@
 
 ---
 
+## 추가 항목 (phase2 - 임베드 메타 + 토큰 검증 + 빌드 다이얼로그 + 난독화)
+
+> 편집자/썸네일러용 zero-setup 인스톨러 완성. 관리자 UI에서 빌드 → 편집자가 받아 설치 → 자동 인증 + 토큰 검증 → 작업 가능. 권한 회수는 `_tokens` 시트 status 변경.
+
+### Phase A — 임베드 메타데이터
+
+`vite.config.ts | IWS_NAME / ROLE / TOKEN / SHEET_URL / SA_KEY_B64 define 5종 | config | 각각 string literal 로 코드에 inline. admin 빌드는 모두 빈 문자열로 강제. SA JSON 은 base64 임베드 → main 이 디코딩해 userData 에 저장 | -> process.env`
+
+`src/App.tsx | EMBED { name, role, token, sheetUrl, hasSaKey } | const | __IWS_*__ 매크로를 모은 객체. hasSaKey 는 SA_KEY_B64 길이 > 0 검사로 boolean 화. UI 라벨 / 토큰 검증 / 자동 셋업 트리거에 활용 | -`
+
+`src/App.tsx | sheetLink useState lazy init | hook | EMBED.sheetUrl 이 있으면 초기값으로 주입 → 편집자는 시트 URL 입력 단계 없이 바로 연결 | -`
+
+`src/App.tsx | embedSetupDoneRef + 셋업 useEffect | hook+ref | 마운트 시 hasSaKey && !IS_ADMIN 이면 IPC setup-embed-sa 한 번 호출 → 응답으로 serviceAccountPath / clientEmail 설정 + 곧바로 verifyEmbedToken("startup") | -> setupEmbedSa`
+
+`electron/main.js | setup-embed-sa (IPC) | handler | saKeyB64 → JSON 검증 → userData/google-credentials.json 으로 쓰기 (이미 있으면 skip) → initSheetsAuth 호출. clientEmail 반환 | -> Buffer.from(b64), initSheetsAuth`
+
+`electron/preload.js | setupEmbedSa | bridge | renderer → main "setup-embed-sa" 호출 래퍼 | -`
+
+### Phase C — 토큰 검증 + 잠금 화면
+
+`electron/main.js | ensureTokensSheet / readTokensRows / generateToken | helper | _tokens 시트 (헤더: name|role|token|issuedAt|status|lastSeen) 자동 생성/보충 + 행 파싱 + crypto.randomBytes 토큰 발급. 모두 spreadsheetId 인자 받는 비공개 함수 | -> crypto, sheetsClient`
+
+`electron/main.js | tokens-verify (IPC) | handler | sheetUrl + name(NFC 정규화) + role + token 으로 _tokens 시트 첫 매칭 행 검색. status==="active" 면 valid=true 반환 + lastSeen 갱신. 그 외 valid=false + status 반환 | -> ensureTokensSheet, readTokensRows`
+
+`electron/main.js | tokens-issue (IPC) | handler | 같은 (name, role) 의 기존 행이 있으면 새 토큰으로 update (rotate), 없으면 append. 결과 토큰 반환 | -> ensureTokensSheet, readTokensRows, generateToken`
+
+`electron/preload.js | tokensVerify / tokensIssue | bridge | renderer → main IPC 호출 래퍼 | -`
+
+`src/App.tsx | lockState ("ok"|"verifying"|"locked") + lockReason | state | staff 빌드 prod 의 마운트 직후 "verifying" → 검증 결과에 따라 ok / locked. admin 과 dev 는 무조건 "ok" 즉시 통과 | -`
+
+`src/App.tsx | verifyEmbedToken (useCallback) | function | EMBED.token 으로 tokens-verify IPC 호출. startup 시점이면 통신 실패도 잠금 처리, periodic 은 톨러런스 (일시 장애 무시). valid=true 면 lockState="ok", 아니면 reason 메시지 분기 | -> tokensVerify`
+
+`src/App.tsx | 주기적 재검증 useEffect | hook | staff prod 빌드 한정 10분 간격 setInterval 로 verifyEmbedToken("periodic"). 권한 회수 시 자동 잠금 | -> verifyEmbedToken`
+
+`src/App.tsx | .lock-overlay / .lock-card 잠금 화면 렌더 | UI | !IS_ADMIN && lockState !== "ok" 면 본문 대신 잠금 화면 표시. 아이콘 + 사용자 이름 + 사유 + [다시 시도] 버튼 | -`
+
+`src/styles.css | .lock-overlay / .lock-card / .lock-retry-btn 등 | stylesheet | 핑크 그라데이션 배경 + 흰 카드 + 핑크 강조 버튼 | -`
+
+### Phase B — 관리자 인스톨러 빌드 다이얼로그
+
+`electron/main.js | pick-output-dir (IPC) | handler | dialog.showOpenDialog (openDirectory + createDirectory) 으로 인스톨러 출력 폴더 선택. defaultPath 옵션 | -> dialog`
+
+`electron/main.js | build-editor-installer (IPC) | handler | 핵심. (1) _tokens 토큰 발급 (2) SA JSON 읽어 base64 (3) spawn("npm.cmd", ["run", "dist:editor"|"dist:thumbnailer"]) + env 로 IWS_NAME/ROLE/TOKEN/SHEET_URL/SA_KEY_B64 forward (4) release/Inel Scheduler-Role-Setup-*.exe + .blockmap 을 outputDir 로 복사. 매 단계 webContents.send("build-installer-log", line) emit | -> spawn, fs.copyFileSync`
+
+`electron/preload.js | pickOutputDir / buildEditorInstaller / onBuildInstallerLog | bridges | onBuildInstallerLog 는 build-installer-log 이벤트 구독 + unsubscribe 콜백 반환 (cleanup 패턴) | -`
+
+`src/App.tsx | installerModalOpen / installerTargetStaffId / installerOutputDir / installerBuilding / installerLogs / installerResult | state | 빌드 모달 6종 상태. 빌드 중에는 모든 입력 disabled, ESC/배경 클릭으로 닫기 차단 | -`
+
+`src/App.tsx | openInstallerModal / handlePickInstallerDir / handleRunInstallerBuild / closeInstallerModal | function | 모달 열기 - 폴더 선택 IPC - 빌드 IPC + 실시간 로그 구독 - 닫기. 빌드 중에는 close 차단 | -> pickOutputDir, buildEditorInstaller, onBuildInstallerLog`
+
+`src/App.tsx | "기타 설정 > 편집자/썸네일러 인스톨러 빌드" 카드 활성화 | UI | 기존 disabled placeholder 제거. staffList 각 항목에 [인스톨러 빌드] 버튼 + onClick={openInstallerModal(s.id)}. sheetLink || serviceAccountPath 미설정 시 disabled + tooltip 안내 | -> openInstallerModal`
+
+`src/App.tsx | .installer-modal-overlay / .installer-modal 등 | UI modal | 편집자 chip + 출력 폴더 선택 + 시트 URL readonly 표시 + 실시간 빌드 로그 (까만 콘솔 박스) + 결과 카드 (성공/실패) + 푸터 [취소][빌드 시작] | -`
+
+`src/styles.css | .installer-modal-* 일괄 | stylesheet | 모달 overlay/header/body/footer + 폴더 pick row + 로그 박스 (#111827 어두운 톤) + 성공/실패 result 카드 | -`
+
+### Phase D — 경량 난독화 (staff 빌드 한정)
+
+`package.json devDeps | vite-plugin-javascript-obfuscator | npm dep | v3.1.0. javascript-obfuscator 의 vite plugin 래퍼. apply: "build" 시점에 stringArray + identifier mangling 적용 | -`
+
+`vite.config.ts | obfuscator plugin (staff 한정) | config | !IS_ADMIN 일 때만 plugins 에 push. stringArray + base64 encoding (한글 라벨, SA_KEY_B64, sheetUrl 등이 grep 으로 안 잡힘). controlFlowFlattening / deadCodeInjection / debugProtection 은 끔 (빌드 시간 / 사용자 PC 부담). identifierNamesGenerator: "mangled" | -> vite-plugin-javascript-obfuscator`
+
+### 종합 빌드 검증 (Phase A+C+B+D 통합)
+
+`(검증) admin index.js | 300.12 kB | "구글시트 다운로드" 1 (UI), "일정 새로고침" 0, "디버그 패널" 4 (UI), 난독화 X | -`
+`(검증) editor index.js | 296.40 kB | "구글시트 다운로드" 0, "일정 새로고침" 0 (난독화로 base64 인코딩), "Service Account" 1 (함수 body dlog), "__IWS" identifier 0 (모두 inline) | -`
+`(검증) thumbnailer .exe | 100.11 MB | editor 와 동일 패턴 | -`
+
+> editor 빌드는 base64 stringArray 로 "일정 새로고침" 도 grep 안 잡힘. 호기심 추출 차단 효과 정상. compact + mangled identifier 로 함수명 / 변수명 무의미 글자로 변환.
+
+### 최종 운영 흐름
+
+```
+[관리자]
+  설정 > 기타 설정 > 편집자/썸네일러 인스톨러 빌드 카드
+    └ "OOO 인스톨러 빌드" 클릭
+        └ 모달:
+            • 출력 폴더 선택 (release/editors/OOO/ 권장)
+            • 시트 URL 자동 표시 (현재 sheetLink)
+            • [빌드 시작] → IPC build-editor-installer
+                • _tokens 시트에 토큰 발급/갱신
+                • SA JSON base64 임베드
+                • spawn npm run dist:editor (또는 dist:thumbnailer)
+                • release/ 의 .exe 를 출력 폴더로 복사
+            • 실시간 로그 + 결과 카드
+
+[편집자/썸네일러]
+  관리자에게서 .exe 받음 → 더블클릭 설치 (NSIS UI)
+    └ 첫 실행:
+        • main 이 임베드된 SA → userData/google-credentials.json 풀어 저장
+        • renderer 가 setup-embed-sa IPC → 자동 인증
+        • verifyEmbedToken("startup") → _tokens 시트와 대조
+            ├ active → ok, 본문 표시
+            └ revoked/not-found → 잠금 화면
+    └ 평상시:
+        • 10분 간격 주기 재검증
+        • 권한 회수 (관리자가 status 를 revoked 로 바꿈) → 다음 폴링에서 자동 잠금
+
+[관리자가 권한 영구 회수 = 시트 공유 권한 해제]
+  Google Cloud Console 에서 해당 SA 의 이 시트 공유 권한 해제.
+  키 자체가 살아있어도 시트 접근 자체 차단.
+```
+
+---
+
 ## 업데이트 템플릿
 
 아래 형식으로 항목을 추가:

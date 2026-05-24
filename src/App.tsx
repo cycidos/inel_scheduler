@@ -8,8 +8,24 @@ import chzzkCategoriesSeed from "./data/chzzk-categories.seed.json";
 // dead code 로 제거되어 산출물 .asar 에 admin 전용 UI 코드가 남지 않는다.
 declare const __IWS_EDITION__: "admin" | "editor" | "thumbnailer";
 
+// 편집자 인스톨러에 임베드되는 메타 (admin 빌드는 모두 빈 문자열).
+// 빌드 시점에 string literal 로 inline. base64 키도 그대로 inline 되어
+// main 프로세스의 시작 코드가 첫 실행 때 userData 폴더에 풀어 저장한다.
+declare const __IWS_NAME__: string;
+declare const __IWS_ROLE__: string;
+declare const __IWS_TOKEN__: string;
+declare const __IWS_SHEET_URL__: string;
+declare const __IWS_SA_KEY_B64__: string;
+
 type Edition = "admin" | "editor" | "thumbnailer";
 const BUILD_EDITION: Edition = __IWS_EDITION__;
+const EMBED = {
+  name: __IWS_NAME__,
+  role: __IWS_ROLE__,
+  token: __IWS_TOKEN__,
+  sheetUrl: __IWS_SHEET_URL__,
+  hasSaKey: __IWS_SA_KEY_B64__.length > 0
+};
 
 // 모듈 최상위 const → Rollup/esbuild 가 boolean literal 로 inline 시켜
 // `{IS_ADMIN && (...)}` JSX 가 editor/thumbnailer 빌드 산출물에서 통째로 제거된다.
@@ -35,6 +51,15 @@ declare global {
       onChzzkError: (cb: (data: { message: string }) => void) => () => void;
       sheetsPickKeyfile: () => Promise<{ ok: boolean; path?: string; clientEmail?: string; error?: string }>;
       sheetsInitAuth: (keyFilePath: string) => Promise<{ ok: boolean; clientEmail?: string; error?: string }>;
+      setupEmbedSa: (saKeyB64: string) => Promise<{ ok: boolean; path?: string; clientEmail?: string; error?: string }>;
+      tokensVerify: (sheetUrl: string, name: string, role: string, token: string) =>
+        Promise<{ ok: boolean; valid?: boolean; status?: string; name?: string; role?: string; error?: string }>;
+      tokensIssue: (sheetUrl: string, name: string, role: string) =>
+        Promise<{ ok: boolean; token?: string; rotated?: boolean; error?: string }>;
+      pickOutputDir: (defaultPath?: string) => Promise<{ ok: boolean; path?: string; canceled?: boolean }>;
+      buildEditorInstaller: (payload: { name: string; role: string; sheetUrl: string; outputDir: string }) =>
+        Promise<{ ok: boolean; token?: string; outputDir?: string; files?: string[]; rotated?: boolean; error?: string }>;
+      onBuildInstallerLog: (cb: (line: string) => void) => () => void;
       sheetsImport: (sheetUrl: string, tabKey: string, year: number, headers: Array<{ key: string; label: string }>) =>
         Promise<{ ok: boolean; rows?: RowItem[]; headerRow?: string[]; sheetNotFound?: boolean; error?: string }>;
       sheetsExport: (sheetUrl: string, tabKey: string, year: number, headers: Array<{ key: string; label: string }>, rows: RowItem[]) =>
@@ -443,9 +468,109 @@ function App() {
   const [uninstallModalOpen, setUninstallModalOpen] = useState(false);
   const [uninstallConfirmText, setUninstallConfirmText] = useState("");
   const [uninstalling, setUninstalling] = useState(false);
+
+  // ── 편집자 인스톨러 빌드 모달 (admin only) ──
+  const [installerModalOpen, setInstallerModalOpen] = useState(false);
+  const [installerTargetStaffId, setInstallerTargetStaffId] = useState<string>("");
+  const [installerOutputDir, setInstallerOutputDir] = useState<string>("");
+  const [installerBuilding, setInstallerBuilding] = useState(false);
+  const [installerLogs, setInstallerLogs] = useState<string[]>([]);
+  const [installerResult, setInstallerResult] = useState<{ ok: boolean; outputDir?: string; files?: string[]; error?: string } | null>(null);
   const UNINSTALL_CONFIRM_PHRASE = "이늘 스케쥴러 삭제합니다";
-  const [sheetLink, setSheetLink] = useState("");
+  const [sheetLink, setSheetLink] = useState(() => EMBED.sheetUrl || "");
   const [serviceAccountPath, setServiceAccountPath] = useState("");
+
+  // ── staff 빌드 잠금/검증 state ──
+  // dev 모드는 검증 우회 (admin 빌드를 dev 띄울 때 staff 시점 토글해도 통과).
+  // prod staff 빌드는 마운트 직후 토큰 검증 결과가 나올 때까지 "verifying".
+  type LockState = "ok" | "verifying" | "locked";
+  const initialLock: LockState = IS_ADMIN ? "ok" : (import.meta.env.DEV ? "ok" : "verifying");
+  const [lockState, setLockState] = useState<LockState>(initialLock);
+  const [lockReason, setLockReason] = useState<string>("");
+
+  // staff 빌드의 임베드된 SA 키를 main 에 한 번 forward → userData/google-credentials.json 풀어 저장 + 자동 인증
+  const embedSetupDoneRef = useRef(false);
+  const tokenVerifyDoneRef = useRef(false);
+  useEffect(() => {
+    if (embedSetupDoneRef.current) return;
+    if (!EMBED.hasSaKey) return;
+    if (IS_ADMIN) return; // 안전망 (admin 빌드에는 hasSaKey=false 지만 이중 가드)
+    embedSetupDoneRef.current = true;
+    (async () => {
+      try {
+        const res = await (window as any).electronAPI?.setupEmbedSa(__IWS_SA_KEY_B64__);
+        if (res?.ok) {
+          if (res.path) setServiceAccountPath(res.path);
+          if (res.clientEmail) setClientEmail(res.clientEmail);
+          dlog(`임베드 SA 셋업 완료: ${res.path || "(path n/a)"}`);
+          // SA 인증이 끝나야 토큰 검증 가능. 셋업 완료 후 곧바로 검증 트리거.
+          void verifyEmbedToken("startup");
+        } else {
+          dlog(`임베드 SA 셋업 실패: ${res?.error || "unknown"}`);
+          setLockState("locked");
+          setLockReason("인증 초기화에 실패했습니다. 관리자에게 새 설치 파일을 요청하세요.");
+        }
+      } catch (err: any) {
+        dlog(`임베드 SA 셋업 예외: ${err?.message || err}`);
+        setLockState("locked");
+        setLockReason("초기화 중 예외가 발생했습니다.");
+      }
+    })();
+  }, []);
+
+  // 토큰 검증 (시작 시 1회 + 주기적 재검증)
+  const verifyEmbedToken = useCallback(async (reason: "startup" | "periodic") => {
+    if (IS_ADMIN) return;
+    if (import.meta.env.DEV) { setLockState("ok"); return; }
+    if (!EMBED.token || !EMBED.name || !EMBED.sheetUrl) {
+      setLockState("locked");
+      setLockReason("설치 파일에 토큰 정보가 없습니다. 관리자에게 새 설치 파일을 요청하세요.");
+      return;
+    }
+    try {
+      const res = await (window as any).electronAPI?.tokensVerify(
+        EMBED.sheetUrl, EMBED.name, EMBED.role, EMBED.token
+      );
+      if (!res?.ok) {
+        // 인증/네트워크 실패: 시작 시점이면 잠금, 주기 검증이면 기존 상태 유지 (일시 장애 톨러런스)
+        dlog(`토큰 검증 통신 실패 (${reason}): ${res?.error || "unknown"}`);
+        if (reason === "startup") {
+          setLockState("locked");
+          setLockReason("권한 확인 중 통신 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
+        }
+        return;
+      }
+      if (res.valid) {
+        if (lockState !== "ok") dlog(`토큰 검증 OK (${reason})`);
+        setLockState("ok");
+        setLockReason("");
+        tokenVerifyDoneRef.current = true;
+      } else {
+        dlog(`토큰 검증 실패 (${reason}): status=${res.status}`);
+        setLockState("locked");
+        setLockReason(
+          res.status === "not-found"
+            ? "등록되지 않은 사용자입니다. 관리자에게 문의하세요."
+            : `권한이 회수되었습니다 (status: ${res.status}). 관리자에게 문의하세요.`
+        );
+      }
+    } catch (err: any) {
+      dlog(`토큰 검증 예외: ${err?.message || err}`);
+      if (reason === "startup") {
+        setLockState("locked");
+        setLockReason("권한 확인 중 예외가 발생했습니다.");
+      }
+    }
+  }, [lockState]);
+
+  // 주기적 재검증 (staff prod 빌드 한정, 10분 간격).
+  useEffect(() => {
+    if (IS_ADMIN) return;
+    if (import.meta.env.DEV) return;
+    if (!EMBED.token) return;
+    const id = setInterval(() => { void verifyEmbedToken("periodic"); }, 10 * 60 * 1000);
+    return () => clearInterval(id);
+  }, [verifyEmbedToken]);
   const [sheetsStatus, setSheetsStatus] = useState("");
   const [syncPhase, setSyncPhase] = useState<"idle" | "downloading" | "uploading" | "success" | "error">("idle");
   const [syncProgress, setSyncProgress] = useState<{ current: number; total: number; label: string }>({
@@ -1338,6 +1463,57 @@ function App() {
     const target = staffList.find((s) => s.id === id);
     setStaffList((prev) => prev.filter((s) => s.id !== id));
     if (target) dlog(`${ROLE_LABEL[target.role]} 삭제: ${target.name}`);
+  };
+
+  // ── 편집자 인스톨러 빌드 (admin 전용) ──
+  const openInstallerModal = (staffId: string) => {
+    setInstallerTargetStaffId(staffId);
+    setInstallerOutputDir("");
+    setInstallerLogs([]);
+    setInstallerResult(null);
+    setInstallerBuilding(false);
+    setInstallerModalOpen(true);
+  };
+  const handlePickInstallerDir = async () => {
+    const res = await (window as any).electronAPI?.pickOutputDir(installerOutputDir || undefined);
+    if (res?.ok && res.path) setInstallerOutputDir(res.path);
+  };
+  const handleRunInstallerBuild = async () => {
+    const target = staffList.find((s) => s.id === installerTargetStaffId);
+    if (!target) { setInstallerResult({ ok: false, error: "편집자 미선택" }); return; }
+    if (!installerOutputDir) { setInstallerResult({ ok: false, error: "출력 폴더 미선택" }); return; }
+    if (!sheetLink) { setInstallerResult({ ok: false, error: "시트 URL 이 없습니다. 구글 시트 탭에서 설정 후 다시 시도하세요." }); return; }
+    if (!serviceAccountPath) { setInstallerResult({ ok: false, error: "Service Account JSON 이 없습니다." }); return; }
+    setInstallerBuilding(true);
+    setInstallerLogs((prev) => [...prev, `▶ ${ROLE_LABEL[target.role]} ${target.name} 빌드 시작`]);
+    setInstallerResult(null);
+    const off = (window as any).electronAPI?.onBuildInstallerLog((line: string) => {
+      setInstallerLogs((prev) => [...prev, line]);
+    });
+    try {
+      const res = await (window as any).electronAPI?.buildEditorInstaller({
+        name: target.name,
+        role: target.role,
+        sheetUrl: sheetLink,
+        outputDir: installerOutputDir
+      });
+      setInstallerResult(res?.ok ? { ok: true, outputDir: res.outputDir, files: res.files } : { ok: false, error: res?.error || "알 수 없는 오류" });
+      if (res?.ok) {
+        setInstallerLogs((prev) => [...prev, `✓ 완료. ${res.files?.length || 0}개 파일 → ${res.outputDir}`]);
+      } else {
+        setInstallerLogs((prev) => [...prev, `✗ 실패: ${res?.error || "unknown"}`]);
+      }
+    } catch (err: any) {
+      setInstallerResult({ ok: false, error: err?.message || "예외 발생" });
+      setInstallerLogs((prev) => [...prev, `✗ 예외: ${err?.message || err}`]);
+    } finally {
+      setInstallerBuilding(false);
+      if (typeof off === "function") off();
+    }
+  };
+  const closeInstallerModal = () => {
+    if (installerBuilding) return;
+    setInstallerModalOpen(false);
   };
 
   /** maxUndoSize 줄이면 기존 스택도 즉시 잘라냄. */
@@ -3199,6 +3375,39 @@ function App() {
     );
   };
 
+  // staff 빌드 잠금 화면 — 검증 중이거나 잠금이면 본문 대신 안내만 표시
+  if (!IS_ADMIN && lockState !== "ok") {
+    return (
+      <div className="lock-overlay">
+        <section className="lock-card">
+          <div className="lock-icon" aria-hidden="true">{lockState === "verifying" ? "⏳" : "🔒"}</div>
+          <h1 className="lock-title">
+            {lockState === "verifying" ? "권한 확인 중" : "사용 권한이 없습니다"}
+          </h1>
+          {EMBED.name && (
+            <p className="lock-user">사용자: <strong>{EMBED.name}</strong> ({EMBED.role || "staff"})</p>
+          )}
+          {lockState === "locked" && (
+            <p className="lock-reason">{lockReason || "권한이 회수되었습니다. 관리자에게 문의해주세요."}</p>
+          )}
+          {lockState === "verifying" && (
+            <p className="lock-reason">잠시만 기다려주세요…</p>
+          )}
+          {lockState === "locked" && (
+            <button
+              type="button"
+              className="lock-retry-btn"
+              onClick={() => { setLockState("verifying"); void verifyEmbedToken("startup"); }}
+            >
+              다시 시도
+            </button>
+          )}
+          <p className="lock-hint">문제 지속 시 관리자에게 새 설치 파일을 요청하세요.</p>
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div className={`app-shell ${IS_ADMIN && isAdmin && showDebugPanel ? "with-debug" : "no-debug"}`}>
       <header className="topbar">
@@ -4116,12 +4325,11 @@ function App() {
                 <div className="etc-card">
                   <div className="etc-card-head">
                     <strong>편집자/썸네일러 전용 설치 파일 만들기</strong>
-                    <span className="etc-badge">2차 배포 예정</span>
                   </div>
                   <p className="etc-card-desc">
                     각 담당자 이름으로 토큰을 발급해 시트의 <code>_tokens</code> 시트에 등록하고,
-                    해당 토큰이 내장된 .exe 인스톨러를 자동 빌드하는 기능입니다.
-                    아래는 미리 보여주는 UI 만 있고 실제 빌드는 비활성화 상태입니다.
+                    해당 토큰 / SA 키 / 시트 URL 이 내장된 .exe 인스톨러를 자동 빌드합니다.
+                    편집자는 받아서 설치만 하면 본인 권한으로 자동 연결됩니다.
                   </p>
                   <div className="staff-installer-list">
                     {staffList.length === 0 ? (
@@ -4137,8 +4345,15 @@ function App() {
                           <button
                             type="button"
                             className="etc-installer-btn"
-                            disabled
-                            title="2차 배포에서 활성화됩니다."
+                            onClick={() => openInstallerModal(s.id)}
+                            disabled={!sheetLink || !serviceAccountPath}
+                            title={
+                              !sheetLink
+                                ? "[구글 시트] 탭에서 시트 URL 부터 설정하세요"
+                                : !serviceAccountPath
+                                ? "[구글 시트] 탭에서 Service Account JSON 부터 등록하세요"
+                                : "인스톨러 빌드 시작"
+                            }
                           >
                             인스톨러 빌드
                           </button>
@@ -4225,6 +4440,97 @@ function App() {
             }
           </div>
         </aside>
+      )}
+
+      {IS_ADMIN && installerModalOpen && (
+        <div
+          className="installer-modal-overlay"
+          onClick={() => { if (!installerBuilding) closeInstallerModal(); }}
+        >
+          <section className="installer-modal" onClick={(e) => e.stopPropagation()}>
+            <header className="installer-modal-header">
+              <h3>편집자 인스톨러 빌드</h3>
+              <button
+                type="button"
+                className="installer-modal-close"
+                onClick={closeInstallerModal}
+                disabled={installerBuilding}
+                aria-label="닫기"
+              >×</button>
+            </header>
+            <div className="installer-modal-body">
+              {(() => {
+                const target = staffList.find((s) => s.id === installerTargetStaffId);
+                if (!target) return <p>편집자 정보 없음</p>;
+                return (
+                  <>
+                    <div className="installer-target">
+                      <span className={`staff-chip role-${target.role}`}>
+                        {ROLE_LABEL[target.role]} · {target.name}
+                      </span>
+                    </div>
+                    <div className="installer-field">
+                      <label>출력 폴더</label>
+                      <div className="installer-pick-row">
+                        <input
+                          type="text"
+                          value={installerOutputDir}
+                          onChange={(e) => setInstallerOutputDir(e.target.value)}
+                          placeholder="폴더 선택을 누르거나 경로를 직접 입력"
+                          spellCheck={false}
+                        />
+                        <button type="button" onClick={handlePickInstallerDir} disabled={installerBuilding}>
+                          폴더 선택
+                        </button>
+                      </div>
+                      <p className="installer-hint">권장: release/editors/{target.name}/</p>
+                    </div>
+                    <div className="installer-field">
+                      <label>연결 시트</label>
+                      <p className="installer-readonly">{sheetLink || "(시트 URL 미설정)"}</p>
+                    </div>
+                    {installerLogs.length > 0 && (
+                      <div className="installer-log">
+                        {installerLogs.map((l, i) => <div key={i} className="installer-log-line">{l}</div>)}
+                      </div>
+                    )}
+                    {installerResult && (
+                      <div className={`installer-result ${installerResult.ok ? "ok" : "err"}`}>
+                        {installerResult.ok ? (
+                          <>
+                            <strong>빌드 성공</strong>
+                            <p>출력: {installerResult.outputDir}</p>
+                            <p>파일 {installerResult.files?.length || 0}개</p>
+                          </>
+                        ) : (
+                          <>
+                            <strong>빌드 실패</strong>
+                            <p>{installerResult.error}</p>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+            <footer className="installer-modal-footer">
+              <button type="button" onClick={closeInstallerModal} disabled={installerBuilding}>
+                {installerResult?.ok ? "닫기" : "취소"}
+              </button>
+              {!installerResult?.ok && (
+                <button
+                  type="button"
+                  className="installer-build-btn"
+                  onClick={handleRunInstallerBuild}
+                  disabled={installerBuilding || !installerOutputDir || !sheetLink || !serviceAccountPath}
+                >
+                  {installerBuilding ? "빌드 중…" : "빌드 시작"}
+                </button>
+              )}
+            </footer>
+          </section>
+        </div>
       )}
 
       {uninstallModalOpen && (

@@ -37,6 +37,24 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   sheetsInitAuth: (keyFilePath) => ipcRenderer.invoke("sheets-init-auth", { keyFilePath }),
 
+  setupEmbedSa: (saKeyB64) => ipcRenderer.invoke("setup-embed-sa", saKeyB64),
+
+  tokensVerify: (sheetUrl, name, role, token) =>
+    ipcRenderer.invoke("tokens-verify", { sheetUrl, name, role, token }),
+
+  tokensIssue: (sheetUrl, name, role) =>
+    ipcRenderer.invoke("tokens-issue", { sheetUrl, name, role }),
+
+  pickOutputDir: (defaultPath) => ipcRenderer.invoke("pick-output-dir", { defaultPath }),
+
+  buildEditorInstaller: (payload) => ipcRenderer.invoke("build-editor-installer", payload),
+
+  onBuildInstallerLog: (callback) => {
+    const handler = (_event, line) => callback(line);
+    ipcRenderer.on("build-installer-log", handler);
+    return () => ipcRenderer.removeListener("build-installer-log", handler);
+  },
+
   sheetsImport: (sheetUrl, tabKey, year, headers) =>
     ipcRenderer.invoke("sheets-import", { sheetUrl, tabKey, year, headers }),
 
