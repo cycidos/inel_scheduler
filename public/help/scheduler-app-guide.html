@@ -693,12 +693,54 @@
         <li>상단바: [<strong>일정 새로고침</strong>] / [<strong>변경사항 저장</strong>] (구글 시트 노출 없음)</li>
       </ol>
 
-      <h3>⑤ 권한 회수 / 재발급</h3>
-      <ul>
-        <li><strong>일시 회수</strong>: 구글 시트의 <code>_tokens</code> 시트에서 해당 행의 <code>status</code> 를 <code>active</code> → <code>revoked</code> 로 변경. 편집자 앱은 10분 주기 재검증 시점 (또는 재시작 시) 자동 잠금 화면 표시.</li>
-        <li><strong>재발급</strong>: 다시 [인스톨러 빌드] 누르면 같은 이름이면 토큰을 갱신(rotate)하고 새 .exe 생성. 옛 .exe 는 자동으로 무효.</li>
-        <li><strong>영구 차단 (퇴직 등)</strong>: <code>_tokens</code> 행 삭제 또는 status=revoked + Google Cloud Console 에서 해당 SA 의 시트 공유 권한 해제. 키 자체가 살아있어도 시트 접근 자체가 차단됩니다.</li>
-      </ul>
+      <h3>⑤ 권한 회수 / 재발급 / 영구 차단</h3>
+      <p>편집자 권한 회수는 강도에 따라 3단계로 나뉩니다.</p>
+
+      <h4>① 일시 회수 (휴직 · 잠시 정지)</h4>
+      <ol>
+        <li>구글 시트 → <code>_tokens</code> 시트 열기</li>
+        <li>해당 편집자 행의 <code>status</code> 컬럼을 <code>active</code> → <code>revoked</code> 로 수정</li>
+        <li>편집자 앱이 10분 주기 재검증 시점 (또는 재시작 시) 자동 잠금 화면 표시</li>
+        <li>다시 복귀: <code>revoked</code> → <code>active</code> 로 되돌리면 다음 재검증 때 자동 잠금 해제</li>
+      </ol>
+
+      <h4>② 재발급 (토큰 갱신 / rotation)</h4>
+      <ol>
+        <li>설정 → 기타 설정 → 같은 편집자 옆 [인스톨러 빌드] 다시 클릭</li>
+        <li>새 토큰이 발급되어 시트의 같은 행을 update (옛 토큰 무효화)</li>
+        <li>새 .exe 산출 → 편집자에게 전달, 옛 .exe 는 자동으로 잠금 화면 (토큰 불일치)</li>
+        <li>사용 사례: 키 정기 회전, 편집자 PC 분실 의심, 토큰 의심 상황</li>
+      </ol>
+
+      <h4>③ 영구 차단 (퇴직 · 외주 종료 등)</h4>
+      <p>운영 강도에 따라 두 가지 절차 중 선택합니다.</p>
+      <p><strong>가벼운 방법 (앱 차원 차단만)</strong></p>
+      <ol>
+        <li><code>_tokens</code> 시트에서 그 행의 <code>status</code> 를 <code>revoked</code> 로 변경 또는 행 자체 삭제</li>
+        <li>편집자 앱이 잠금 화면으로 전환</li>
+        <li><strong>한계</strong>: 키가 살아있으므로 외부 도구로 SA 키 직접 사용 시 시트 접근 가능. 신뢰하는 편집자에게는 충분, 의심스러운 상황엔 ↓ 강한 방법 필요.</li>
+      </ol>
+
+      <p><strong>강한 방법 (Google 측에서 SA 키 자체 무효화)</strong></p>
+      <ol>
+        <li><a href="https://console.cloud.google.com/iam-admin/serviceaccounts" target="_blank" rel="noopener">Google Cloud Console → IAM 및 관리자 → 서비스 계정</a> 열기</li>
+        <li>해당 프로젝트 선택 → 사용 중인 SA (예: <code>inel-scheduler-sa@…</code>) 클릭</li>
+        <li>상단 [<strong>키</strong>] 탭 → 회전할 키의 우측 ⋮ 메뉴 → [<strong>키 삭제</strong>]</li>
+        <li>같은 화면에서 [<strong>키 추가</strong>] → JSON 키 새로 생성 → 다운로드</li>
+        <li>관리자 앱 [구글 시트] 탭으로 돌아와 새 JSON 드래그 등록 → [연결 테스트] 통과 확인</li>
+        <li><strong>모든 편집자에게 새 인스톨러 재배포</strong> (옛 .exe 의 SA 키는 죽음 → 새 키로 다시 빌드)</li>
+      </ol>
+      <div class="callout">현재 운영은 모든 편집자가 같은 SA 를 공유하는 단순 모델이라, SA 키를 갈면 모든 편집자에게 영향이 갑니다. 한 명만 영구 차단하면서 다른 편집자에게 영향 주지 않으려면 ↓ 별도 SA 운영 방식이 필요.</div>
+
+      <p><strong>SA 자체 삭제 (계정 폐기)</strong> — 같은 SA 를 다른 시트에서도 안 쓸 때만 사용</p>
+      <ol>
+        <li>위 화면에서 SA 행의 ⋮ → [<strong>관리</strong>] → [<strong>서비스 계정 삭제</strong>]</li>
+        <li>그 SA 의 모든 키 영구 무효화 + 시트 공유 권한도 자동 해제</li>
+        <li>다른 시트에서도 그 SA 를 사용 중이면 모두 영향. 반드시 미리 확인.</li>
+      </ol>
+
+      <h4>④ 편집자별 별도 SA 운영 (보안 강화 옵션)</h4>
+      <p>편집자마다 새 SA 를 만들고 그 키를 해당 인스톨러에만 임베드하면, 한 명 영구 차단 시 다른 편집자에게 영향이 없습니다. 절차는 처음 시트 등록 시 SA 만든 절차와 100% 동일 — Cloud Console 에서 같은 프로젝트에 새 SA 추가 + JSON 키 발급 + 시트에 그 SA 이메일을 편집자 권한으로 공유. 다만 현재 1.1.x 빌드 다이얼로그는 관리자 본인의 SA 만 자동 임베드하므로, 이 운영 방식은 향후 업데이트에서 모달에 "이 편집자용 SA JSON 첨부" 입력란이 추가되어야 합니다.</p>
 
       <h3>⑥ 흔한 에러</h3>
       <ul>
