@@ -655,101 +655,13 @@
     <article>
       <h2><span class="section-num">10</span>편집자/썸네일러 전용 인스톨러 만들기</h2>
       <p>각 편집자/썸네일러에게 <strong>본인 권한이 자동 임베드된 .exe 인스톨러</strong>를 만들어 전달할 수 있어요. 받은 사람은 더블클릭 설치만 하면 별도의 시트 URL 입력 / 인증 키 등록 없이 본인 권한으로 바로 작업 가능합니다.</p>
-      <div class="callout">아래 내용은 빠른 요약입니다. <strong>전체 가이드(사전 조건 / 빌드 / _tokens 시트 / 권한 회수 / SA 키 폐기 / 트러블슈팅)</strong> 는 [설정 → 기타 설정 → 편집자/썸네일러 카드 → 전체 가이드 ↗] 또는 인스톨러 빌드 모달의 [도움말 ↗] 버튼에서 확인하세요.</div>
-
-      <h3>① 사전 조건 (이 단계가 안 되어 있으면 빌드 버튼이 비활성)</h3>
-      <ol>
-        <li><strong>설정 → 구글 시트</strong> 탭에서 Sheet URL 입력</li>
-        <li>같은 탭에서 <strong>Service Account JSON</strong> 드래그 등록 + [연결 테스트] 통과</li>
-        <li><strong>구글시트 다운로드</strong> 1회 (시트 동기화 시작)</li>
-        <li><strong>설정 → 시트 설정</strong> 에서 해당 편집자/썸네일러 이름 + 역할 등록</li>
-      </ol>
-      <div class="callout">관리자 본인의 SA JSON 이 임베드되므로 보안상 주의 — 편집자별로 별도 SA 키를 만들어 그 시트에만 공유 권한을 주는 운영을 권장합니다.</div>
-
-      <h3>② 빌드 절차</h3>
-      <ol>
-        <li><strong>설정 → 기타 설정</strong> 탭 이동</li>
-        <li>"<strong>편집자/썸네일러 전용 설치 파일 만들기</strong>" 카드에서 해당 인원 옆 [<strong>인스톨러 빌드</strong>] 클릭</li>
-        <li>모달이 열리면:
-          <ul>
-            <li><strong>출력 폴더 선택</strong> — 예: <code>release/editors/홍길동/</code> 또는 바탕화면 폴더</li>
-            <li>연결 시트는 현재 등록된 URL 자동 표시 (수정 불가)</li>
-            <li>[<strong>빌드 시작</strong>] 클릭 → 약 30~40초 소요</li>
-          </ul>
-        </li>
-        <li>완료 시 결과 카드 표시 + 출력 폴더에 <code>Inel Scheduler-Editor-Setup-1.1.0.exe</code> (또는 <code>-Thumbnailer-</code>) 생성</li>
-      </ol>
-
-      <h3>③ 자동으로 시트에 만들어지는 것</h3>
-      <ul>
-        <li><code>_tokens</code> 시트 (없으면 자동 생성) — 해당 편집자의 토큰이 <strong>active</strong> 상태로 등록됨</li>
-        <li>헤더: <code>name | role | token | issuedAt | status | lastSeen</code></li>
-      </ul>
-
-      <h3>④ 편집자가 받은 .exe 실행 시</h3>
-      <ol>
-        <li>NSIS 인스톨러 (기본 경로: 내 문서\Inel Scheduler Editor)</li>
-        <li>설치 완료 후 앱 시작 → "권한 확인 중..." → <code>_tokens</code> 시트와 자동 대조 → 통과 시 본문 표시</li>
-        <li>편집자는 시트 URL / SA JSON 입력할 필요 없음 (전부 임베드됨)</li>
-        <li>상단바: [<strong>일정 새로고침</strong>] / [<strong>변경사항 저장</strong>] (구글 시트 노출 없음)</li>
-      </ol>
-
-      <h3>⑤ 권한 회수 / 재발급 / 영구 차단</h3>
-      <p>편집자 권한 회수는 강도에 따라 3단계로 나뉩니다.</p>
-
-      <h4>① 일시 회수 (휴직 · 잠시 정지)</h4>
-      <ol>
-        <li>구글 시트 → <code>_tokens</code> 시트 열기</li>
-        <li>해당 편집자 행의 <code>status</code> 컬럼을 <code>active</code> → <code>revoked</code> 로 수정</li>
-        <li>편집자 앱이 10분 주기 재검증 시점 (또는 재시작 시) 자동 잠금 화면 표시</li>
-        <li>다시 복귀: <code>revoked</code> → <code>active</code> 로 되돌리면 다음 재검증 때 자동 잠금 해제</li>
-      </ol>
-
-      <h4>② 재발급 (토큰 갱신 / rotation)</h4>
-      <ol>
-        <li>설정 → 기타 설정 → 같은 편집자 옆 [인스톨러 빌드] 다시 클릭</li>
-        <li>새 토큰이 발급되어 시트의 같은 행을 update (옛 토큰 무효화)</li>
-        <li>새 .exe 산출 → 편집자에게 전달, 옛 .exe 는 자동으로 잠금 화면 (토큰 불일치)</li>
-        <li>사용 사례: 키 정기 회전, 편집자 PC 분실 의심, 토큰 의심 상황</li>
-      </ol>
-
-      <h4>③ 영구 차단 (퇴직 · 외주 종료 등)</h4>
-      <p>운영 강도에 따라 두 가지 절차 중 선택합니다.</p>
-      <p><strong>가벼운 방법 (앱 차원 차단만)</strong></p>
-      <ol>
-        <li><code>_tokens</code> 시트에서 그 행의 <code>status</code> 를 <code>revoked</code> 로 변경 또는 행 자체 삭제</li>
-        <li>편집자 앱이 잠금 화면으로 전환</li>
-        <li><strong>한계</strong>: 키가 살아있으므로 외부 도구로 SA 키 직접 사용 시 시트 접근 가능. 신뢰하는 편집자에게는 충분, 의심스러운 상황엔 ↓ 강한 방법 필요.</li>
-      </ol>
-
-      <p><strong>강한 방법 (Google 측에서 SA 키 자체 무효화)</strong></p>
-      <ol>
-        <li><a href="https://console.cloud.google.com/iam-admin/serviceaccounts" target="_blank" rel="noopener">Google Cloud Console → IAM 및 관리자 → 서비스 계정</a> 열기</li>
-        <li>해당 프로젝트 선택 → 사용 중인 SA (예: <code>inel-scheduler-sa@…</code>) 클릭</li>
-        <li>상단 [<strong>키</strong>] 탭 → 회전할 키의 우측 ⋮ 메뉴 → [<strong>키 삭제</strong>]</li>
-        <li>같은 화면에서 [<strong>키 추가</strong>] → JSON 키 새로 생성 → 다운로드</li>
-        <li>관리자 앱 [구글 시트] 탭으로 돌아와 새 JSON 드래그 등록 → [연결 테스트] 통과 확인</li>
-        <li><strong>모든 편집자에게 새 인스톨러 재배포</strong> (옛 .exe 의 SA 키는 죽음 → 새 키로 다시 빌드)</li>
-      </ol>
-      <div class="callout">현재 운영은 모든 편집자가 같은 SA 를 공유하는 단순 모델이라, SA 키를 갈면 모든 편집자에게 영향이 갑니다. 한 명만 영구 차단하면서 다른 편집자에게 영향 주지 않으려면 ↓ 별도 SA 운영 방식이 필요.</div>
-
-      <p><strong>SA 자체 삭제 (계정 폐기)</strong> — 같은 SA 를 다른 시트에서도 안 쓸 때만 사용</p>
-      <ol>
-        <li>위 화면에서 SA 행의 ⋮ → [<strong>관리</strong>] → [<strong>서비스 계정 삭제</strong>]</li>
-        <li>그 SA 의 모든 키 영구 무효화 + 시트 공유 권한도 자동 해제</li>
-        <li>다른 시트에서도 그 SA 를 사용 중이면 모두 영향. 반드시 미리 확인.</li>
-      </ol>
-
-      <h4>④ 편집자별 별도 SA 운영 (보안 강화 옵션)</h4>
-      <p>편집자마다 새 SA 를 만들고 그 키를 해당 인스톨러에만 임베드하면, 한 명 영구 차단 시 다른 편집자에게 영향이 없습니다. 절차는 처음 시트 등록 시 SA 만든 절차와 100% 동일 — Cloud Console 에서 같은 프로젝트에 새 SA 추가 + JSON 키 발급 + 시트에 그 SA 이메일을 편집자 권한으로 공유. 다만 현재 1.1.x 빌드 다이얼로그는 관리자 본인의 SA 만 자동 임베드하므로, 이 운영 방식은 향후 업데이트에서 모달에 "이 편집자용 SA JSON 첨부" 입력란이 추가되어야 합니다.</p>
-
-      <h3>⑥ 흔한 에러</h3>
-      <ul>
-        <li><strong>"Service Account JSON 이 없습니다"</strong> → 사전 조건 ①번 미완료. <strong>설정 → 구글 시트</strong> 탭에서 SA JSON 드래그 등록 후 다시 시도.</li>
-        <li><strong>"시트 URL 이 없습니다"</strong> → 사전 조건 ①번 미완료. 같은 탭에서 Sheet URL 입력 후 다시 시도.</li>
-        <li><strong>"먼저 [시트 설정] 탭에서 편집자/썸네일러를 등록하세요"</strong> → 사전 조건 ②번 미완료.</li>
-        <li><strong>빌드 중 멈춤</strong> → 디버그 패널 켜서 로그 확인. 보통 npm/electron-builder 의 환경 변수 문제이거나 release/ 폴더 권한 문제. 안티바이러스가 새 .exe 를 잠시 잠그는 경우도 있음.</li>
-      </ul>
+      <p>사전 조건 / 빌드 절차 / <code>_tokens</code> 시트 / 권한 회수 / SA 키 폐기 / 트러블슈팅 등 자세한 내용은 별도의 전용 가이드 페이지에 정리되어 있습니다.</p>
+      <p style="margin-top:14px;">
+        <a href="staff-installer-guide.html"
+           style="display:inline-block;padding:10px 18px;background:#f472b6;color:#ffffff;border-radius:8px;font-weight:700;text-decoration:none;">
+          편집자/썸네일러 인스톨러 전용 가이드 보기 ↗
+        </a>
+      </p>
     </article>
 
     <div class="footer">
