@@ -289,6 +289,134 @@
 
 ---
 
+## 추가 항목 (phase1 마무리 ~ 1.0.0)
+
+> 1차 배포(1.0.0) 직전까지 누적된 변경 모음. 위 본문 항목과 일관된 한 줄 표 형식 유지.
+
+### 영구 저장 (localStorage)
+
+`src/App.tsx | loadInitialRows | function | 앱 마운트 시 localStorage("inel.rowsByTab.v1") 에서 행 데이터 복원. 없으면 initialRows fallback. appData 의 useState lazy initializer 로 사용해 동기 로드 | -`
+
+`src/App.tsx | useEffect (rowsByTab 자동 저장) | hook | appData.rowsByTab 변경 시 500ms 디바운스 후 localStorage("inel.rowsByTab.v1") 저장. 시트 미연결도 로컬 영구화 | -`
+
+`src/App.tsx | useEffect (schemaByTab 영구 저장) | hook | appData.schemaByTab 변경 시 localStorage("inel.schemaByTab.v1") 저장. 시작 시 default schema 와 머지 로드 (새 컬럼 도입에도 호환) | -`
+
+`src/App.tsx | sortOrderByTab / SortOrder | state+type | 탭별 행 정렬 순서 ("desc"|"asc"). 기본 "desc". localStorage("inel.sortOrderByTab.v1") 영구 저장. filteredData useMemo 가 broadcastDate → broadcastStartTime 순으로 안정 정렬, 빈 날짜는 항상 맨 끝 | -`
+
+`src/App.tsx | toolbar-row + sort-select | UI | 월 페이저 우측에 "최신순/이전순" 드롭다운(.sort-select). margin-left:auto 로 우측 정렬. title 에 "앱 표시 전용. 시트는 항상 오름차순 고정" 안내 | -> sortOrderByTab`
+
+### 방송감지 영구 / 자동 재개
+
+`src/App.tsx | wasDetectingRef / autoResumeDoneRef | useRef | localStorage 의 inel.isDetecting.v1 값을 보관 + 앱 시작 시 1회 자동 재개 가드 | -`
+
+`src/App.tsx | useEffect (isDetecting 영구 저장 / 자동 재개) | hook | (1) isDetecting 변경 시 localStorage 저장. (2) 마운트 시 wasDetectingRef && chzzkLink 면 startChzzkPolling 1회 호출해 감지 자동 재개. autoResumeDoneRef 로 중복 방지 | -> startChzzkPolling`
+
+### 방송제목 타임라인 누적 (다시보기)
+
+`src/App.tsx | appendTitleTimeline | useCallback | fullReplay 활성 row.values.videoTitle 에 "HH:MM:SS - <제목>" entry 누적. 직전 entry 와 같으면 append 안 함 (중복 방지). schedulePatchActiveRow 호출로 즉시 시트 patch | -> schedulePatchActiveRow`
+
+`src/App.tsx | firstTitleRecorded (ref) | useRef | LIVE ON 첫 감지 시 한 번만 첫 제목을 timeline 에 기록. LIVE OFF / 토글 시 리셋 | -`
+
+`src/App.tsx | onChzzkTitleChange 핸들러 | logic | 매 title 변경마다 appendTitleTimeline 호출. ensureDetectRow 활성 row 가 없으면 무시 | -> appendTitleTimeline`
+
+`src/App.tsx | fullReplay schema 의 videoTitle | const update | label "영상제목 타임라인", type "text", width 320. shorts/longform 의 videoTitle 은 일반 단일값 유지 | -`
+
+`src/App.tsx | renderCell (timeline-cell 분기) | logic | activeTab==="fullReplay" && (column.key==="categoryTimeline" || column.key==="videoTitle") 일 때 read-only div.timeline-cell 로 렌더. 줄바꿈마다 .timeline-entry div | -`
+
+`src/styles.css | .timeline-cell / .timeline-entry | stylesheet | 다시보기 timeline 컬럼의 read-only multi-line 표시 (배경 약간 어둡고 cursor:default) | -`
+
+### 카테고리 타임라인 즉시 patch (t12-a, t12-b 완성)
+
+`src/App.tsx | appendCategoryTimeline | useCallback | fullReplay 활성 row.values.categoryTimeline 에 "HH:MM:SS - <카테고리>" entry 누적. 직전 entry 와 같으면 append 안 함. schedulePatchActiveRow 호출로 즉시 시트 patch. 신규 카테고리는 categoriesAddUser 자동 등록(별도 분기) | -> schedulePatchActiveRow, categoriesAddUser`
+
+### 시트 / Google Sheets 추가
+
+`electron/main.js | sheets-export 안정 정렬 | logic | export 직전 rows 를 broadcastDate 오름차순, 같으면 broadcastStartTime, 같으면 원래 입력 순으로 안정 정렬. 빈 날짜는 항상 맨 끝. 시트의 시간 흐름을 사람이 읽기 쉽게 고정 | -`
+
+`electron/main.js | sheets-patch-row USER_ENTERED | option | update/append 시 valueInputOption="USER_ENTERED" 로 호출해 Google Sheets 가 날짜를 진짜 날짜로 인식 (46144 같은 시리얼 숫자 표시 방지) | -`
+
+`src/App.tsx | handleCopySheetLink | async function | 시트 링크를 navigator.clipboard.writeText 로 복사 + sheetsStatus 짧게 갱신. sheetLink 비어 있으면 disabled | -> navigator.clipboard`
+
+`src/App.tsx | icon-button (copy sheet link) | UI button | "구글시트 업로드" 우측의 SVG 아이콘 버튼. .icon-button 정사각 + 중앙 정렬 | -> handleCopySheetLink`
+
+`src/App.tsx | settings-tab 라벨 "구글 시트" | UI const | 기존 "구글 시트 연결" → "구글 시트" 단축. settingsTab key 는 "connection" 그대로 유지 | -`
+
+### 다시보기 방송시작시간 (broadcastStartTime)
+
+`src/App.tsx | fullReplay schema 의 broadcastStartTime | const | type "text", HH:MM:SS KST 표시. ensureDetectRow 시 Chzzk openDate 를 KST 변환해 초기값. 같은 세션 안에서는 값이 안 변하므로 row 검색 키로 안전 사용 | -`
+
+`electron/main.js | chzzk-status 의 broadcastStartTime 계산 | logic | poll 응답의 openDate (KST 가정) 를 파싱해 HH:MM:SS 문자열 추출. polling 시작 시각 fallback 안 씀 (단절 후 재개에도 같은 시각 유지) | -`
+
+### Chzzk payload 키화 / 에러 정보 강화
+
+`electron/main.js | chzzk-error 에 stack 동봉 | logic | webContents.send("chzzk-error", { message, stack: err.stack }) 형태로 디버그 추적성 향상 | -`
+
+`electron/main.js | chzzk-title-change payload (categoryDisplay 사용) | fix | 과거 미정의 category 변수 참조로 인한 무한 emit 버그 해결. 비교는 lastCategory.categoryId, 표시값은 categoryDisplay 로 분리 | -`
+
+### 앱 삭제 기능 (Self-uninstall)
+
+`electron/main.js | app-uninstall (IPC) | handler | win32 & packaged 환경에서만 동작. process.execPath 의 dirname 에 있는 "Uninstall Inel Work Scheduler.exe" 를 spawn(["/S","--force-run"], { detached, stdio:ignore, windowsHide }) + child.unref. 600ms 뒤 app.quit() 로 파일 잠금 회피 | -> child_process.spawn`
+
+`electron/preload.js | uninstallApp | bridge | renderer → main "app-uninstall" IPC 호출 래퍼 | -`
+
+`src/App.tsx | uninstallModalOpen / uninstallConfirmText / uninstalling | state | 앱 삭제 모달 가시성 / 확인 문구 입력값 / 진행중 플래그. UNINSTALL_CONFIRM_PHRASE = "이늘 스케쥴러 삭제합니다" 정확히 입력해야 [삭제 진행] 활성화 | -`
+
+`src/App.tsx | settingsTab="etc" 안의 .etc-danger-card | UI | "기타 설정" 탭 최하단의 빨간 위험 카드. [앱 삭제하기] 빨간 버튼 → 확인 모달 오픈 | -> uninstallApp`
+
+`src/App.tsx | uninstall-modal-overlay | UI modal | 경고 메시지 + 입력 필드 + [취소][삭제 진행]. 확인 문구 정확 일치 시에만 [삭제 진행] enabled. 클릭 시 electronAPI.uninstallApp + setUninstalling(true) | -> uninstallApp`
+
+`src/styles.css | .etc-danger-card / .etc-danger-btn / .uninstall-modal-* | stylesheet | 빨간 danger 카드 + 모달 (overlay, warning, confirm-phrase input, confirm-btn) | -`
+
+### AI 연결 / CSV 가져오기 기능 잠금 (테스트 중)
+
+`src/App.tsx | ai-locked-banner + fieldset.ai-fieldset-locked | UI | "AI 연결" 탭 진입 시 노란 "⚠ 기능 테스트 중" 배너 + 아래 모든 컨트롤을 <fieldset disabled> 로 한 번에 잠금. pointer-events:none + opacity 0.55 로 시각적 비활성. provider/key/model select + key visibility / refresh / guide 모두 영향 | -`
+
+`src/App.tsx | "CSV 가져오기 (AI)" 상단바 버튼 | UI | disabled 고정 + title="기능 테스트 중 — 다음 업데이트에서 활성화됩니다." | -`
+
+`src/styles.css | .ai-locked-banner / .ai-fieldset-locked | stylesheet | 잠금 배너 색상 (warm yellow) + fieldset opacity / grayscale / pointer-events 처리 | -`
+
+### NSIS / Installer 보강
+
+`build/installer.nsh | !ifndef BUILD_UNINSTALLER 가드 | nsis | installer 전용 Var / Function / Page 정의가 uninstaller 빌드에 노출되면 NSIS warning 6010 (electron-builder 가 error 로 취급) 발생. 그래서 customUnInstall 만 가드 밖에 두고 나머지는 모두 안에 둠 | -`
+
+`build/installer.nsh | customUnInstall RMDir 안전망 | nsis | electron-builder 의 deleteAppDataOnUninstall:true 만으로는 $LOCALAPPDATA Chromium 캐시 잔존이 발생하므로 $APPDATA, $LOCALAPPDATA, $LOCALAPPDATA\${APP_PACKAGE_NAME}-updater 를 RMDir /r 로 강제 정리. 빈 $INSTDIR 도 RMDir | -`
+
+`build/installer.nsh | PendingAutoStart 핸드오프 | nsis+main | NSIS 가 Run 키를 직접 안 쓰고 HKCU\Software\${PRODUCT_NAME}\PendingAutoStart 에 "0"/"1" 만 적음. main.js 가 첫 실행 시 이를 읽어 app.setLoginItemSettings 호출 후 키 삭제. (Electron 의 인용 포맷 차이로 직접 Run 키를 만들면 getLoginItemSettings 가 OFF 로 인식) | -> app.setLoginItemSettings`
+
+### .cursor 하네스
+
+`.cursor/rules/00-project-context.mdc | alwaysApply rule | 매 세션 자동 로드. 스택 / 탭 구조 / 데이터 흐름 / 브랜치 전략 / 영구 저장 위치 / 보안 모델 핵심 요약 | -`
+
+`.cursor/rules/10-typescript-conventions.mdc | globs rule | src/**/*.{ts,tsx}, electron/**/*.js 편집 시 로드. IPC 4단계 동기화 의무 / strict TS / React 훅 / 상태 mutate 금지 | -`
+
+`.cursor/rules/20-deny-dangerous.mdc | alwaysApply rule | force push / npm install / package.json build / installer.nsh / app-uninstall 핸들러 등 위험 작업 시 사용자 동의 강제 | -`
+
+`.cursor/rules/30-secrets-policy.mdc | alwaysApply rule | Service Account / AI API Key / Chzzk 자격증명 취급. 마스킹 요청 / 노출 사고 절차 | -`
+
+`.cursor/rules/40-i18n.mdc | alwaysApply rule | 한국어 UI / 한국어 응답 정책. 식별자는 영어, 라벨은 한국어 | -`
+
+`.cursor/rules/dev-rule.mdc | alwaysApply rule | (기존) docs/code_flow / git / reference 정책 | -`
+
+`AGENTS.md | directory rule | 루트 큰 그림 + 디렉토리 지도 + IPC 카테고리 + 데이터 흐름 다이어그램 + 브랜치 전략 | -`
+
+`electron/AGENTS.md | directory rule | main/preload 컨벤션 + IPC 4단계 절차 + Sheets/Chzzk 호출 규약 + NSIS 핸드오프 | -`
+
+`src/AGENTS.md | directory rule | App.tsx 단일파일 정책 + 상태/localStorage 카탈로그 + IPC 호출 패턴 + 새 기능 추가 흐름 | -`
+
+`build/AGENTS.md | directory rule | NSIS 매크로 구조 + !ifndef BUILD_UNINSTALLER 함정 + 빌드 실패 패턴 + 업그레이드 정책 | -`
+
+`docs/AGENTS.md | directory rule | code_flow.md 갱신 의무 + plans/ 운영 + public/help/ HTML 가이드 관리 | -`
+
+`.cursor/skills/sheets-sync/SKILL.md | on-demand skill | Sheets 동기화 작업 시 자동 로드. 헤더 정렬 보존 / 2-row 구조 / patch-row 흐름 / 편집자별 SA 분리 보안 모델 | -`
+
+`.cursor/skills/chzzk-detection/SKILL.md | on-demand skill | 방송감지 작업 시 자동 로드. 1세션=1row 정책 / ensureDetectRow / appendTimeline / 단절 후 재개 / 즉시 patch | -`
+
+`.cursorignore | file | release, reference, node_modules, secrets 패턴 차단. .env, *-service-account.json 등 자격증명 우발 노출 방지 | -`
+
+`.cursorindexignore | file | public/help/gifs, src/assets, chzzk-categories.seed.json 등은 인덱싱(RAG)만 제외 - 명시 Read 는 허용 | -`
+
+---
+
 ## 업데이트 템플릿
 
 아래 형식으로 항목을 추가:

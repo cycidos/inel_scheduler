@@ -1,0 +1,58 @@
+---
+description: "Inel Work Scheduler — 프로젝트 전반 컨텍스트 (Electron + React + TypeScript)"
+alwaysApply: true
+---
+
+# Inel Work Scheduler — Project Context
+
+## 누구를 위한 앱인가
+- 치지직 스트리머 "이늘"과 그 편집자/썸네일러 팀이 사용하는 **콘텐츠 작업 + 방송 일정 관리 데스크탑 앱**.
+- UI 톤: **White & Soft Pink**. 한국어 인터페이스.
+
+## 스택
+- **Electron** (메인 프로세스 = Node.js, `electron/main.js`)
+- **React + TypeScript + Vite** (렌더러, `src/App.tsx` 단일 파일에 거의 모든 UI 집약)
+- **electron-builder + NSIS** (Windows 인스톨러)
+- **googleapis** (Google Sheets 양방향 동기화, Service Account 인증)
+- **Chzzk Open API** (방송 감지 / 카테고리 / 제목 폴링)
+
+## 데이터 흐름 (한 줄 요약)
+```
+Chzzk API ─┐
+           ├─ electron/main.js ─ IPC ─ src/App.tsx (state) ─ Google Sheets
+사용자 입력 ┘                                                ↑↓
+                                            localStorage (오프라인 영구 저장)
+```
+
+## 탭 구조 (3개)
+- **숏폼** (shorts) / **롱폼** (longform) / **다시보기** (fullReplay)
+- shorts/longform 은 1 영상 = 2-row 구조 (공유 행 + 담당자별 행)
+- fullReplay 는 방송감지 결과를 자동 누적 (categoryTimeline / videoTitle 타임라인)
+
+## 두 가지 배포 라인 (브랜치)
+- `master` — 1차 배포 1.0.0 (관리자용 풀 기능)
+- `feature/phase2-installer-ui` — 2차 배포 예정 (편집자/썸네일러 토큰 기반 인스톨러)
+- 두 브랜치는 가능한 한 cherry-pick으로 동기화. 기능 분기 시 phase2 만의 UI는 master에 누출되지 않게.
+
+## 영구 저장소
+- **Google Sheets** — 팀 공유 진실 (Service Account JSON 으로 인증)
+- **localStorage** — `inel.rowsByTab.v1`, `schemaByTab`, `sortOrderByTab`, `isDetecting`, AI 설정 등
+- **`%APPDATA%/Inel Work Scheduler/`** — `app.getPath('userData')` 경로. chzzk 카테고리 캐시, AI 모델 캐시 등
+
+## 빌드/배포
+- 개발: `npm run dev` (Vite dev server + Electron 동시 실행)
+- 빌드: `npm run dist` (Vite 빌드 → electron-builder NSIS)
+- 산출물: `release/Inel Work Scheduler-Setup-<version>.exe`
+- 설치 위치: `%USERPROFILE%\Documents\Inel Work Scheduler`
+- 업그레이드: 같은 App ID 기반 NSIS overwrite 방식. **`electron-updater` 미사용**.
+
+## 결정된 보안 모델 (편집자 인스톨러 관련)
+- service account 키는 클라이언트에 임베드 가능하다는 전제.
+- **편집자별 별도 service account 키 발급** + **`_tokens` 시트로 일상 회수** 가 권장 모델.
+- 자세한 내용은 `.cursor/skills/sheets-sync/SKILL.md` 와 `docs/plans/` 참조.
+
+## 핵심 원칙
+1. **새 파일 생성 전 `docs/structure/code_flow.md` 확인** (기존 함수/컴포넌트 중복 검사). 기존 `dev-rule.mdc` 규약 준수.
+2. **`src/App.tsx` 는 거대 단일 파일**. 분할은 신중하게 — 사용자 동의 없이 임의 분리 금지.
+3. **모든 UI 텍스트는 한국어**, 코드 식별자는 영어.
+4. **민감 정보는 `.cursorignore`에 등록되어 있음** — 우발 노출 방지.

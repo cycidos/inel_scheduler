@@ -1,0 +1,13 @@
+﻿# === 인덱싱(RAG)에서는 빼되, 명시 Read는 허용 ===
+# 큰 도움말 GIF/이미지 — 가끔 참조만
+public/help/gifs/
+src/assets/
+
+# 대용량 시드 데이터 — 필요 시 직접 Read
+src/data/chzzk-categories.seed.json
+
+# legacy 문서 (있을 경우)
+docs/legacy/
+
+# 빌드 아이콘 (인덱싱 의미 없음)
+build/icon.png
