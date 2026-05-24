@@ -476,6 +476,41 @@
 
 ---
 
+## 추가 항목 (phase2 - 인스톨러 빌드 분기)
+
+> admin / editor / thumbnailer 별로 다른 productName · appId · 산출물 파일명 · 시작메뉴 shortcut 으로 NSIS 빌드. 같은 머신에 3개 동시 설치 가능.
+
+`scripts/build-edition.mjs | build-edition | node script | IWS_EDITION 환경변수(admin/editor/thumbnailer, 기본 admin) 기반으로 package.json 의 build 섹션을 override 한 config 객체를 만들어 electron-builder Node API(build())로 Windows NSIS 빌드 실행. NSIS 의 ${PRODUCT_NAME} 매크로는 productName 을 그대로 받아쓰므로 설치 경로 / 레지스트리 / AppData 가 edition 별로 자연 분리됨 — installer.nsh 별도 수정 불필요 | -> electron-builder Node API, package.json`
+
+`package.json | scripts.dist:admin / dist:editor / dist:thumbnailer | npm script | cross-env IWS_EDITION=<edition> npm run build:web && cross-env IWS_EDITION=<edition> node scripts/build-edition.mjs. 두 단계 모두 환경변수 주입 필수 (vite + electron-builder 단계 각각). 기존 npm run dist 는 dist:admin 으로 alias | -> scripts/build-edition.mjs`
+
+### edition 별 빌드 메타데이터
+
+| edition | productName | appId | artifactName | shortcutName |
+|---|---|---|---|---|
+| admin | Inel Work Scheduler | com.inel.scheduler | Inel Work Scheduler-Setup-${version}.${ext} | Inel Work Scheduler |
+| editor | Inel Scheduler Editor | com.inel.scheduler.editor | Inel Scheduler-Editor-Setup-${version}.${ext} | 이늘 스케쥴러 (편집자) |
+| thumbnailer | Inel Scheduler Thumbnailer | com.inel.scheduler.thumbnailer | Inel Scheduler-Thumbnailer-Setup-${version}.${ext} | 이늘 스케쥴러 (썸네일러) |
+
+> productName / artifactName 은 폴더명·레지스트리·파일시스템 호환 위해 영문. shortcutName 만 한글 (시작메뉴 가시성).
+
+### 자동 분리되는 경로 (NSIS ${PRODUCT_NAME} 활용)
+
+- 설치 경로: `$DOCUMENTS\${PRODUCT_NAME}` → admin/editor/thumbnailer 별 다른 폴더
+- 레지스트리: `HKCU\Software\${PRODUCT_NAME}` 분리
+- AppData: `$APPDATA\${PRODUCT_NAME}` / `$LOCALAPPDATA\${PRODUCT_NAME}` 분리
+- 바탕화면 shortcut, customUnInstall 정리 경로 모두 분리
+
+### 1차 빌드 검증
+
+`(검증) admin .exe | 100.10 MB | Inel Work Scheduler-Setup-1.0.0.exe | -`
+`(검증) editor .exe | 100.09 MB | Inel Scheduler-Editor-Setup-1.0.0.exe | -`
+`(검증) thumbnailer .exe | 100.09 MB | Inel Scheduler-Thumbnailer-Setup-1.0.0.exe | -`
+
+> 크기는 거의 동일 (asar 안의 JS 차이 26 kB 는 .exe 100 MB 안에서 미미). 핵심은 appId 분리로 같은 머신에 3개 공존 설치 가능, 그리고 각자 다른 UI 빌드 (admin only UI 제거된 staff 빌드) 가 박혔다는 점.
+
+---
+
 ## 업데이트 템플릿
 
 아래 형식으로 항목을 추가:

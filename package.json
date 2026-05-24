@@ -10,7 +10,10 @@
     "build:web": "vite build",
     "start": "electron .",
     "seed:chzzk-categories": "node scripts/seed-chzzk-categories.mjs",
-    "dist": "npm run build:web && electron-builder --win",
+    "dist": "npm run dist:admin",
+    "dist:admin": "cross-env IWS_EDITION=admin npm run build:web && cross-env IWS_EDITION=admin node scripts/build-edition.mjs",
+    "dist:editor": "cross-env IWS_EDITION=editor npm run build:web && cross-env IWS_EDITION=editor node scripts/build-edition.mjs",
+    "dist:thumbnailer": "cross-env IWS_EDITION=thumbnailer npm run build:web && cross-env IWS_EDITION=thumbnailer node scripts/build-edition.mjs",
     "dist:dir": "npm run build:web && electron-builder --win --dir"
   },
   "repository": {
