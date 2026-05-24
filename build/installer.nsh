@@ -32,7 +32,18 @@
 !macroend
 
 ; ───────────────────────────────────────────────────────────────
-; (Installer 전용) 옵션 체크박스 페이지
+; customInit:
+;   electron-builder가 옛 버전을 silent uninstall 호출하기 *직전* 시점.
+;   여기서 옛 1.x.x 의 $APPDATA\${PRODUCT_NAME} 을 임시 폴더로 Rename 해두면
+;   옛 customUnInstall 매크로의 RMDir 가 빈 폴더만 발견하여 noop 이 된다.
+;   설치 완료 시점 customInstall 에서 다시 원위치로 Rename 하여 복원.
+;
+;   Rename 은 메타데이터만 변경하므로 즉시 끝나고, Chromium 캐시가 잠겨
+;   있어도 폴더 단위 이동이라 영향을 받지 않는다 (파일 핸들이 아니라
+;   디렉토리 엔트리만 변경).
+;
+;   $InelUpgradeFound 가 1 이면 "기존 버전을 발견했다" 라는 안내를
+;   추가 페이지로 표시한다.
 ; ───────────────────────────────────────────────────────────────
 !ifndef BUILD_UNINSTALLER
 
@@ -41,10 +52,53 @@ Var InelDesktopShortcutCheckbox
 Var InelDesktopShortcutState
 Var InelAutoStartCheckbox
 Var InelAutoStartState
+Var InelUpgradeFound
+Var InelUpgradeDialog
+
+!macro customInit
+  ; 옛 1.x.x 의 AppData 가 있으면 (= 업그레이드 케이스)
+  IfFileExists "$APPDATA\${PRODUCT_NAME}\*.*" 0 noOldData
+    ; 이미 backup 폴더가 잔존하면 (이전 실패 흔적) 먼저 정리
+    IfFileExists "$APPDATA\${PRODUCT_NAME}.upgrade-backup\*.*" 0 +2
+      RMDir /r "$APPDATA\${PRODUCT_NAME}.upgrade-backup"
+    ; Rename — 디렉토리 엔트리만 변경, 파일 IO 없음
+    Rename "$APPDATA\${PRODUCT_NAME}" "$APPDATA\${PRODUCT_NAME}.upgrade-backup"
+    StrCpy $InelUpgradeFound "1"
+    Goto initDone
+  noOldData:
+    StrCpy $InelUpgradeFound "0"
+  initDone:
+!macroend
 
 !macro customPageAfterChangeDir
+  Page custom InelUpgradePageCreate InelUpgradePageLeave
   Page custom InelOptionsPageCreate InelOptionsPageLeave
 !macroend
+
+; ───── 업그레이드 안내 페이지 (옛 데이터 발견 시에만 노출) ─────
+Function InelUpgradePageCreate
+  ${If} $InelUpgradeFound != "1"
+    Abort  ; 옛 데이터 없으면 페이지 자체 skip
+  ${EndIf}
+
+  !insertmacro MUI_HEADER_TEXT "업데이트로 진행" "기존 버전이 발견되었습니다."
+
+  nsDialogs::Create 1018
+  Pop $InelUpgradeDialog
+  ${If} $InelUpgradeDialog == error
+    Abort
+  ${EndIf}
+
+  ${NSD_CreateLabel} 0 0 100% 16u "기존 ${PRODUCT_NAME} 설치를 발견했습니다."
+  ${NSD_CreateLabel} 0 20u 100% 48u "업데이트 모드로 진행됩니다:$\r$\n  · 작업 데이터 / 시트 링크 / 편집자 명단 / 설정값은 모두 그대로 보존$\r$\n  · 앱 파일만 새 버전으로 교체$\r$\n  · 자동실행 / 바로가기 / 인증 정보도 유지"
+  ${NSD_CreateLabel} 0 78u 100% 16u "[다음] 버튼을 눌러 진행하세요."
+
+  nsDialogs::Show
+FunctionEnd
+
+Function InelUpgradePageLeave
+  ; 사용자 선택값 없음 — 안내 페이지일 뿐
+FunctionEnd
 
 Function InelOptionsPageCreate
   !insertmacro MUI_HEADER_TEXT "추가 옵션" "설치 후 동작을 선택하세요."
@@ -75,6 +129,21 @@ Function InelOptionsPageLeave
 FunctionEnd
 
 !macro customInstall
+  ; ── 업그레이드 백업 복원 (customInit 의 Rename 대응) ──
+  ;
+  ; 옛 silent uninstall 흐름은 이 시점까지 끝나 있다. customInit 에서
+  ; .upgrade-backup 로 옮겨둔 폴더가 있으면 다시 원위치로 Rename.
+  ;
+  ; 만약 silent uninstall 의 RMDir 가 운 좋게 (혹은 운 나쁘게) $APPDATA\PRODUCT_NAME
+  ; 빈 폴더를 어떻게든 새로 만들었다면 그것부터 정리 후 Rename.
+  IfFileExists "$APPDATA\${PRODUCT_NAME}.upgrade-backup\*.*" 0 noRestore
+    IfFileExists "$APPDATA\${PRODUCT_NAME}\*.*" 0 doRestore
+      RMDir /r "$APPDATA\${PRODUCT_NAME}"
+    doRestore:
+      Rename "$APPDATA\${PRODUCT_NAME}.upgrade-backup" "$APPDATA\${PRODUCT_NAME}"
+      DetailPrint "Restored user data from upgrade backup"
+  noRestore:
+
   ${If} $InelDesktopShortcutState == ${BST_CHECKED}
     CreateShortCut "$DESKTOP\${PRODUCT_NAME}.lnk" "$INSTDIR\${APP_EXECUTABLE_FILENAME}"
   ${EndIf}

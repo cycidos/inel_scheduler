@@ -56,6 +56,12 @@ declare global {
         Promise<{ ok: boolean; valid?: boolean; status?: string; name?: string; role?: string; error?: string }>;
       tokensIssue: (sheetUrl: string, name: string, role: string) =>
         Promise<{ ok: boolean; token?: string; rotated?: boolean; error?: string }>;
+      settingsSheetLoad: (sheetUrl: string) =>
+        Promise<{ ok: boolean; kv?: Record<string, any>; count?: number; error?: string }>;
+      settingsSheetWrite: (sheetUrl: string, kv: Record<string, any>) =>
+        Promise<{ ok: boolean; count?: number; error?: string }>;
+      settingsSheetPatch: (sheetUrl: string, patch: Record<string, any>) =>
+        Promise<{ ok: boolean; count?: number; error?: string }>;
       pickOutputDir: (defaultPath?: string) => Promise<{ ok: boolean; path?: string; canceled?: boolean }>;
       buildEditorInstaller: (payload: { name: string; role: string; sheetUrl: string; outputDir: string }) =>
         Promise<{ ok: boolean; token?: string; outputDir?: string; files?: string[]; rotated?: boolean; error?: string }>;
@@ -479,6 +485,20 @@ function App() {
   const UNINSTALL_CONFIRM_PHRASE = "이늘 스케쥴러 삭제합니다";
   const [sheetLink, setSheetLink] = useState(() => EMBED.sheetUrl || "");
   const [serviceAccountPath, setServiceAccountPath] = useState("");
+
+  // ── 시트 settings 마이그레이션 마커 (admin 전용) ──
+  // 시트의 _settings 시트가 진실의 단일 소스. localStorage 는 캐시.
+  // 마이그레이션 = 기존 1.x 사용자의 localStorage settings 를 시트로 1회 push.
+  // 마커가 true 면 이미 시트와 동기화된 상태로 간주, 이후엔 saveSettings 가
+  // 시트로도 push 한다.
+  const settingsMigratedRef = useRef<boolean>(false);
+  useEffect(() => {
+    try { settingsMigratedRef.current = localStorage.getItem("inel.settingsMigrated.v1") === "1"; } catch (_e) { /* ignore */ }
+  }, []);
+  const setSettingsMigrated = (v: boolean) => {
+    settingsMigratedRef.current = v;
+    try { localStorage.setItem("inel.settingsMigrated.v1", v ? "1" : "0"); } catch (_e) { /* ignore */ }
+  };
 
   // ── staff 빌드 잠금/검증 state ──
   // dev 모드는 검증 우회 (admin 빌드를 dev 띄울 때 staff 시점 토글해도 통과).
@@ -2134,6 +2154,24 @@ function App() {
   }, [schedulePatchActiveRow]);
 
 
+  // 시트로 push 할 settings 페이로드를 만든다.
+  // sheetLink / serviceAccountPath 는 "부트스트랩 정보" 라 시트엔 안 올림.
+  const buildSettingsPayload = useCallback((): Record<string, any> => ({
+    chzzkLink,
+    pollingInterval,
+    statusOptions,
+    showDebugPanel,
+    staffList,
+    maxUndoSize,
+    schemaByTab: appData.schemaByTab,
+    sortOrderByTab,
+    isDetecting,
+    aiProvider,
+    aiApiKey,
+    aiModel,
+    userCategories
+  }), [chzzkLink, pollingInterval, statusOptions, showDebugPanel, staffList, maxUndoSize, appData.schemaByTab, sortOrderByTab, isDetecting, aiProvider, aiApiKey, aiModel, userCategories]);
+
   const saveSettings = () => {
     try {
       const data = {
@@ -2156,10 +2194,86 @@ function App() {
       localStorage.setItem("inel.settings.v1", JSON.stringify(data));
       setSheetsStatus("설정 저장 완료");
       dlog("설정 저장됨");
+      // 시트 동기화 — sheetLink + 마이그레이션 마커 true 일 때만
+      if (IS_ADMIN && sheetLink && settingsMigratedRef.current) {
+        void (async () => {
+          try {
+            const res = await (window as any).electronAPI?.settingsSheetPatch(sheetLink, buildSettingsPayload());
+            if (res?.ok) dlog(`[settings→sheet] patch ${res.count}개`);
+            else dlog(`[settings→sheet] patch 실패: ${res?.error || "unknown"}`);
+          } catch (err: any) {
+            dlog(`[settings→sheet] patch 예외: ${err?.message || err}`);
+          }
+        })();
+      }
     } catch (err: unknown) {
       dlog(`설정 저장 실패: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
+
+  // 시트 다운로드 직후 호출: _settings 시트 → state 적용 또는 마이그레이션.
+  const syncSettingsFromSheet = useCallback(async () => {
+    if (!IS_ADMIN) return;
+    if (!sheetLink) return;
+    const api = (window as any).electronAPI;
+    if (!api?.settingsSheetLoad) return;
+    try {
+      const res = await api.settingsSheetLoad(sheetLink);
+      if (!res?.ok) { dlog(`[sheet→settings] load 실패: ${res?.error || "unknown"}`); return; }
+      const kv = res.kv || {};
+      const sheetHasData = Object.keys(kv).length > 0;
+      if (sheetHasData) {
+        // 시트가 진실 → state 적용
+        if (typeof kv.chzzkLink === "string") setChzzkLink(kv.chzzkLink);
+        if (typeof kv.pollingInterval === "number") setPollingInterval(kv.pollingInterval);
+        if (Array.isArray(kv.statusOptions)) setStatusOptions(kv.statusOptions);
+        if (typeof kv.showDebugPanel === "boolean") setShowDebugPanel(kv.showDebugPanel);
+        if (Array.isArray(kv.staffList)) setStaffList(kv.staffList);
+        if (typeof kv.maxUndoSize === "number") setMaxUndoSize(Math.min(50, Math.max(5, kv.maxUndoSize)));
+        if (kv.schemaByTab && typeof kv.schemaByTab === "object") {
+          // schemaByTab 머지 (코드 default 와 시트값 + 새 컬럼 자동 보충)
+          const merged: Record<TabKey, ColumnDef[]> = { ...tableSchema };
+          (Object.keys(tableSchema) as TabKey[]).forEach((tab) => {
+            const stored: ColumnDef[] = Array.isArray(kv.schemaByTab[tab]) ? kv.schemaByTab[tab] : [];
+            if (stored.length === 0) { merged[tab] = tableSchema[tab]; return; }
+            const storedKeys = new Set(stored.map((c) => c.key));
+            const missing = tableSchema[tab].filter((c) => !storedKeys.has(c.key));
+            merged[tab] = [...stored, ...missing];
+          });
+          setAppData((prev) => ({ ...prev, schemaByTab: merged }));
+        }
+        if (kv.sortOrderByTab && typeof kv.sortOrderByTab === "object") {
+          const valid = (v: unknown): v is SortOrder => v === "asc" || v === "desc";
+          setSortOrderByTab((prev) => ({
+            shorts: valid(kv.sortOrderByTab.shorts) ? kv.sortOrderByTab.shorts : prev.shorts,
+            longform: valid(kv.sortOrderByTab.longform) ? kv.sortOrderByTab.longform : prev.longform,
+            fullReplay: valid(kv.sortOrderByTab.fullReplay) ? kv.sortOrderByTab.fullReplay : prev.fullReplay
+          }));
+        }
+        if (typeof kv.isDetecting === "boolean") wasDetectingRef.current = kv.isDetecting;
+        if (typeof kv.aiProvider === "string") setAiProvider(kv.aiProvider as AiProvider);
+        if (typeof kv.aiApiKey === "string") setAiApiKey(kv.aiApiKey);
+        if (typeof kv.aiModel === "string") setAiModel(kv.aiModel);
+        if (Array.isArray(kv.userCategories)) setUserCategories(kv.userCategories);
+        setSettingsMigrated(true);
+        dlog(`[sheet→settings] 적용 완료 (${Object.keys(kv).length}개)`);
+      } else {
+        // 시트가 비어있음 → 마이그레이션 (현재 localStorage 의 settings 를 시트로 1회 push)
+        if (!settingsMigratedRef.current) {
+          const payload = buildSettingsPayload();
+          const write = await api.settingsSheetWrite(sheetLink, payload);
+          if (write?.ok) {
+            setSettingsMigrated(true);
+            dlog(`[settings 마이그레이션] localStorage → 시트 push 완료 (${write.count}개)`);
+          } else {
+            dlog(`[settings 마이그레이션] 실패: ${write?.error || "unknown"}`);
+          }
+        }
+      }
+    } catch (err: any) {
+      dlog(`[sheet→settings] 예외: ${err?.message || err}`);
+    }
+  }, [sheetLink, buildSettingsPayload]);
 
   useEffect(() => {
     const api = window.electronAPI;
@@ -2571,8 +2685,39 @@ function App() {
     setSheetsStatus(`동기화 완료 (총 ${totalImported}행)`);
     setSyncPhase("success");
     dlog(`전체 가져오기 완료: ${totalImported}행`);
+
+    // 시트 다운로드 끝났으면 _settings 시트도 동기화 (admin 전용).
+    // 시트에 settings 가 있으면 state 적용, 없으면 마이그레이션.
+    void syncSettingsFromSheet();
+
     return true;
   };
+
+  // settings 자동 push (디바운스 1.5초)
+  // 마이그레이션이 끝나면 그 이후의 모든 설정 변경을 자동으로 시트의 _settings 에 patch.
+  // 다른 PC 에서 같은 시트 연결 시 다음 [일정 새로고침] 으로 자동 동기화.
+  useEffect(() => {
+    if (!IS_ADMIN) return;
+    if (!sheetLink) return;
+    if (!settingsMigratedRef.current) return;
+    const timer = setTimeout(() => {
+      void (async () => {
+        const api = (window as any).electronAPI;
+        if (!api?.settingsSheetPatch) return;
+        try {
+          const res = await api.settingsSheetPatch(sheetLink, buildSettingsPayload());
+          if (res?.ok) dlog(`[settings→sheet] auto patch ${res.count}개`);
+        } catch (err: any) {
+          dlog(`[settings→sheet] auto patch 예외: ${err?.message || err}`);
+        }
+      })();
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [
+    sheetLink, chzzkLink, pollingInterval, statusOptions, showDebugPanel,
+    staffList, maxUndoSize, appData.schemaByTab, sortOrderByTab, isDetecting,
+    aiProvider, aiApiKey, aiModel, userCategories, buildSettingsPayload
+  ]);
 
   const runExport = async () => {
     const api = window.electronAPI;

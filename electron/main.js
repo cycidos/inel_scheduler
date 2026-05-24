@@ -453,6 +453,159 @@ function createWindow() {
     }
   });
 
+  // ── _settings 시트 헬퍼 ───────────────────────────────────────
+  // 관리자 환경 설정 일체를 시트에 저장. 헤더: key | value (value 는 JSON 문자열 가능)
+  // 시트 링크와 SA 키 파일 같은 "부트스트랩 정보" 는 제외 (로컬 only).
+  const SETTINGS_SHEET_NAME = "_settings";
+  const SETTINGS_HEADER = ["key", "value"];
+
+  async function ensureSettingsSheet(spreadsheetId) {
+    const ss = await sheetsClient.spreadsheets.get({ spreadsheetId });
+    const has = (ss.data.sheets || []).some((s) => s.properties && s.properties.title === SETTINGS_SHEET_NAME);
+    if (!has) {
+      await sheetsClient.spreadsheets.batchUpdate({
+        spreadsheetId,
+        requestBody: { requests: [{ addSheet: { properties: { title: SETTINGS_SHEET_NAME } } }] }
+      });
+    }
+    const head = await sheetsClient.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${SETTINGS_SHEET_NAME}!A1:B1`
+    });
+    const row = (head.data.values && head.data.values[0]) || [];
+    if (row.length === 0) {
+      await sheetsClient.spreadsheets.values.update({
+        spreadsheetId,
+        range: `${SETTINGS_SHEET_NAME}!A1:B1`,
+        valueInputOption: "RAW",
+        requestBody: { values: [SETTINGS_HEADER] }
+      });
+    }
+  }
+
+  // 시트 → { key: value, ... } 로 직렬화. JSON 으로 파싱 가능하면 파싱.
+  async function readSettingsKV(spreadsheetId) {
+    const res = await sheetsClient.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${SETTINGS_SHEET_NAME}!A2:B`
+    });
+    const rows = res.data.values || [];
+    const out = {};
+    for (const r of rows) {
+      const k = (r[0] || "").trim();
+      const v = r[1] != null ? r[1] : "";
+      if (!k) continue;
+      // JSON 파싱 시도 (객체 / 배열 / true / false / 숫자)
+      const trimmed = (typeof v === "string" ? v : String(v)).trim();
+      if (trimmed.startsWith("{") || trimmed.startsWith("[") || trimmed === "true" || trimmed === "false" || /^-?\d+(\.\d+)?$/.test(trimmed)) {
+        try { out[k] = JSON.parse(trimmed); continue; } catch (_e) { /* fallthrough */ }
+      }
+      out[k] = v;
+    }
+    return out;
+  }
+
+  // 시트의 settings 를 통째로 덮어쓰기 (clear → header → rows).
+  // 한 번에 모든 key 를 push 할 때 사용 (마이그레이션 / 강제 sync).
+  async function writeSettingsKV(spreadsheetId, kv) {
+    await ensureSettingsSheet(spreadsheetId);
+    await sheetsClient.spreadsheets.values.clear({
+      spreadsheetId,
+      range: `${SETTINGS_SHEET_NAME}!A2:B`
+    });
+    const entries = Object.entries(kv).filter(([k]) => k && typeof k === "string");
+    if (entries.length === 0) return;
+    const values = entries.map(([k, v]) => [k, typeof v === "string" ? v : JSON.stringify(v)]);
+    await sheetsClient.spreadsheets.values.update({
+      spreadsheetId,
+      range: `${SETTINGS_SHEET_NAME}!A2:B${1 + values.length}`,
+      valueInputOption: "RAW",
+      requestBody: { values }
+    });
+  }
+
+  // 일부 key 만 업데이트 (부분 patch). 기존 key 면 같은 행 update, 새 key 면 append.
+  async function patchSettingsKV(spreadsheetId, patch) {
+    if (!patch || typeof patch !== "object") return;
+    await ensureSettingsSheet(spreadsheetId);
+    const res = await sheetsClient.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${SETTINGS_SHEET_NAME}!A2:A`
+    });
+    const existing = (res.data.values || []).map((r, i) => ({ key: (r[0] || "").trim(), rowNum: i + 2 }));
+    const updates = [];
+    const appends = [];
+    for (const [k, v] of Object.entries(patch)) {
+      if (!k) continue;
+      const serialized = typeof v === "string" ? v : JSON.stringify(v);
+      const found = existing.find((e) => e.key === k);
+      if (found) {
+        updates.push({ rowNum: found.rowNum, val: serialized });
+      } else {
+        appends.push([k, serialized]);
+      }
+    }
+    // 1) 기존 행 update — 한 번에 batchUpdate 로
+    if (updates.length > 0) {
+      await sheetsClient.spreadsheets.values.batchUpdate({
+        spreadsheetId,
+        requestBody: {
+          valueInputOption: "RAW",
+          data: updates.map((u) => ({
+            range: `${SETTINGS_SHEET_NAME}!B${u.rowNum}`,
+            values: [[u.val]]
+          }))
+        }
+      });
+    }
+    // 2) 새 key append
+    if (appends.length > 0) {
+      await sheetsClient.spreadsheets.values.append({
+        spreadsheetId,
+        range: `${SETTINGS_SHEET_NAME}!A:B`,
+        valueInputOption: "RAW",
+        requestBody: { values: appends }
+      });
+    }
+  }
+
+  ipcMain.handle("settings-sheet-load", async (_event, { sheetUrl }) => {
+    try {
+      if (!sheetsClient) return { ok: false, error: "Sheets 인증 미초기화" };
+      const spreadsheetId = extractSpreadsheetId(sheetUrl);
+      if (!spreadsheetId) return { ok: false, error: "유효한 시트 URL이 아닙니다." };
+      await ensureSettingsSheet(spreadsheetId);
+      const kv = await readSettingsKV(spreadsheetId);
+      return { ok: true, kv, count: Object.keys(kv).length };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle("settings-sheet-write", async (_event, { sheetUrl, kv }) => {
+    try {
+      if (!sheetsClient) return { ok: false, error: "Sheets 인증 미초기화" };
+      const spreadsheetId = extractSpreadsheetId(sheetUrl);
+      if (!spreadsheetId) return { ok: false, error: "유효한 시트 URL이 아닙니다." };
+      await writeSettingsKV(spreadsheetId, kv || {});
+      return { ok: true, count: Object.keys(kv || {}).length };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle("settings-sheet-patch", async (_event, { sheetUrl, patch }) => {
+    try {
+      if (!sheetsClient) return { ok: false, error: "Sheets 인증 미초기화" };
+      const spreadsheetId = extractSpreadsheetId(sheetUrl);
+      if (!spreadsheetId) return { ok: false, error: "유효한 시트 URL이 아닙니다." };
+      await patchSettingsKV(spreadsheetId, patch || {});
+      return { ok: true, count: Object.keys(patch || {}).length };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
   // ── _tokens 시트 헬퍼 ─────────────────────────────────────────
   // 헤더: name | role | token | issuedAt | status | lastSeen
   const TOKENS_SHEET_NAME = "_tokens";

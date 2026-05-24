@@ -626,9 +626,75 @@
 
 `package.json | version 1.1.0 | metadata | phase2 (편집자 인스톨러 시스템 + 자동 임베드 + 토큰 검증 + 빌드 다이얼로그 + 경량 난독화 + 안전 업그레이드) minor up | -`
 
-### 1.0.0 → 1.1.0 업그레이드 주의 (1회성)
+### 1.0.0 → 1.1.0 업그레이드 주의 (해결됨, 아래 항목으로 대체)
 
-`(주의) 1.0.0 의 customUnInstall 은 ${Silent} 분기 없이 무조건 RMDir /r "$APPDATA\${PRODUCT_NAME}" 호출. 새 1.1.0 인스톨러가 옛 1.0.0 uninstaller 를 silent 호출하면 옛 매크로가 트리거됨 → 이론적으로 AppData 가 삭제됨. 실측에선 RMDir 가 부분 실패해 일부 보존되긴 했음 (1.0.0→1.0.1 테스트). 안전을 위해 1.0.0 사용자는 (1) %APPDATA%\Inel Work Scheduler\ 폴더를 백업 후 1.1.0 설치, 또는 (2) 시트 + SA JSON 만 갖고 1.1.0 신규 설치 (시트 동기화로 모든 행/스키마 자동 복원). 1.1.0 → 이후 업데이트는 새 분기 덕분에 안전 보장. | -`
+> 위 우려는 NSIS Rename 백업/복원 패턴과 _settings 시트 마이그레이션으로 완전히 해결되었다.
+
+---
+
+## 추가 항목 (phase2 - NSIS Rename + 시트 _settings 마이그레이션)
+
+> 1.0.0 사용자의 데이터 (localStorage + AppData) 가 1.1.0 업그레이드 시 100% 보존되도록 두 레이어 추가. 이후엔 시트가 진실의 단일 소스, localStorage 는 캐시.
+
+### NSIS Rename 안전 패턴 (작업 2)
+
+`build/installer.nsh | customInit | nsis | 옛 1.x.x 의 $APPDATA\${PRODUCT_NAME} 이 있으면 .upgrade-backup 으로 Rename. 디렉토리 엔트리만 변경하므로 즉시 끝나고 Chromium 캐시 잠금 영향 없음. 옛 customUnInstall 의 RMDir 는 빈 폴더만 발견하여 noop. $InelUpgradeFound 변수에 1 기록 | -`
+
+`build/installer.nsh | InelUpgradePageCreate / customPageAfterChangeDir | nsis | 옛 데이터 발견 시 "업데이트로 진행됩니다 — 모든 데이터 보존" 안내 페이지 노출. 사용자에게 마이그레이션 의도 명시 | -`
+
+`build/installer.nsh | customInstall 복원 | nsis | $APPDATA\${PRODUCT_NAME}.upgrade-backup 이 있으면 다시 원위치로 Rename. silent uninstall 이 만든 빈 폴더가 있으면 RMDir 후 복원 | -`
+
+### 시트 _settings 마이그레이션 (작업 1)
+
+`electron/main.js | _settings 시트 헬퍼 | helper | SETTINGS_SHEET_NAME="_settings", 헤더 [key, value]. ensureSettingsSheet (자동 생성/헤더 보충) + readSettingsKV (시트 → { key: value }, JSON 자동 파싱) + writeSettingsKV (clear → header → rows, 전체 덮어쓰기) + patchSettingsKV (기존 행 batchUpdate, 새 key append) | -> sheetsClient`
+
+`electron/main.js | settings-sheet-load / settings-sheet-write / settings-sheet-patch (IPC) | handler | renderer 가 _settings 시트와 양방향 동기화. load 는 kv 객체 반환, write 는 통째 덮어쓰기 (마이그레이션 1회용), patch 는 일부 key 만 update/append (자동 push 용) | -`
+
+`electron/preload.js | settingsSheetLoad / settingsSheetWrite / settingsSheetPatch | bridges | renderer → main IPC 호출 래퍼 | -`
+
+`src/App.tsx | settingsMigratedRef + setSettingsMigrated | useRef+fn | localStorage("inel.settingsMigrated.v1") 마이그레이션 마커. true 면 시트가 진실의 단일 소스로 간주, 이후 모든 settings 변경은 자동 시트 patch | -`
+
+`src/App.tsx | buildSettingsPayload (useCallback) | function | 시트 _settings 로 push 할 객체 빌드. sheetLink / serviceAccountPath 는 부트스트랩 정보라 제외. chzzkLink, pollingInterval, statusOptions, staffList, maxUndoSize, schemaByTab, sortOrderByTab, isDetecting, AI 4종, userCategories 포함 | -`
+
+`src/App.tsx | syncSettingsFromSheet (useCallback) | function | runImport 끝에 호출. settings-sheet-load 로 kv 받아서: 시트가 비어있고 마커 false 면 → 현재 localStorage 의 settings 를 시트로 통째 push (마이그레이션). 시트가 비어있지 않으면 → state 들 적용 (시트가 진실). 마커 true 설정 | -> settingsSheetLoad/Write, setSettingsMigrated`
+
+`src/App.tsx | settings 자동 push useEffect | hook | 디바운스 1.5초. 마커 true + sheetLink 있을 때 settings payload 의 어떤 state 가 변경되면 자동으로 settingsSheetPatch 호출. 다른 PC 에서 다음 [일정 새로고침] 으로 자동 동기화 | -> settingsSheetPatch`
+
+`src/App.tsx | saveSettings 안의 시트 patch | fn | 사용자가 [저장] 버튼 누르면 localStorage + 시트 _settings 양쪽 갱신. 마커 true + sheetLink 있을 때만 시트 patch | -> settingsSheetPatch`
+
+### 업그레이드 흐름 (시나리오)
+
+```
+[시나리오 A — 옛 1.0.0 사용자 + 시트 연결됨]
+1. 1.1.0 .exe 더블클릭
+   ├ NSIS customInit: AppData 를 .upgrade-backup 으로 Rename
+   ├ "업데이트로 진행" 안내 페이지
+   ├ 옛 1.0.0 silent uninstall (RMDir 가 빈 폴더만 발견, noop)
+   ├ 1.1.0 파일 설치
+   └ NSIS customInstall: AppData 원위치 복원
+2. 1.1.0 첫 실행
+   ├ localStorage 그대로 (Rename 덕분에 보존됨)
+   ├ 사용자가 [일정 새로고침] → runImport 끝에 syncSettingsFromSheet
+   ├ 시트의 _settings 가 비어있고 마커 false 면 → settingsSheetWrite 로 통째 push
+   └ 마커 true. 이후 모든 settings 변경 자동 시트 patch.
+
+[시나리오 B — 옛 1.0.0 사용자 + 시트 미연결]
+1. 1.1.0 .exe → NSIS Rename 보존 (시트 미사용이라 마이그레이션 보류)
+2. 1.1.0 첫 실행 → localStorage 그대로
+3. 나중에 사용자가 시트 URL + SA 등록 → [일정 새로고침] → 자동 마이그레이션 → 마커 true
+
+[시나리오 C — 신규 사용자]
+1. 1.1.0 신규 설치 → localStorage 비어있음
+2. 시트 URL + SA 등록 → 시트 _settings 받음 → 마커 true. 시트가 진실
+
+[시나리오 D — 다른 PC 에서 이미 마이그레이션됨]
+1. 1.1.0 첫 실행, localStorage 있음 + 시트 _settings 도 있음
+2. syncSettingsFromSheet: sheetHasData=true → 시트 kv 로 state 덮어쓰기. 마커 true
+```
+
+### 검증 빌드
+
+`(검증) admin 1.1.0 .exe | 100.10 MB | NSIS Rename 흐름 + _settings 마이그레이션 통합 | release/Inel Work Scheduler-Setup-1.1.0.exe`
 
 ---
 

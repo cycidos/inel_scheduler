@@ -45,6 +45,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
   tokensIssue: (sheetUrl, name, role) =>
     ipcRenderer.invoke("tokens-issue", { sheetUrl, name, role }),
 
+  settingsSheetLoad: (sheetUrl) =>
+    ipcRenderer.invoke("settings-sheet-load", { sheetUrl }),
+
+  settingsSheetWrite: (sheetUrl, kv) =>
+    ipcRenderer.invoke("settings-sheet-write", { sheetUrl, kv }),
+
+  settingsSheetPatch: (sheetUrl, patch) =>
+    ipcRenderer.invoke("settings-sheet-patch", { sheetUrl, patch }),
+
   pickOutputDir: (defaultPath) => ipcRenderer.invoke("pick-output-dir", { defaultPath }),
 
   buildEditorInstaller: (payload) => ipcRenderer.invoke("build-editor-installer", payload),
