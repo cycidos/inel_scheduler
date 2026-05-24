@@ -18,6 +18,7 @@
 !include "MUI2.nsh"
 !include "nsDialogs.nsh"
 !include "LogicLib.nsh"
+!include "FileFunc.nsh"
 
 ; ───────────────────────────────────────────────────────────────
 ; preInit:
@@ -94,30 +95,53 @@ FunctionEnd
 
 ; ───────────────────────────────────────────────────────────────
 ; customUnInstall:
-;   언인스톨 시 모든 흔적을 깨끗이 정리.
-;   - 바탕화면 바로가기
-;   - 자동실행 Run 키
-;   - PendingAutoStart 임시 키
-;   - 사용자 데이터 폴더 (AppData / LocalAppData)
+;   세 가지 경로를 명령행 인자 + ${Silent} 로 구분.
 ;
-;   electron-builder 의 deleteAppDataOnUninstall: true 만으로는
-;   $LOCALAPPDATA 의 Chromium 캐시(GPUCache, Code Cache 등)가 남는 경우가
-;   있어 RMDir /r 로 안전망을 한 번 더 둔다.
+;   1) NSIS 자동 업그레이드 (Silent + --force-run 없음)
+;      새 인스톨러가 옛 버전 uninstaller 를 자동 silent 호출.
+;      사용자 데이터(시트 링크, SA JSON, localStorage, 카테고리 캐시,
+;      자동실행 토글 등)는 그대로 보존되어야 한다.
+;      → 어떤 흔적도 지우지 않음.
+;
+;   2) in-app [앱 삭제하기] (Silent + --force-run 있음)
+;      앱 안의 모달에서 명시적으로 삭제 의도. electron 의 main.js 가
+;      spawn 시 "/S --force-run" 으로 호출.
+;      → 모든 흔적 완전 정리.
+;
+;   3) 사용자 수동 제거 (Silent 아님)
+;      제어판 / 시작메뉴 / 설치 폴더의 uninstaller 직접 실행.
+;      → 모든 흔적 완전 정리.
 ; ───────────────────────────────────────────────────────────────
 !macro customUnInstall
-  Delete "$DESKTOP\${PRODUCT_NAME}.lnk"
-  DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "${PRODUCT_NAME}"
-  DeleteRegKey HKCU "Software\${PRODUCT_NAME}"
+  ${GetParameters} $R0
+  ${GetOptions} $R0 "--force-run" $R1
+  ${IfNot} ${Errors}
+    StrCpy $R2 "wipe"
+  ${ElseIf} ${Silent}
+    StrCpy $R2 "preserve"
+  ${Else}
+    StrCpy $R2 "wipe"
+  ${EndIf}
 
-  ; 사용자 데이터/캐시 폴더 강제 삭제 (실패해도 무시됨)
-  RMDir /r "$APPDATA\${PRODUCT_NAME}"
-  RMDir /r "$LOCALAPPDATA\${PRODUCT_NAME}"
+  ${If} $R2 == "preserve"
+    ; ── 업그레이드 경로: 데이터 보존 ──
+    DetailPrint "Silent uninstall (upgrade) — preserving user data"
+  ${Else}
+    ; ── 완전 제거 경로 (in-app 삭제 또는 수동 uninstall) ──
+    Delete "$DESKTOP\${PRODUCT_NAME}.lnk"
+    DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "${PRODUCT_NAME}"
+    DeleteRegKey HKCU "Software\${PRODUCT_NAME}"
 
-  ; electron-builder 자동 업데이트 캐시 폴더 (이름은 package.json 의 npm name + "-updater")
-  ; 우리 경우: %LOCALAPPDATA%\inel_scheduler-updater
-  RMDir /r "$LOCALAPPDATA\${APP_PACKAGE_NAME}-updater"
+    ; 사용자 데이터/캐시 폴더 강제 삭제 (실패해도 무시됨)
+    RMDir /r "$APPDATA\${PRODUCT_NAME}"
+    RMDir /r "$LOCALAPPDATA\${PRODUCT_NAME}"
 
-  ; 설치 폴더 자체가 비어있으면 같이 정리
-  ; (사용자가 직접 만든 파일이 있으면 NSIS 가 알아서 보존)
-  RMDir "$INSTDIR"
+    ; electron-builder 자동 업데이트 캐시 폴더 (이름은 package.json 의 npm name + "-updater")
+    ; 우리 경우: %LOCALAPPDATA%\inel_scheduler-updater
+    RMDir /r "$LOCALAPPDATA\${APP_PACKAGE_NAME}-updater"
+
+    ; 설치 폴더 자체가 비어있으면 같이 정리
+    ; (사용자가 직접 만든 파일이 있으면 NSIS 가 알아서 보존)
+    RMDir "$INSTDIR"
+  ${EndIf}
 !macroend

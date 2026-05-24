@@ -616,6 +616,22 @@
 
 ---
 
+## 추가 항목 (phase2 - 1.1.0 배포: 안전 업그레이드 흐름)
+
+> NSIS 인스톨러 자동 업그레이드 시 사용자 데이터 (AppData / LocalAppData / 자동실행 / 바로가기) 보존 보장.
+
+`build/installer.nsh | !include FileFunc.nsh | nsis | GetParameters / GetOptions 매크로 사용 위해 추가 | -`
+
+`build/installer.nsh | customUnInstall 3분기 | nsis | (a) Silent + --force-run 없음 → 업그레이드 경로, 데이터 보존. (b) Silent + --force-run 있음 → in-app [앱 삭제하기] 경로, 모든 흔적 제거. (c) Silent 아님 → 수동 uninstall (제어판/시작메뉴), 모든 흔적 제거. main.js 의 app-uninstall spawn 이 "/S --force-run" 으로 호출하므로 in-app 삭제 의도가 명확히 구분됨 | -> GetParameters, GetOptions, Silent`
+
+`package.json | version 1.1.0 | metadata | phase2 (편집자 인스톨러 시스템 + 자동 임베드 + 토큰 검증 + 빌드 다이얼로그 + 경량 난독화 + 안전 업그레이드) minor up | -`
+
+### 1.0.0 → 1.1.0 업그레이드 주의 (1회성)
+
+`(주의) 1.0.0 의 customUnInstall 은 ${Silent} 분기 없이 무조건 RMDir /r "$APPDATA\${PRODUCT_NAME}" 호출. 새 1.1.0 인스톨러가 옛 1.0.0 uninstaller 를 silent 호출하면 옛 매크로가 트리거됨 → 이론적으로 AppData 가 삭제됨. 실측에선 RMDir 가 부분 실패해 일부 보존되긴 했음 (1.0.0→1.0.1 테스트). 안전을 위해 1.0.0 사용자는 (1) %APPDATA%\Inel Work Scheduler\ 폴더를 백업 후 1.1.0 설치, 또는 (2) 시트 + SA JSON 만 갖고 1.1.0 신규 설치 (시트 동기화로 모든 행/스키마 자동 복원). 1.1.0 → 이후 업데이트는 새 분기 덕분에 안전 보장. | -`
+
+---
+
 ## 업데이트 템플릿
 
 아래 형식으로 항목을 추가:
