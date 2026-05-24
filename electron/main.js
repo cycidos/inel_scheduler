@@ -1301,6 +1301,10 @@ function createWindow() {
     return openHelpPage("scheduler-app-guide.html");
   });
 
+  ipcMain.handle("help-open-staff-installer", async () => {
+    return await openHelpPage("staff-installer-guide.html");
+  });
+
   ipcMain.handle("help-open-ai-setup", async () => {
     return openHelpPage("ai-setup.html");
   });

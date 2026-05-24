@@ -712,6 +712,22 @@
 
 ---
 
+## 추가 항목 (편집자 인스톨러 전용 가이드 페이지)
+
+`public/help/staff-installer-guide.html | static guide | static page | 편집자/썸네일러 인스톨러 빌드 전용 가이드 페이지. 시트 설정 가이드와 동일한 핑크 톤 + 8단계 step 카드 스타일. 섹션: ① 사전 조건 ② 빌드 다이얼로그 ③ _tokens 시트 (테이블 예시 포함) ④ 편집자 첫 실행 흐름 ⑤ 권한 회수 / 재발급 / 영구 차단 4단계 (강도별 배지) ⑥ 흔한 에러 / 트러블슈팅. SA 키 회전 외부 링크 (Cloud Console) 포함 | -`
+
+`electron/main.js | help-open-staff-installer (IPC) | handler | openHelpPage("staff-installer-guide.html") 호출. 다른 도움말과 동일 패턴 | -> shell.openExternal`
+
+`electron/preload.js | helpOpenStaffInstaller | bridge | renderer → main IPC 호출 래퍼 | -`
+
+`src/App.tsx | openStaffInstallerHelp | function | helpOpenStaffInstaller IPC 호출. 인스톨러 빌드 모달의 [도움말 ↗] / 사전조건 경고박스의 인라인 링크 / 기타 설정 카드 헤더의 [전체 가이드 ↗] 에서 호출 | -> helpOpenStaffInstaller`
+
+`src/App.tsx | "편집자/썸네일러 전용 설치 파일 만들기" 카드 헤더 - [전체 가이드 ↗] 버튼 | UI | etc-card-head 우측에 connection-help-btn 스타일 적용. openStaffInstallerHelp 호출 | -`
+
+`public/help/scheduler-app-guide.html | §10 짧은 요약 + 전체 가이드 안내 | static guide | §10 본문은 짧게 (overview + callout 으로 전용 가이드 페이지 안내). 자세한 내용은 staff-installer-guide.html 로 분리 | -`
+
+---
+
 ## 업데이트 템플릿
 
 아래 형식으로 항목을 추가:

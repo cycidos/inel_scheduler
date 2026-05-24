@@ -86,6 +86,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   helpOpenSheetsSetup: () => ipcRenderer.invoke("help-open-sheets-setup"),
   helpOpenAppGuide: () => ipcRenderer.invoke("help-open-app-guide"),
+  helpOpenStaffInstaller: () => ipcRenderer.invoke("help-open-staff-installer"),
   helpOpenAiSetup: () => ipcRenderer.invoke("help-open-ai-setup"),
 
   autostartGet: () => ipcRenderer.invoke("autostart-get"),

@@ -88,6 +88,7 @@ declare global {
         Promise<{ ok: boolean; categories?: Array<{ categoryId: string; categoryValue: string; categoryType: string }>; keyword?: string; error?: string }>;
       helpOpenSheetsSetup: () => Promise<{ ok: boolean; url?: string; error?: string }>;
       helpOpenAppGuide: () => Promise<{ ok: boolean; url?: string; error?: string }>;
+      helpOpenStaffInstaller: () => Promise<{ ok: boolean; url?: string; error?: string }>;
       helpOpenAiSetup: () => Promise<{ ok: boolean; url?: string; error?: string }>;
       aiListModels: (provider: string, apiKey: string) => Promise<{
         ok: boolean;
@@ -2619,6 +2620,20 @@ function App() {
     }
   };
 
+  const openStaffInstallerHelp = async () => {
+    const api = window.electronAPI;
+    if (!api?.helpOpenStaffInstaller) {
+      dlog("편집자 인스톨러 가이드 열기 불가 (Electron 환경 아님)");
+      return;
+    }
+    const res = await api.helpOpenStaffInstaller();
+    if (res.ok) {
+      dlog(`편집자 인스톨러 가이드 열림: ${res.url}`);
+    } else {
+      dlog(`편집자 인스톨러 가이드 열기 실패: ${res.error}`);
+    }
+  };
+
   const TAB_LABELS: Record<TabKey, string> = {
     shorts: "숏폼",
     longform: "롱폼",
@@ -4470,6 +4485,14 @@ function App() {
                 <div className="etc-card">
                   <div className="etc-card-head">
                     <strong>편집자/썸네일러 전용 설치 파일 만들기</strong>
+                    <button
+                      type="button"
+                      className="connection-help-btn"
+                      onClick={openStaffInstallerHelp}
+                      style={{ marginLeft: "auto" }}
+                    >
+                      전체 가이드 ↗
+                    </button>
                   </div>
                   <p className="etc-card-desc">
                     각 담당자 이름으로 토큰을 발급해 시트의 <code>_tokens</code> 시트에 등록하고,
@@ -4601,8 +4624,8 @@ function App() {
                 <button
                   type="button"
                   className="installer-help-btn"
-                  onClick={openAppGuideHelp}
-                  title="자세한 절차 / 사전 조건 / 권한 회수 방법"
+                  onClick={openStaffInstallerHelp}
+                  title="자세한 절차 / 사전 조건 / 권한 회수 / SA 키 폐기 방법"
                 >
                   도움말 ↗
                 </button>
@@ -4633,7 +4656,7 @@ function App() {
                       <div className="installer-prereq-warn">
                         <strong>사전 조건이 충족되지 않았습니다</strong>
                         <ul>{prereqMissing.map((m, i) => <li key={i}>{m}</li>)}</ul>
-                        <p>해당 항목을 먼저 등록한 뒤 다시 시도하세요. <button type="button" className="installer-help-inline" onClick={openAppGuideHelp}>도움말 §10 참조</button></p>
+                        <p>해당 항목을 먼저 등록한 뒤 다시 시도하세요. <button type="button" className="installer-help-inline" onClick={openStaffInstallerHelp}>전체 가이드 보기 ↗</button></p>
                       </div>
                     )}
                     <div className="installer-field">
