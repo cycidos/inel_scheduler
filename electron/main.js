@@ -5,6 +5,7 @@ const fs = require("fs");
 const crypto = require("crypto");
 const { execFile, spawn } = require("child_process");
 const { google } = require("googleapis");
+const oauth = require("./oauth");
 
 let pollingTimer = null;
 let lastCategory = null;
@@ -395,8 +396,10 @@ function createWindow() {
   let sheetsAuth = null;
   let sheetsClient = null;
   let sheetsClientEmail = null;
+  let authMode = "none"; // "oauth" | "sa" | "none"
 
   async function initSheetsAuth(keyFilePath) {
+    // (Legacy) Service Account JSON 으로 인증. 1.1.x 호환 유지용.
     const auth = new google.auth.GoogleAuth({
       keyFile: keyFilePath,
       scopes: ["https://www.googleapis.com/auth/spreadsheets"]
@@ -411,7 +414,56 @@ function createWindow() {
     } catch {
       sheetsClientEmail = null;
     }
+    authMode = "sa";
   }
+
+  /** OAuth2Client 를 sheets API 의 auth 로 등록. login/restore 성공 후 호출. */
+  function useOAuthClient(oauth2Client, userEmail) {
+    sheetsAuth = oauth2Client;
+    sheetsClient = google.sheets({ version: "v4", auth: oauth2Client });
+    sheetsClientEmail = userEmail || null;
+    authMode = "oauth";
+  }
+
+  // 앱 시작 시 저장된 refresh_token 으로 자동 복원 시도.
+  (async () => {
+    try {
+      const res = await oauth.restore(app);
+      if (res.ok) {
+        useOAuthClient(oauth.getClient(), oauth.getUserEmail());
+        if (win && !win.isDestroyed()) {
+          try { win.webContents.send("oauth-auto-restored", { email: res.email }); } catch (_e) { /* renderer 아직 준비 안 됐을 수도 */ }
+        }
+      }
+    } catch (_e) { /* ignore */ }
+  })();
+
+  // OAuth 로그인 IPC — 사용자가 [Google 로그인] 클릭 시 호출
+  ipcMain.handle("oauth-login", async () => {
+    const res = await oauth.login(app);
+    if (res.ok) {
+      useOAuthClient(oauth.getClient(), res.email);
+    }
+    return res;
+  });
+
+  ipcMain.handle("oauth-logout", async () => {
+    oauth.logout(app);
+    sheetsClient = null;
+    sheetsAuth = null;
+    sheetsClientEmail = null;
+    authMode = "none";
+    return { ok: true };
+  });
+
+  ipcMain.handle("oauth-status", async () => {
+    return {
+      ok: true,
+      loggedIn: oauth.isLoggedIn(),
+      email: oauth.getUserEmail(),
+      authMode
+    };
+  });
 
   function extractSpreadsheetId(url) {
     const match = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);

@@ -52,6 +52,10 @@ declare global {
       sheetsPickKeyfile: () => Promise<{ ok: boolean; path?: string; clientEmail?: string; error?: string }>;
       sheetsInitAuth: (keyFilePath: string) => Promise<{ ok: boolean; clientEmail?: string; error?: string }>;
       setupEmbedSa: (saKeyB64: string) => Promise<{ ok: boolean; path?: string; clientEmail?: string; error?: string }>;
+      oauthLogin: () => Promise<{ ok: boolean; email?: string; error?: string }>;
+      oauthLogout: () => Promise<{ ok: boolean }>;
+      oauthStatus: () => Promise<{ ok: boolean; loggedIn?: boolean; email?: string | null; authMode?: string }>;
+      onOAuthAutoRestored: (cb: (data: { email?: string }) => void) => () => void;
       tokensVerify: (sheetUrl: string, name: string, role: string, token: string) =>
         Promise<{ ok: boolean; valid?: boolean; status?: string; name?: string; role?: string; error?: string }>;
       tokensIssue: (sheetUrl: string, name: string, role: string) =>
@@ -486,6 +490,76 @@ function App() {
   const UNINSTALL_CONFIRM_PHRASE = "이늘 스케쥴러 삭제합니다";
   const [sheetLink, setSheetLink] = useState(() => EMBED.sheetUrl || "");
   const [serviceAccountPath, setServiceAccountPath] = useState("");
+
+  // ── OAuth 2.0 (Google 계정 로그인) ──
+  // 1.2.0 부터 시트 인증을 OAuth 로 전환. SA JSON 등록 UI 는 점진적으로 deprecated.
+  // 앱 시작 시 main 이 저장된 refresh_token 으로 자동 복원하면 onOAuthAutoRestored 이벤트 발생.
+  const [oauthLoggedIn, setOauthLoggedIn] = useState(false);
+  const [oauthEmail, setOauthEmail] = useState<string | null>(null);
+  const [oauthAuthMode, setOauthAuthMode] = useState<string>("none");
+  const [oauthBusy, setOauthBusy] = useState(false);
+  const [oauthError, setOauthError] = useState<string>("");
+  useEffect(() => {
+    const api = (window as any).electronAPI;
+    if (!api?.oauthStatus) return;
+    // 마운트 시 한 번 상태 조회
+    (async () => {
+      try {
+        const res = await api.oauthStatus();
+        if (res?.ok) {
+          setOauthLoggedIn(!!res.loggedIn);
+          setOauthEmail(res.email || null);
+          setOauthAuthMode(res.authMode || "none");
+        }
+      } catch (_e) { /* ignore */ }
+    })();
+    // 자동 복원 이벤트 구독 (main 이 시작 시 토큰 복원 성공하면 늦게 호출됨)
+    const off = api.onOAuthAutoRestored?.((data: { email?: string }) => {
+      setOauthLoggedIn(true);
+      setOauthEmail(data?.email || null);
+      setOauthAuthMode("oauth");
+      dlog(`[OAuth] 자동 복원 완료: ${data?.email || "(이메일 미상)"}`);
+    });
+    return () => { if (typeof off === "function") off(); };
+  }, []);
+
+  const handleOAuthLogin = async () => {
+    const api = (window as any).electronAPI;
+    if (!api?.oauthLogin) { dlog("[OAuth] electronAPI 없음"); return; }
+    setOauthBusy(true);
+    setOauthError("");
+    dlog("[OAuth] 로그인 시작 — 시스템 브라우저가 열립니다");
+    try {
+      const res = await api.oauthLogin();
+      if (res?.ok) {
+        setOauthLoggedIn(true);
+        setOauthEmail(res.email || null);
+        setOauthAuthMode("oauth");
+        dlog(`[OAuth] 로그인 성공: ${res.email}`);
+      } else {
+        setOauthError(res?.error || "알 수 없는 오류");
+        dlog(`[OAuth] 로그인 실패: ${res?.error}`);
+      }
+    } catch (err: any) {
+      setOauthError(err?.message || String(err));
+      dlog(`[OAuth] 로그인 예외: ${err?.message || err}`);
+    } finally {
+      setOauthBusy(false);
+    }
+  };
+
+  const handleOAuthLogout = async () => {
+    const api = (window as any).electronAPI;
+    if (!api?.oauthLogout) return;
+    if (!window.confirm("Google 계정 로그아웃합니다. 다시 시트에 접근하려면 재로그인이 필요해요. 계속하시겠어요?")) return;
+    await api.oauthLogout();
+    setOauthLoggedIn(false);
+    setOauthEmail(null);
+    setOauthAuthMode("none");
+    setServiceAccountPath("");
+    setClientEmail("");
+    dlog("[OAuth] 로그아웃 완료");
+  };
 
   // ── 시트 settings 마이그레이션 마커 (admin 전용) ──
   // 시트의 _settings 시트가 진실의 단일 소스. localStorage 는 캐시.
@@ -4276,10 +4350,51 @@ function App() {
 
             {IS_ADMIN && isAdmin && settingsTab === "connection" && (
               <>
+                <div className="oauth-card">
+                  <div className="oauth-card-head">
+                    <strong>Google 계정 연결</strong>
+                    {oauthLoggedIn && oauthAuthMode === "oauth" && (
+                      <span className="oauth-status ok">● 연결됨</span>
+                    )}
+                  </div>
+                  {oauthLoggedIn && oauthAuthMode === "oauth" ? (
+                    <>
+                      <p className="oauth-card-desc">
+                        현재 <strong>{oauthEmail || "(이메일 미상)"}</strong> 계정으로 시트 API 인증이 활성화되어 있습니다.
+                        다른 계정으로 바꾸려면 로그아웃 후 재로그인하세요.
+                      </p>
+                      <button
+                        type="button"
+                        className="oauth-logout-btn"
+                        onClick={handleOAuthLogout}
+                        disabled={oauthBusy}
+                      >
+                        로그아웃
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <p className="oauth-card-desc">
+                        본인 Google 계정으로 로그인하면 시트에 접근할 수 있습니다.
+                        Service Account JSON 같은 별도 인증 파일이 필요 없어요. 클릭하면 시스템 브라우저에서 Google 로그인 페이지가 열립니다.
+                      </p>
+                      <button
+                        type="button"
+                        className="oauth-login-btn"
+                        onClick={handleOAuthLogin}
+                        disabled={oauthBusy}
+                      >
+                        {oauthBusy ? "로그인 중…" : "Google 계정으로 로그인"}
+                      </button>
+                      {oauthError && <p className="oauth-error">{oauthError}</p>}
+                    </>
+                  )}
+                </div>
+
                 <div className="connection-help-banner">
                   <div className="connection-help-text">
-                    <strong>설정 방법은 별도 가이드 페이지에서 확인하세요.</strong>
-                    <span>스크린샷 GIF가 큰 화면에서 잘 재생됩니다.</span>
+                    <strong>(레거시) Service Account JSON 인증</strong>
+                    <span>1.1.x 호환용. 새 운영에는 위 Google 계정 로그인 권장.</span>
                   </div>
                   <button
                     type="button"

@@ -37,6 +37,15 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   sheetsInitAuth: (keyFilePath) => ipcRenderer.invoke("sheets-init-auth", { keyFilePath }),
 
+  oauthLogin: () => ipcRenderer.invoke("oauth-login"),
+  oauthLogout: () => ipcRenderer.invoke("oauth-logout"),
+  oauthStatus: () => ipcRenderer.invoke("oauth-status"),
+  onOAuthAutoRestored: (callback) => {
+    const handler = (_event, data) => callback(data);
+    ipcRenderer.on("oauth-auto-restored", handler);
+    return () => ipcRenderer.removeListener("oauth-auto-restored", handler);
+  },
+
   setupEmbedSa: (saKeyB64) => ipcRenderer.invoke("setup-embed-sa", saKeyB64),
 
   tokensVerify: (sheetUrl, name, role, token) =>

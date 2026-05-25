@@ -2572,6 +2572,68 @@ tbody td.role-cell.role-editor::before {
   color: #f9fafb;
 }
 
+/* Google 계정 연결 (OAuth) 카드 */
+.oauth-card {
+  padding: 18px 20px;
+  margin-bottom: 16px;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border: 1px solid #7dd3fc;
+  border-radius: 12px;
+}
+.oauth-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.oauth-card-head strong {
+  font-size: 14px;
+  color: #0c4a6e;
+}
+.oauth-status {
+  font-size: 12px;
+  color: #6b7280;
+}
+.oauth-status.ok { color: #047857; font-weight: 600; }
+.oauth-card-desc {
+  margin: 6px 0 12px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #075985;
+}
+.oauth-login-btn {
+  padding: 10px 22px;
+  background: #0284c7;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.oauth-login-btn:hover { background: #0369a1; }
+.oauth-login-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.oauth-logout-btn {
+  padding: 8px 16px;
+  background: #ffffff;
+  color: #0c4a6e;
+  border: 1px solid #7dd3fc;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.oauth-logout-btn:hover { background: #f0f9ff; }
+.oauth-logout-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.oauth-error {
+  margin: 10px 0 0;
+  padding: 8px 12px;
+  background: #fef2f2;
+  border: 1px solid #fca5a5;
+  border-radius: 6px;
+  color: #991b1b;
+  font-size: 12.5px;
+}
+
 /* 편집자 인스톨러 빌드 모달 (admin 전용) */
 .installer-modal-overlay {
   position: fixed; inset: 0; background: rgba(15, 23, 42, 0.5);
