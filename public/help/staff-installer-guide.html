@@ -252,39 +252,6 @@
     }
     .ext-link:hover { color: var(--pink-600); }
 
-    .table-wrap { overflow-x: auto; margin: 10px 0; }
-    table.matrix {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 13px;
-    }
-    table.matrix th, table.matrix td {
-      padding: 8px 10px;
-      border: 1px solid var(--gray-200);
-      text-align: left;
-      vertical-align: top;
-    }
-    table.matrix th {
-      background: var(--pink-50);
-      color: var(--pink-700);
-      font-weight: 700;
-    }
-    table.matrix td code { background: var(--pink-100); }
-
-    .seq {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      margin: 10px 0;
-      padding: 14px 16px;
-      background: var(--gray-50);
-      border-radius: 8px;
-      font-family: ui-monospace, SFMono-Regular, monospace;
-      font-size: 12.5px;
-      color: var(--gray-700);
-    }
-    .seq .arrow { color: var(--pink-500); }
-
     .badge {
       display: inline-block;
       padding: 2px 8px;
@@ -294,7 +261,6 @@
       margin-left: 4px;
     }
     .badge-easy { background: var(--green-50); color: var(--green-700); }
-    .badge-med { background: var(--yellow-50); color: var(--yellow-700); }
     .badge-strong { background: var(--red-50); color: var(--red-700); }
 
     .footer {
@@ -314,42 +280,37 @@
 
     <section class="intro">
       <h2>이 가이드는 무엇을 다루나요?</h2>
-      <p>각 편집자/썸네일러에게 <strong>본인 권한이 자동 임베드된 .exe 인스톨러</strong>를 만들어 전달하는 흐름과, 권한을 회수/재발급/영구 차단하는 운영 절차를 정리합니다.</p>
-      <p>받은 사람은 .exe 더블클릭 설치만 하면 별도의 시트 URL 입력 / 인증 키 등록 없이 본인 권한으로 바로 작업할 수 있어요.</p>
+      <p>각 편집자/썸네일러에게 <strong>본인 이메일과 시트 URL이 자동 임베드된 .exe 인스톨러</strong>를 만들어 전달하는 흐름과, 권한을 회수하는 방법을 정리합니다.</p>
+      <p>받은 사람은 .exe 더블클릭 설치 → 본인 Google 계정으로 로그인만 하면 바로 작업할 수 있어요.</p>
       <ul class="checklist">
-        <li>관리자 본인의 SA JSON 이 임베드됨</li>
-        <li>토큰은 <code>_tokens</code> 시트에 자동 등록</li>
-        <li>편집자 앱은 자기 토큰만 검증해서 잠금 해제</li>
-        <li>10분 주기로 권한 재확인</li>
+        <li>시트 URL + 스태프 이메일 자동 임베드</li>
+        <li>각자 본인 Google 계정으로 직접 로그인</li>
+        <li>권한 회수 = 시트 공유에서 해당 Gmail 제거 (1클릭)</li>
+        <li>매 10분 주기로 권한 재확인</li>
       </ul>
     </section>
 
     <nav class="toc">
       <a href="#step1"><span class="num">1</span>사전 조건</a>
       <a href="#step2"><span class="num">2</span>빌드 다이얼로그</a>
-      <a href="#step3"><span class="num">3</span>_tokens 시트</a>
-      <a href="#step4"><span class="num">4</span>편집자 첫 실행</a>
-      <a href="#step5"><span class="num">5</span>권한 회수 / 폐기</a>
-      <a href="#step6"><span class="num">6</span>흔한 에러</a>
+      <a href="#step3"><span class="num">3</span>편집자 첫 실행</a>
+      <a href="#step4"><span class="num">4</span>권한 회수</a>
+      <a href="#step5"><span class="num">5</span>흔한 에러</a>
     </nav>
 
     <article id="step1" class="step">
       <div class="step-head">
         <span class="step-num">1</span>
-        <h2 class="step-title">사전 조건 (이 단계가 안 되어 있으면 빌드 버튼이 비활성)</h2>
+        <h2 class="step-title">사전 조건 (빌드 버튼이 비활성이면 여기부터 확인)</h2>
       </div>
-      <p>빌드를 시작하기 전에 관리자 앱에 다음 4가지가 모두 준비되어 있어야 합니다.</p>
+      <p>빌드를 시작하기 전에 관리자 앱에 다음 3가지가 준비되어 있어야 합니다.</p>
       <ol>
-        <li><strong>설정 → 구글 시트</strong> 탭에서 <strong>Sheet URL</strong> 입력</li>
-        <li>같은 탭에서 <strong>Service Account JSON</strong> 드래그 등록 + [연결 테스트] 통과</li>
-        <li><strong>구글시트 다운로드</strong> 1회 (시트 동기화 시작)</li>
-        <li><strong>설정 → 시트 설정</strong>에서 해당 편집자/썸네일러 이름 + 역할 등록</li>
+        <li><strong>설정 → 구글 시트</strong> 탭에서 [Google 계정으로 로그인] 완료</li>
+        <li>같은 탭에서 <strong>Sheet URL</strong> 입력 (연결 테스트 통과 권장)</li>
+        <li><strong>설정 → 시트 설정</strong>에서 해당 편집자/썸네일러를 <strong>이름 + Gmail</strong> 모두 입력해 등록</li>
       </ol>
       <div class="callout warn">
-        <strong>SA JSON 이 새로 필요한 게 아니에요</strong> — 처음 시트 등록할 때 만든 그 JSON 파일을 그대로 [구글 시트] 탭에 드래그 등록하면 됩니다. 관리자 본인의 SA 가 모든 편집자 인스톨러에 그대로 임베드됩니다.
-      </div>
-      <div class="callout">
-        <strong>SA JSON 자체를 처음 만드는 방법</strong>은 별도 가이드 <strong>[설정 → 구글 시트 → 설정 방법 자세히 보기]</strong> 에서 8단계로 설명되어 있어요.
+        <strong>스태프의 Gmail 이 시트 공유 권한에도 추가되어 있어야</strong> 스태프 앱이 시트에 접근할 수 있습니다. 시트 우상단 [공유] 버튼에서 그 Gmail 을 편집자 권한으로 추가해두세요.
       </div>
     </article>
 
@@ -363,173 +324,91 @@
         <li>"<strong>편집자/썸네일러 전용 설치 파일 만들기</strong>" 카드에서 해당 인원 옆 [<strong>인스톨러 빌드</strong>] 클릭</li>
         <li>모달이 열리면:
           <ul>
-            <li><strong>출력 폴더 선택</strong> — 예: <code>release/editors/홍길동/</code> 또는 바탕화면</li>
+            <li><strong>출력 폴더 선택</strong> — 예: 바탕화면 또는 <code>release/editors/홍길동/</code></li>
             <li>연결 시트는 현재 등록된 URL 이 자동 표시 (수정 불가)</li>
             <li>[<strong>빌드 시작</strong>] 클릭 → 약 30~40초 소요</li>
           </ul>
         </li>
         <li>완료 시 결과 카드 표시 + 출력 폴더에 다음 2개 파일 생성:
           <ul>
-            <li><code>Inel Scheduler-Editor-Setup-1.1.0.exe</code> (또는 <code>-Thumbnailer-</code>) — 본체</li>
-            <li><code>...-Setup-1.1.0.exe.blockmap</code> — 차분 업데이트용 메타 (같이 전달해도 됨)</li>
+            <li><code>Inel Scheduler-Editor-Setup-X.Y.Z.exe</code> (또는 <code>-Thumbnailer-</code>) — 본체</li>
+            <li><code>...-Setup-X.Y.Z.exe.blockmap</code> — 차분 업데이트용 메타</li>
           </ul>
         </li>
         <li>그 .exe 파일만 편집자에게 전달 (USB / 메신저 / 클라우드 등)</li>
       </ol>
-      <div class="callout ok">
-        <strong>같은 사람을 다시 빌드</strong>하면 토큰이 자동 갱신(rotate)되고 새 .exe 가 생성됩니다. 옛 .exe 는 자동으로 잠금 화면이 떠서 무효화됩니다.
+      <div class="callout">
+        <strong>임베드되는 정보</strong>: 시트 URL · 스태프 이름 · 스태프 Gmail · role (editor / thumbnailer). 인증 키나 토큰은 임베드되지 않습니다. 스태프는 본인 Google 계정으로 직접 로그인합니다.
       </div>
     </article>
 
     <article id="step3" class="step">
       <div class="step-head">
         <span class="step-num">3</span>
-        <h2 class="step-title">_tokens 시트 — 자동 생성되는 권한 명단</h2>
+        <h2 class="step-title">편집자가 받은 .exe 실행 시</h2>
       </div>
-      <p>첫 빌드 시 시트 안에 <code>_tokens</code> 라는 시트가 자동으로 만들어집니다. 관리자가 직접 만들 필요 없어요. 헤더는 다음과 같습니다.</p>
-      <div class="table-wrap">
-        <table class="matrix">
-          <thead>
-            <tr>
-              <th>name</th>
-              <th>role</th>
-              <th>token</th>
-              <th>issuedAt</th>
-              <th>status</th>
-              <th>lastSeen</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>홍길동</td>
-              <td>editor</td>
-              <td>5f8e…hex</td>
-              <td>2026-05-25T01:30:00Z</td>
-              <td><code>active</code></td>
-              <td>2026-05-25T02:15:00Z</td>
-            </tr>
-            <tr>
-              <td>김썸네일</td>
-              <td>thumbnailer</td>
-              <td>91a4…hex</td>
-              <td>2026-05-25T01:32:00Z</td>
-              <td><code>active</code></td>
-              <td>(편집자 실행 후 자동 채워짐)</td>
-            </tr>
-          </tbody>
-        </table>
+      <p>편집자는 다음 흐름으로 사용합니다 — 관리자 안내 없이도 자기 권한으로 자동 동작.</p>
+      <ol>
+        <li>관리자가 보낸 <code>Inel Scheduler-Editor-Setup-X.Y.Z.exe</code> 더블클릭</li>
+        <li>NSIS 인스톨러 진행 (기본 경로: 내 문서\Inel Scheduler Editor)</li>
+        <li>설치 완료 후 앱 실행 → 🔑 "Google 계정으로 로그인" 화면</li>
+        <li>[Google 계정으로 로그인] 클릭 → 시스템 브라우저에서 Google 로그인 페이지 열림</li>
+        <li><strong>관리자가 등록한 본인 Gmail</strong>로 로그인 + 권한 허용</li>
+        <li>앱으로 자동 복귀 → 본인 담당 행만 표시되는 본문 진입</li>
+        <li>매 10분 주기로 자동 권한 재확인. 시트 공유 권한이 해제되면 다음 새로고침 시 동기화 실패.</li>
+      </ol>
+      <div class="callout ok">
+        편집자에게 시트 URL / 인증 키를 알려줄 필요가 없습니다. 시트 URL 은 임베드, 인증은 본인 Google 계정으로 자동.
       </div>
-      <ul>
-        <li><strong>token</strong>: 빌드 시 생성된 48자 hex. .exe 안에 임베드되어 시트와 대조.</li>
-        <li><strong>status</strong>: <code>active</code> 면 통과, 그 외엔 잠금. 회수 시 이 값을 변경.</li>
-        <li><strong>lastSeen</strong>: 편집자 앱이 마지막으로 검증한 시각 (자동 갱신). 누가 활동 중인지 추적용.</li>
-      </ul>
-      <div class="callout">
-        <strong>이 시트를 사람이 직접 편집</strong>해도 됩니다. 권한 회수 / 영구 차단은 모두 이 시트를 통해 이뤄져요 (자세한 절차는 §5 참조).
+      <div class="callout warn">
+        <strong>등록과 다른 Gmail 로 로그인하면</strong> "계정 불일치" 잠금 화면이 표시되고 사용 불가. 관리자가 등록한 그 Gmail 이어야 합니다.
       </div>
     </article>
 
     <article id="step4" class="step">
       <div class="step-head">
         <span class="step-num">4</span>
-        <h2 class="step-title">편집자가 받은 .exe 실행 시</h2>
+        <h2 class="step-title">권한 회수 / 재발급</h2>
       </div>
-      <p>편집자는 다음 흐름으로 사용합니다 — 관리자 안내 없이도 자기 권한으로 자동 동작.</p>
+
+      <h4>① 권한 회수 <span class="badge badge-easy">매우 쉬움 · 1클릭</span></h4>
+      <p>휴직, 퇴직, 외주 종료 등 모든 상황에 동일하게 적용.</p>
       <ol>
-        <li>관리자가 보낸 <code>Inel Scheduler-Editor-Setup-1.1.0.exe</code> 더블클릭</li>
-        <li>NSIS 인스톨러 진행 (기본 경로: 내 문서\Inel Scheduler Editor)</li>
-        <li>설치 완료 후 앱 실행 → "권한 확인 중..." 잠깐 표시 → 본문 화면</li>
-        <li>본문에서 편집자가 볼 수 있는 것:
-          <ul>
-            <li>본인이 담당자로 지정된 행</li>
-            <li>상단바: [<strong>일정 새로고침</strong>] / [<strong>변경사항 저장</strong>] (구글 시트 노출 없음)</li>
-            <li>설정 → [<strong>기타 설정</strong>] 탭 한 개만 노출 (자동실행 / 데이터 폴더 / 앱 삭제)</li>
-          </ul>
-        </li>
-        <li>매 10분마다 자동으로 권한 재검증. 권한이 회수되면 잠금 화면으로 전환.</li>
+        <li>관리자가 작업 시트 우상단 [<strong>공유</strong>] 버튼 클릭</li>
+        <li>해당 편집자의 Gmail 옆 권한 메뉴 → [<strong>권한 제거</strong>] 또는 [<strong>액세스 권한 삭제</strong>]</li>
+        <li>그 편집자의 앱은 다음 [일정 새로고침] 시점에 시트 API 가 403 반환 → 동기화 실패</li>
+        <li>편집자가 .exe 를 보관하고 있어도 시트 접근 불가 → 사실상 완전 차단</li>
       </ol>
       <div class="callout ok">
-        편집자에게 시트 URL / SA JSON 을 알려주거나 등록을 요청할 필요가 전혀 없습니다. 그 정보는 모두 .exe 안에 임베드되어 있어요.
+        Google 계정 기반이라 회수가 즉시 + 영구적입니다. 옛 SA 키 방식처럼 키 회전 / 모든 편집자 재배포 필요 없음.
       </div>
+
+      <h4>② 재발급 (이메일 변경 / 정보 갱신) <span class="badge badge-easy">쉬움</span></h4>
+      <ol>
+        <li>관리자 앱 [시트 설정] 탭에서 그 편집자를 [X] 로 제거</li>
+        <li>새 정보로 다시 등록 (이름 / 새 Gmail / role)</li>
+        <li>시트 [공유] 에서도 옛 Gmail 제거 + 새 Gmail 추가</li>
+        <li>[기타 설정] → [인스톨러 빌드] 다시 → 새 .exe 전달</li>
+      </ol>
+
+      <h4>③ 임시 정지 (휴직 등)</h4>
+      <p>완전 회수 대신 잠시 비활성화하려면 시트 [공유] 에서 그 Gmail 의 권한을 <strong>편집자 → 뷰어</strong>로 낮추세요. 앱은 시트를 읽기만 가능하고 [변경사항 저장] 시 403 받음. 복귀 시 다시 편집자 권한 복원.</p>
     </article>
 
     <article id="step5" class="step">
       <div class="step-head">
         <span class="step-num">5</span>
-        <h2 class="step-title">권한 회수 / 재발급 / 영구 차단</h2>
-      </div>
-      <p>운영 강도에 따라 4단계의 옵션이 있습니다. 작은 일에는 가벼운 옵션, 보안 사고 의심에는 강한 옵션을 씁니다.</p>
-
-      <h4>① 일시 회수 <span class="badge badge-easy">매우 쉬움 · 영향 그 사람만</span></h4>
-      <p>휴직, 잠깐의 정지, 외주 일시 중단 같은 상황.</p>
-      <ol>
-        <li>구글 시트 → <code>_tokens</code> 시트 열기</li>
-        <li>해당 편집자 행의 <code>status</code> 컬럼을 <code>active</code> → <code>revoked</code> 로 수정</li>
-        <li>편집자 앱이 10분 주기 재검증 시점 (또는 재시작 시) 자동 잠금 화면 표시</li>
-        <li>다시 복귀시키려면 <code>revoked</code> → <code>active</code> 로 되돌리기. 다음 재검증 때 자동 해제.</li>
-      </ol>
-
-      <h4>② 재발급 (토큰 갱신 / rotation) <span class="badge badge-easy">쉬움 · 그 사람만</span></h4>
-      <p>토큰이 노출됐을 의심, 편집자 PC 분실, 정기 회전.</p>
-      <ol>
-        <li>설정 → 기타 설정 → 같은 편집자 옆 [<strong>인스톨러 빌드</strong>] 다시 클릭</li>
-        <li>새 토큰이 발급되어 시트의 같은 행을 update (옛 토큰 무효화)</li>
-        <li>새 .exe 가 출력 폴더에 생성됨 → 편집자에게 전달</li>
-        <li>옛 .exe 는 자동으로 잠금 화면 (토큰 불일치)</li>
-      </ol>
-
-      <h4>③ 영구 차단 — 가벼운 방법 <span class="badge badge-med">중간 · 그 사람만 (앱 차원)</span></h4>
-      <p>퇴직, 외주 종료 등. 신뢰할 수 있는 편집자라면 이 정도로 충분.</p>
-      <ol>
-        <li><code>_tokens</code> 시트에서 그 행을 <strong>삭제</strong> 또는 <code>status</code> 를 <code>revoked</code> 로 변경</li>
-        <li>편집자 앱이 잠금 화면으로 전환 → 사용 불가</li>
-      </ol>
-      <div class="callout warn">
-        <strong>한계</strong>: SA 키 자체는 살아있으므로, 외부 도구로 그 키를 직접 사용하면 시트 접근이 여전히 가능합니다. 신뢰하지 못하는 사람을 차단할 때는 ↓ 강한 방법 사용.
-      </div>
-
-      <h4>④ 영구 차단 — 강한 방법 (SA 키 자체 회전) <span class="badge badge-strong">강함 · 모든 편집자 영향</span></h4>
-      <p>키 노출 확실, 보안 사고 의심, 정기 회전 (연 1회 권장).</p>
-      <ol>
-        <li><a class="ext-link" href="https://console.cloud.google.com/iam-admin/serviceaccounts" target="_blank" rel="noopener">Google Cloud Console → IAM 및 관리자 → 서비스 계정 ↗</a> 열기</li>
-        <li>해당 프로젝트 선택 → 사용 중인 SA (예: <code>inel-scheduler-sa@…</code>) 클릭</li>
-        <li>상단 [<strong>키</strong>] 탭 → 회전할 키의 우측 ⋮ 메뉴 → [<strong>키 삭제</strong>]</li>
-        <li>같은 화면에서 [<strong>키 추가</strong>] → JSON 키 새로 생성 → 다운로드</li>
-        <li>관리자 앱 [구글 시트] 탭으로 돌아와 새 JSON 드래그 등록 → [연결 테스트] 통과 확인</li>
-        <li><strong>모든 편집자에게 새 인스톨러 재배포</strong> (옛 .exe 의 SA 키는 죽음 → 새 키로 다시 빌드)</li>
-      </ol>
-      <div class="callout danger">
-        현재 운영은 모든 편집자가 같은 SA 를 공유하는 단순 모델이라, SA 키를 갈면 모든 편집자가 영향을 받습니다. 한 명만 영구 차단하면서 다른 편집자에게 영향을 안 주려면 ↓ 별도 SA 운영 방식이 필요.
-      </div>
-
-      <h4>(특수) SA 자체 삭제 (계정 폐기)</h4>
-      <p>그 SA 를 다른 시트에서도 안 쓸 때만 사용. 키 회전보다 더 강함.</p>
-      <ol>
-        <li>위 화면에서 SA 행의 ⋮ → [<strong>관리</strong>] → [<strong>서비스 계정 삭제</strong>]</li>
-        <li>그 SA 의 모든 키 영구 무효화 + 시트 공유 권한도 자동 해제</li>
-        <li>다른 시트에서도 그 SA 를 사용 중이면 모두 영향. 반드시 미리 확인.</li>
-      </ol>
-
-      <h4>(향후) 편집자별 별도 SA 운영</h4>
-      <p>편집자마다 새 SA 를 만들고 그 키를 해당 인스톨러에만 임베드하면, 한 명 영구 차단 시 다른 편집자에게 영향이 없습니다. 절차는 처음 시트 등록 시 SA 만든 절차와 100% 동일 — Cloud Console 에서 같은 프로젝트에 새 SA 추가 + JSON 키 발급 + 시트에 그 SA 이메일을 편집자 권한으로 공유.</p>
-      <div class="callout">
-        다만 현재 1.1.x 빌드 다이얼로그는 관리자 본인의 SA 만 자동 임베드하므로, 이 운영 방식은 향후 업데이트에서 모달에 "이 편집자용 SA JSON 첨부" 입력란이 추가되어야 적용 가능합니다.
-      </div>
-    </article>
-
-    <article id="step6" class="step">
-      <div class="step-head">
-        <span class="step-num">6</span>
         <h2 class="step-title">흔한 에러 / 트러블슈팅</h2>
       </div>
       <ul>
-        <li><strong>"Service Account JSON 이 없습니다"</strong> → §1 사전 조건 ②번 미완료. <strong>설정 → 구글 시트</strong> 탭에서 SA JSON 드래그 등록 후 다시 시도.</li>
-        <li><strong>"시트 URL 이 없습니다"</strong> → §1 사전 조건 ①번 미완료. 같은 탭에서 Sheet URL 입력 후 다시 시도.</li>
-        <li><strong>"먼저 [시트 설정] 탭에서 편집자/썸네일러를 등록하세요"</strong> → §1 사전 조건 ④번 미완료. [시트 설정] 탭에서 이름 + 역할 추가.</li>
-        <li><strong>빌드 중 멈춤</strong> → 디버그 패널 켜서 로그 확인. 보통 npm/electron-builder 의 환경 변수 문제이거나 <code>release/</code> 폴더 권한 문제. 안티바이러스가 새 .exe 를 잠시 잠그는 경우도 있음.</li>
-        <li><strong>편집자 앱에서 잠금 화면</strong> → <code>_tokens</code> 시트의 해당 행 <code>status</code> 확인. <code>active</code> 가 아니면 변경 후 편집자에게 앱 재시작 안내.</li>
-        <li><strong>편집자 앱 시작 직후 "권한 확인 중" 무한 대기</strong> → 인터넷 연결 불안정 또는 임베드된 시트 URL 이 잘못된 경우. 새 인스톨러 재발급 권장.</li>
-        <li><strong>같은 PC 에 관리자/편집자 둘 다 설치</strong> → 가능합니다 (appId 분리). 시작메뉴에서 두 개 따로 보임 ("Inel Work Scheduler" / "이늘 스케쥴러 (편집자)").</li>
+        <li><strong>"Google 계정으로 먼저 로그인하세요"</strong> → 관리자가 §1 사전 조건 ①번 미완료. 관리자 앱에서 OAuth 로그인 후 다시 시도.</li>
+        <li><strong>"시트 URL 이 없습니다"</strong> → §1 사전 조건 ②번 미완료. [구글 시트] 탭에서 URL 입력 후 다시 시도.</li>
+        <li><strong>"이 스태프의 Gmail 미등록"</strong> → [시트 설정] 탭에서 해당 인원의 이메일 입력 후 다시 시도.</li>
+        <li><strong>편집자 앱 - "계정 불일치" 잠금</strong> → 관리자가 등록한 Gmail 과 로그인 시도한 Gmail 이 다름. [로그아웃 후 다시 로그인] 으로 본인 Gmail 사용.</li>
+        <li><strong>편집자 앱 - 새로고침 시 권한 오류 (403)</strong> → 시트 공유에 그 Gmail 이 추가되어 있지 않음. 관리자가 [공유] 에 추가.</li>
+        <li><strong>편집자 앱 - "Google 계정으로 로그인" 안 됨 (Test mode 한정)</strong> → 개발자가 Cloud Console 의 Test users 명단에 그 Gmail 을 추가해야 함. 개발자에게 그 Gmail 전달.</li>
+        <li><strong>같은 PC 에 관리자/편집자 둘 다 설치</strong> → 가능 (appId 분리). 시작메뉴에서 두 개 따로 보임.</li>
+        <li><strong>빌드 중 멈춤</strong> → 안티바이러스가 새 .exe 를 잠시 잠그는 경우. 잠시 기다린 후 모달 닫고 재시도.</li>
       </ul>
     </article>
 

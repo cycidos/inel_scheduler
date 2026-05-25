@@ -145,7 +145,8 @@ FunctionEnd
   noRestore:
 
   ${If} $InelDesktopShortcutState == ${BST_CHECKED}
-    CreateShortCut "$DESKTOP\${PRODUCT_NAME}.lnk" "$INSTDIR\${APP_EXECUTABLE_FILENAME}"
+    ; 아이콘 명시 — staff 빌드의 시작메뉴/바탕화면 단축키도 본체 .exe 안의 아이콘 사용.
+    CreateShortCut "$DESKTOP\${PRODUCT_NAME}.lnk" "$INSTDIR\${APP_EXECUTABLE_FILENAME}" "" "$INSTDIR\${APP_EXECUTABLE_FILENAME}" 0
   ${EndIf}
 
   ; 자동실행은 Electron 이 자기 표준 형식(따옴표/args 포함)으로 등록해야

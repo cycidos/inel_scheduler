@@ -4593,8 +4593,10 @@ function App() {
                     </label>
                   </div>
                   <p className="etc-card-desc">
-                    켜면 PC 부팅 시 Inel Work Scheduler 가 자동으로 실행됩니다.
-                    설치 빌드(.exe)에서만 정상 동작하며, 개발(<code>npm run dev</code>) 환경에서는 효과가 없습니다.
+                    켜면 PC 부팅 시 자동으로 실행됩니다.
+                    {import.meta.env.DEV && (
+                      <> {" "}<em style={{ color: "#9ca3af" }}>(설치 빌드에서만 동작. 개발 환경에서는 효과 없음)</em></>
+                    )}
                   </p>
                   {autoStartMessage && <p className="etc-card-msg">{autoStartMessage}</p>}
                 </div>
@@ -4638,11 +4640,6 @@ function App() {
                       전체 가이드 ↗
                     </button>
                   </div>
-                  <p className="etc-card-desc">
-                    각 담당자 이름으로 토큰을 발급해 시트의 <code>_tokens</code> 시트에 등록하고,
-                    해당 토큰 / SA 키 / 시트 URL 이 내장된 .exe 인스톨러를 자동 빌드합니다.
-                    편집자는 받아서 설치만 하면 본인 권한으로 자동 연결됩니다.
-                  </p>
                   <div className="staff-installer-list">
                     {staffList.length === 0 ? (
                       <p className="etc-card-empty">
@@ -4694,8 +4691,8 @@ function App() {
                     </button>
                   </div>
                   <p className="etc-card-desc">
-                    설치된 Inel Work Scheduler 와 모든 사용자 데이터(설정, 행, 카테고리)를 삭제합니다.
-                    이 작업은 되돌릴 수 없습니다. 시트에 업로드된 데이터는 그대로 유지됩니다.
+                    앱과 로컬 캐시를 모두 삭제합니다. 이 작업은 되돌릴 수 없습니다.
+                    {" "}변경사항 저장한 데이터는 시트에 그대로 있으니 재설치 후 [일정 새로고침] 으로 다시 가져올 수 있습니다.
                   </p>
                 </div>
               </>

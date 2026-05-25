@@ -132,9 +132,10 @@
       gap: 10px;
     }
     .section h2 .section-num {
-      width: 28px;
+      min-width: 28px;
       height: 28px;
-      border-radius: 50%;
+      padding: 0 6px;
+      border-radius: 14px;
       background: linear-gradient(135deg, var(--pink-500), var(--pink-600));
       color: #ffffff;
       font-size: 13px;
@@ -142,6 +143,7 @@
       align-items: center;
       justify-content: center;
       font-weight: 800;
+      flex-shrink: 0;
     }
     .section h3 {
       margin: 18px 0 8px;
@@ -652,7 +654,7 @@
       <div class="callout">초기 연결 설정 방법은 <strong>설정 → 구글 시트</strong> 탭의 [설정 방법 자세히 보기] 버튼에서 자세한 8단계 가이드를 확인하세요.</div>
     </article>
 
-    <article>
+    <article class="section" id="sec-staff-installer">
       <h2><span class="section-num">10</span>편집자/썸네일러 전용 인스톨러 만들기</h2>
       <p>각 편집자/썸네일러에게 <strong>본인 권한이 자동 임베드된 .exe 인스톨러</strong>를 만들어 전달할 수 있어요. 받은 사람은 더블클릭 설치만 하면 별도의 시트 URL 입력 / 인증 키 등록 없이 본인 권한으로 바로 작업 가능합니다.</p>
       <p>사전 조건 / 빌드 절차 / <code>_tokens</code> 시트 / 권한 회수 / SA 키 폐기 / 트러블슈팅 등 자세한 내용은 별도의 전용 가이드 페이지에 정리되어 있습니다.</p>
