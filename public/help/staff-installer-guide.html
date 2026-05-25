@@ -279,15 +279,7 @@
     </header>
 
     <section class="intro">
-      <h2>이 가이드는 무엇을 다루나요?</h2>
-      <p>각 편집자/썸네일러에게 <strong>본인 이메일과 시트 URL이 자동 임베드된 .exe 인스톨러</strong>를 만들어 전달하는 흐름과, 권한을 회수하는 방법을 정리합니다.</p>
-      <p>받은 사람은 .exe 더블클릭 설치 → 본인 Google 계정으로 로그인만 하면 바로 작업할 수 있어요.</p>
-      <ul class="checklist">
-        <li>시트 URL + 스태프 이메일 자동 임베드</li>
-        <li>각자 본인 Google 계정으로 직접 로그인</li>
-        <li>권한 회수 = 시트 공유에서 해당 Gmail 제거 (1클릭)</li>
-        <li>매 10분 주기로 권한 재확인</li>
-      </ul>
+      <p>각 편집자/썸네일러에게 시트 URL · 이메일이 임베드된 .exe 인스톨러를 만들어 전달합니다. 받은 사람은 .exe 더블클릭 설치 후 본인 Google 계정으로 로그인하면 됩니다.</p>
     </section>
 
     <nav class="toc">
@@ -332,13 +324,13 @@
         <li>완료 시 결과 카드 표시 + 출력 폴더에 다음 2개 파일 생성:
           <ul>
             <li><code>Inel Scheduler-Editor-Setup-X.Y.Z.exe</code> (또는 <code>-Thumbnailer-</code>) — 본체</li>
-            <li><code>...-Setup-X.Y.Z.exe.blockmap</code> — 차분 업데이트용 메타</li>
+            <li><code>...-Setup-X.Y.Z.exe.blockmap</code> — 보조 파일</li>
           </ul>
         </li>
         <li>그 .exe 파일만 편집자에게 전달 (USB / 메신저 / 클라우드 등)</li>
       </ol>
       <div class="callout">
-        <strong>임베드되는 정보</strong>: 시트 URL · 스태프 이름 · 스태프 Gmail · role (editor / thumbnailer). 인증 키나 토큰은 임베드되지 않습니다. 스태프는 본인 Google 계정으로 직접 로그인합니다.
+        <strong>임베드되는 정보</strong>: 시트 URL · 스태프 이름 · 스태프 Gmail · role (editor / thumbnailer). 스태프는 본인 Google 계정으로 로그인합니다.
       </div>
     </article>
 
@@ -347,7 +339,7 @@
         <span class="step-num">3</span>
         <h2 class="step-title">편집자가 받은 .exe 실행 시</h2>
       </div>
-      <p>편집자는 다음 흐름으로 사용합니다 — 관리자 안내 없이도 자기 권한으로 자동 동작.</p>
+      <p>편집자는 다음 흐름으로 사용합니다.</p>
       <ol>
         <li>관리자가 보낸 <code>Inel Scheduler-Editor-Setup-X.Y.Z.exe</code> 더블클릭</li>
         <li>NSIS 인스톨러 진행 (기본 경로: 내 문서\Inel Scheduler Editor)</li>
@@ -357,9 +349,6 @@
         <li>앱으로 자동 복귀 → 본인 담당 행만 표시되는 본문 진입</li>
         <li>매 10분 주기로 자동 권한 재확인. 시트 공유 권한이 해제되면 다음 새로고침 시 동기화 실패.</li>
       </ol>
-      <div class="callout ok">
-        편집자에게 시트 URL / 인증 키를 알려줄 필요가 없습니다. 시트 URL 은 임베드, 인증은 본인 Google 계정으로 자동.
-      </div>
       <div class="callout warn">
         <strong>등록과 다른 Gmail 로 로그인하면</strong> "계정 불일치" 잠금 화면이 표시되고 사용 불가. 관리자가 등록한 그 Gmail 이어야 합니다.
       </div>
@@ -371,23 +360,17 @@
         <h2 class="step-title">권한 회수 / 재발급</h2>
       </div>
 
-      <h4>① 권한 회수 <span class="badge badge-easy">매우 쉬움 · 1클릭</span></h4>
-      <p>휴직, 퇴직, 외주 종료 등 모든 상황에 동일하게 적용.</p>
+      <h4>① 권한 회수</h4>
       <ol>
         <li>관리자가 작업 시트 우상단 [<strong>공유</strong>] 버튼 클릭</li>
         <li>해당 편집자의 Gmail 옆 권한 메뉴 → [<strong>권한 제거</strong>] 또는 [<strong>액세스 권한 삭제</strong>]</li>
-        <li>그 편집자의 앱은 다음 [일정 새로고침] 시점에 시트 API 가 403 반환 → 동기화 실패</li>
-        <li>편집자가 .exe 를 보관하고 있어도 시트 접근 불가 → 사실상 완전 차단</li>
+        <li>그 편집자의 앱은 다음 [일정 새로고침] 시점에 동기화 실패</li>
       </ol>
-      <div class="callout ok">
-        Google 계정 기반이라 회수가 즉시 + 영구적입니다. 옛 SA 키 방식처럼 키 회전 / 모든 편집자 재배포 필요 없음.
-      </div>
-
-      <h4>② 재발급 (이메일 변경 / 정보 갱신) <span class="badge badge-easy">쉬움</span></h4>
+      <h4>② 재발급 (이메일 변경 / 정보 갱신)</h4>
       <ol>
         <li>관리자 앱 [시트 설정] 탭에서 그 편집자를 [X] 로 제거</li>
         <li>새 정보로 다시 등록 (이름 / 새 Gmail / role)</li>
-        <li>시트 [공유] 에서도 옛 Gmail 제거 + 새 Gmail 추가</li>
+        <li>시트 [공유] 에서도 기존 Gmail 제거 + 새 Gmail 추가</li>
         <li>[기타 설정] → [인스톨러 빌드] 다시 → 새 .exe 전달</li>
       </ol>
 
@@ -406,7 +389,7 @@
         <li><strong>"이 스태프의 Gmail 미등록"</strong> → [시트 설정] 탭에서 해당 인원의 이메일 입력 후 다시 시도.</li>
         <li><strong>편집자 앱 - "계정 불일치" 잠금</strong> → 관리자가 등록한 Gmail 과 로그인 시도한 Gmail 이 다름. [로그아웃 후 다시 로그인] 으로 본인 Gmail 사용.</li>
         <li><strong>편집자 앱 - 새로고침 시 권한 오류 (403)</strong> → 시트 공유에 그 Gmail 이 추가되어 있지 않음. 관리자가 [공유] 에 추가.</li>
-        <li><strong>편집자 앱 - "Google 계정으로 로그인" 안 됨 (Test mode 한정)</strong> → 개발자가 Cloud Console 의 Test users 명단에 그 Gmail 을 추가해야 함. 개발자에게 그 Gmail 전달.</li>
+        <li><strong>편집자 앱 - "Google 계정으로 로그인" 안 됨 / "Access blocked"</strong> → 개발자에게 그 편집자의 Gmail 전달 → 개발자가 등록 후 재시도.</li>
         <li><strong>같은 PC 에 관리자/편집자 둘 다 설치</strong> → 가능 (appId 분리). 시작메뉴에서 두 개 따로 보임.</li>
         <li><strong>빌드 중 멈춤</strong> → 안티바이러스가 새 .exe 를 잠시 잠그는 경우. 잠시 기다린 후 모달 닫고 재시도.</li>
       </ul>

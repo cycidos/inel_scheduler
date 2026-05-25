@@ -16,9 +16,12 @@
  */
 const path = require("path");
 const fs = require("fs");
+const http = require("http");
 const https = require("https");
+const crypto = require("crypto");
+const { URL } = require("url");
 const { google } = require("googleapis");
-const { authenticate } = require("@google-cloud/local-auth");
+const { shell } = require("electron");
 
 const SCOPES = [
   "https://www.googleapis.com/auth/spreadsheets",
@@ -164,34 +167,113 @@ function clearTokens(app) {
 }
 
 /**
+ * OAuth callback 으로 받은 HTML 응답.
+ * window.close() 즉시 시도 + 실패 시 짧은 한국어 안내. 라이브러리 기본 영문 페이지
+ * ("Authentication successful! Please return to the console.") 대체.
+ */
+const CALLBACK_HTML_SUCCESS = `<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>로그인 완료</title><style>html,body{margin:0;padding:0;background:#fdf2f8;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Apple SD Gothic Neo","Malgun Gothic",sans-serif;}.box{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;color:#9d174d;}.box h1{font-size:18px;margin:0 0 8px;}.box p{font-size:13px;color:#6b7280;margin:0;}</style></head><body><div class="box"><h1>로그인 완료</h1><p>이 창을 닫고 앱으로 돌아가세요.</p></div><script>try{window.close();}catch(e){}setTimeout(function(){try{window.close();}catch(e){}},50);</script></body></html>`;
+const CALLBACK_HTML_ERROR = `<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>로그인 실패</title><style>html,body{margin:0;padding:0;background:#fef2f2;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Apple SD Gothic Neo","Malgun Gothic",sans-serif;}.box{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;color:#991b1b;}.box h1{font-size:18px;margin:0 0 8px;}.box p{font-size:13px;color:#6b7280;margin:0;}</style></head><body><div class="box"><h1>로그인 실패</h1><p>이 창을 닫고 앱으로 돌아가 다시 시도하세요.</p></div><script>try{window.close();}catch(e){}</script></body></html>`;
+
+/**
  * 시스템 브라우저로 Google 로그인 페이지 열어 사용자 인증 받음.
  * 성공 시 refresh_token 영구 저장 + oauthClient 메모리에 보관.
+ *
+ * @google-cloud/local-auth 대신 직접 구현 — callback 응답을 한국어 + 자동 close
+ * 페이지로 커스터마이즈 하기 위함.
  *
  * @returns {Promise<{ok:boolean, email?:string, error?:string}>}
  */
 async function login(app) {
+  let server = null;
   try {
-    const result = await authenticate({
-      keyfilePath: KEYFILE_PATH,
-      scopes: SCOPES
+    const cfg = loadClientFile();
+    const state = crypto.randomBytes(16).toString("hex");
+
+    const result = await new Promise((resolve, reject) => {
+      server = http.createServer((req, res) => {
+        try {
+          const reqUrl = new URL(req.url, "http://127.0.0.1");
+          // 즐겨찾기 자동 요청 등 OAuth 무관 요청은 무시.
+          if (reqUrl.pathname !== "/oauth2callback") {
+            res.writeHead(404);
+            res.end();
+            return;
+          }
+          const params = reqUrl.searchParams;
+          if (params.has("error")) {
+            res.writeHead(400, { "Content-Type": "text/html; charset=utf-8" });
+            res.end(CALLBACK_HTML_ERROR);
+            reject(new Error(params.get("error")));
+            return;
+          }
+          const code = params.get("code");
+          const gotState = params.get("state");
+          if (!code) {
+            res.writeHead(400, { "Content-Type": "text/html; charset=utf-8" });
+            res.end(CALLBACK_HTML_ERROR);
+            reject(new Error("authorization code 없음"));
+            return;
+          }
+          if (gotState !== state) {
+            res.writeHead(400, { "Content-Type": "text/html; charset=utf-8" });
+            res.end(CALLBACK_HTML_ERROR);
+            reject(new Error("state 불일치 (CSRF 의심)"));
+            return;
+          }
+          // 성공 응답을 먼저 브라우저에 보내서 사용자 화면이 빠르게 갱신되도록.
+          res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+          res.end(CALLBACK_HTML_SUCCESS);
+          resolve({ code });
+        } catch (e) {
+          reject(e);
+        }
+      });
+
+      server.on("error", (err) => reject(err));
+
+      // 127.0.0.1 의 임의 포트 사용. Google OAuth Desktop client 는 localhost
+      // port wildcard 허용.
+      server.listen(0, "127.0.0.1", () => {
+        const addr = server.address();
+        const port = typeof addr === "object" && addr ? addr.port : 0;
+        const redirectUri = `http://127.0.0.1:${port}/oauth2callback`;
+        const tmpClient = new google.auth.OAuth2(cfg.client_id, cfg.client_secret, redirectUri);
+        const authUrl = tmpClient.generateAuthUrl({
+          access_type: "offline",
+          scope: SCOPES.join(" "),
+          prompt: "consent",
+          state
+        });
+        // tmpClient 를 외부에서도 쓸 수 있게 server 객체에 stash.
+        server._redirectUri = redirectUri;
+        server._tmpClient = tmpClient;
+        shell.openExternal(authUrl).catch(() => { /* ignore */ });
+      });
     });
-    // result 는 OAuth2Client. credentials 안에 access_token / refresh_token.
-    if (!result || !result.credentials) {
-      return { ok: false, error: "인증 결과가 비어있음" };
-    }
-    const refresh = result.credentials.refresh_token;
+
+    // server 가 응답을 보낸 직후 close. listening 만 종료, 보낸 응답은 그대로 도착.
+    try { server.close(); } catch (_e) { /* ignore */ }
+
+    // code → tokens 교환
+    const tmpClient = server._tmpClient;
+    const { tokens } = await tmpClient.getToken({
+      code: result.code,
+      redirect_uri: server._redirectUri
+    });
+    tmpClient.setCredentials(tokens);
+
+    const refresh = tokens.refresh_token;
     if (!refresh) {
-      return { ok: false, error: "refresh_token 발급 실패 (이미 발급된 적이 있을 수 있음. 본인 Google 계정 → 보안 → 연결된 앱에서 'Inel Scheduler' 제거 후 다시 시도)" };
+      return { ok: false, error: "refresh_token 발급 실패 (본인 Google 계정 → 보안 → 연결된 앱에서 'Inel Scheduler' 제거 후 다시 시도)" };
     }
-    // 사용자 이메일 조회 — googleapis 의 oauth2.userinfo.get() 이 빈 결과를 줄 때가
-    // 있어서 더 신뢰성 있는 userinfo endpoint 를 직접 호출.
-    const email = await fetchUserEmail(result);
+    const email = await fetchUserEmail(tmpClient);
 
     saveRefreshToken(app, refresh, email);
-    oauthClient = result;
+    oauthClient = tmpClient;
     currentUserEmail = email;
     return { ok: true, email };
   } catch (err) {
+    try { if (server) server.close(); } catch (_e) { /* ignore */ }
     return { ok: false, error: err.message || String(err) };
   }
 }

@@ -4438,8 +4438,7 @@ function App() {
                   ) : (
                     <>
                       <p className="oauth-card-desc">
-                        본인 Google 계정으로 로그인하면 시트에 접근할 수 있습니다.
-                        Service Account JSON 같은 별도 인증 파일이 필요 없어요. 클릭하면 시스템 브라우저에서 Google 로그인 페이지가 열립니다.
+                        본인 Google 계정으로 로그인하세요.
                       </p>
                       <button
                         type="button"
@@ -4477,6 +4476,14 @@ function App() {
                     }
                   >
                     연결 테스트
+                  </button>
+                  <button
+                    type="button"
+                    className="sa-help-btn"
+                    onClick={openSheetsSetupHelp}
+                    title="Google 계정 로그인 + 시트 URL 등록 절차를 자세히 안내합니다"
+                  >
+                    설정 방법 자세히 보기
                   </button>
                   {sheetsStatus && <p className="sheets-status">{sheetsStatus}</p>}
                 </div>
@@ -4760,7 +4767,7 @@ function App() {
                   type="button"
                   className="installer-help-btn"
                   onClick={openStaffInstallerHelp}
-                  title="자세한 절차 / 사전 조건 / 권한 회수 / SA 키 폐기 방법"
+                  title="자세한 절차 / 사전 조건 / 권한 회수"
                 >
                   도움말 ↗
                 </button>

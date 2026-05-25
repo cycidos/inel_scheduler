@@ -528,6 +528,37 @@ body {
   color: #be185d;
   font-size: 12px;
   font-weight: 600;
+  cursor: pointer;
+}
+
+.sa-help-btn {
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 6px;
+  border: 1px solid #fbcfe8;
+  background: #fdf2f8;
+  color: #9d174d;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sa-help-btn:hover {
+  background: #fce7f3;
+}
+
+.sheet-action-row {
+  margin-top: 8px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.sheet-action-row .sheets-status {
+  margin: 0 0 0 4px;
+  font-size: 12px;
+  color: #6b7280;
 }
 
 /* ── Service Account / Sheets ── */
