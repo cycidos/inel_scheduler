@@ -29,7 +29,6 @@
   },
   "homepage": "https://github.com/cycidos/inel_scheduler#readme",
   "dependencies": {
-    "@google-cloud/local-auth": "^3.0.1",
     "googleapis": "^171.4.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5"

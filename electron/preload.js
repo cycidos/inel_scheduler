@@ -1,4 +1,4 @@
-const { contextBridge, ipcRenderer, webUtils } = require("electron");
+const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("electronAPI", {
   appName: "Inel Work Scheduler",
@@ -33,10 +33,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
     return () => ipcRenderer.removeListener("chzzk-error", handler);
   },
 
-  sheetsPickKeyfile: () => ipcRenderer.invoke("sheets-pick-keyfile"),
-
-  sheetsInitAuth: (keyFilePath) => ipcRenderer.invoke("sheets-init-auth", { keyFilePath }),
-
   oauthLogin: () => ipcRenderer.invoke("oauth-login"),
   oauthLogout: () => ipcRenderer.invoke("oauth-logout"),
   oauthStatus: () => ipcRenderer.invoke("oauth-status"),
@@ -45,14 +41,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.on("oauth-auto-restored", handler);
     return () => ipcRenderer.removeListener("oauth-auto-restored", handler);
   },
-
-  setupEmbedSa: (saKeyB64) => ipcRenderer.invoke("setup-embed-sa", saKeyB64),
-
-  tokensVerify: (sheetUrl, name, role, token) =>
-    ipcRenderer.invoke("tokens-verify", { sheetUrl, name, role, token }),
-
-  tokensIssue: (sheetUrl, name, role) =>
-    ipcRenderer.invoke("tokens-issue", { sheetUrl, name, role }),
 
   settingsSheetLoad: (sheetUrl) =>
     ipcRenderer.invoke("settings-sheet-load", { sheetUrl }),
@@ -107,19 +95,5 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("ai-list-models", { provider, apiKey }),
 
   aiAnalyzeCsv: (provider, apiKey, model, csvHeader, csvSample, ourSchema) =>
-    ipcRenderer.invoke("ai-analyze-csv", { provider, apiKey, model, csvHeader, csvSample, ourSchema }),
-
-
-  /**
-   * Electron 32+에서는 File.path가 비어 있으므로 webUtils.getPathForFile()로
-   * 절대 경로를 얻어야 한다. 드래그&드롭으로 받은 File 객체에 사용.
-   */
-  getFilePath: (file) => {
-    try {
-      if (file && webUtils && typeof webUtils.getPathForFile === "function") {
-        return webUtils.getPathForFile(file) || "";
-      }
-    } catch (e) {}
-    return (file && file.path) || "";
-  }
+    ipcRenderer.invoke("ai-analyze-csv", { provider, apiKey, model, csvHeader, csvSample, ourSchema })
 });

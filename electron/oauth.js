@@ -3,8 +3,7 @@
  *
  * 흐름:
  *   1) 사용자가 [Google 로그인] 클릭 → renderer 에서 IPC oauth-login 호출
- *   2) main 이 @google-cloud/local-auth 의 authenticate() 호출
- *      → 시스템 브라우저에 Google 로그인 페이지 열림
+ *   2) main 이 loopback HTTP 서버 띄우고 시스템 브라우저로 Google 로그인 URL 열기
  *      → 사용자가 로그인 + 동의 → loopback 으로 authorization code 회신
  *      → access_token + refresh_token 교환
  *   3) refresh_token 을 Electron safeStorage 로 암호화 → userData 에 저장

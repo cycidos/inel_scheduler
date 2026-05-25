@@ -2,7 +2,6 @@ const { app, BrowserWindow, Menu, ipcMain, dialog, shell } = require("electron")
 const path = require("path");
 const https = require("https");
 const fs = require("fs");
-const crypto = require("crypto");
 const { execFile, spawn } = require("child_process");
 const { google } = require("googleapis");
 const oauth = require("./oauth");
@@ -393,44 +392,18 @@ function createWindow() {
 
   /* ── Google Sheets ── */
 
-  let sheetsAuth = null;
   let sheetsClient = null;
-  let sheetsClientEmail = null;
-  let authMode = "none"; // "oauth" | "sa" | "none"
-
-  async function initSheetsAuth(keyFilePath) {
-    // (Legacy) Service Account JSON 으로 인증. 1.1.x 호환 유지용.
-    const auth = new google.auth.GoogleAuth({
-      keyFile: keyFilePath,
-      scopes: ["https://www.googleapis.com/auth/spreadsheets"]
-    });
-    sheetsAuth = auth;
-    sheetsClient = google.sheets({ version: "v4", auth });
-
-    try {
-      const raw = fs.readFileSync(keyFilePath, "utf8");
-      const json = JSON.parse(raw);
-      sheetsClientEmail = json.client_email || null;
-    } catch {
-      sheetsClientEmail = null;
-    }
-    authMode = "sa";
-  }
 
   /** OAuth2Client 를 sheets API 의 auth 로 등록. login/restore 성공 후 호출. */
-  function useOAuthClient(oauth2Client, userEmail) {
-    sheetsAuth = oauth2Client;
+  function useOAuthClient(oauth2Client) {
     sheetsClient = google.sheets({ version: "v4", auth: oauth2Client });
-    sheetsClientEmail = userEmail || null;
-    authMode = "oauth";
   }
 
   /**
-   * sheets API 호출 직전 토큰 신선화 보장. OAuth 모드에서만 의미 있음.
-   * 매 IPC 핸들러 시작에서 호출.
+   * sheets API 호출 직전 토큰 신선화 보장. 매 IPC 핸들러 시작에서 호출.
    */
   async function ensureAuthReady() {
-    if (authMode === "oauth") {
+    if (sheetsClient) {
       await oauth.ensureFreshToken();
     }
   }
@@ -440,7 +413,7 @@ function createWindow() {
     try {
       const res = await oauth.restore(app);
       if (res.ok) {
-        useOAuthClient(oauth.getClient(), oauth.getUserEmail());
+        useOAuthClient(oauth.getClient());
         if (win && !win.isDestroyed()) {
           try { win.webContents.send("oauth-auto-restored", { email: res.email }); } catch (_e) { /* renderer 아직 준비 안 됐을 수도 */ }
         }
@@ -452,7 +425,7 @@ function createWindow() {
   ipcMain.handle("oauth-login", async () => {
     const res = await oauth.login(app);
     if (res.ok) {
-      useOAuthClient(oauth.getClient(), res.email);
+      useOAuthClient(oauth.getClient());
     }
     return res;
   });
@@ -460,9 +433,6 @@ function createWindow() {
   ipcMain.handle("oauth-logout", async () => {
     oauth.logout(app);
     sheetsClient = null;
-    sheetsAuth = null;
-    sheetsClientEmail = null;
-    authMode = "none";
     return { ok: true };
   });
 
@@ -470,8 +440,7 @@ function createWindow() {
     return {
       ok: true,
       loggedIn: oauth.isLoggedIn(),
-      email: oauth.getUserEmail(),
-      authMode
+      email: oauth.getUserEmail()
     };
   });
 
@@ -490,34 +459,9 @@ function createWindow() {
     return `${TAB_SHEET_MAP[tabKey] || tabKey}_${year}`;
   }
 
-  ipcMain.handle("sheets-pick-keyfile", async () => {
-    const result = await dialog.showOpenDialog(win, {
-      title: "Google Service Account JSON 선택",
-      filters: [{ name: "JSON", extensions: ["json"] }],
-      properties: ["openFile"]
-    });
-    if (result.canceled || result.filePaths.length === 0) return { ok: false };
-    const filePath = result.filePaths[0];
-    try {
-      await initSheetsAuth(filePath);
-      return { ok: true, path: filePath, clientEmail: sheetsClientEmail };
-    } catch (err) {
-      return { ok: false, error: err.message };
-    }
-  });
-
-  ipcMain.handle("sheets-init-auth", async (_event, { keyFilePath }) => {
-    try {
-      await initSheetsAuth(keyFilePath);
-      return { ok: true, clientEmail: sheetsClientEmail };
-    } catch (err) {
-      return { ok: false, error: err.message };
-    }
-  });
-
   // ── _settings 시트 헬퍼 ───────────────────────────────────────
   // 관리자 환경 설정 일체를 시트에 저장. 헤더: key | value (value 는 JSON 문자열 가능)
-  // 시트 링크와 SA 키 파일 같은 "부트스트랩 정보" 는 제외 (로컬 only).
+  // 시트 링크 같은 "부트스트랩 정보" 는 제외 (로컬 only).
   const SETTINGS_SHEET_NAME = "_settings";
   const SETTINGS_HEADER = ["key", "value"];
 
@@ -671,131 +615,6 @@ function createWindow() {
     }
   });
 
-  // ── _tokens 시트 헬퍼 ─────────────────────────────────────────
-  // 헤더: name | role | token | issuedAt | status | lastSeen
-  const TOKENS_SHEET_NAME = "_tokens";
-  const TOKENS_HEADER = ["name", "role", "token", "issuedAt", "status", "lastSeen"];
-
-  async function ensureTokensSheet(spreadsheetId) {
-    const ss = await sheetsClient.spreadsheets.get({ spreadsheetId });
-    const has = (ss.data.sheets || []).some((s) => s.properties && s.properties.title === TOKENS_SHEET_NAME);
-    if (!has) {
-      await sheetsClient.spreadsheets.batchUpdate({
-        spreadsheetId,
-        requestBody: { requests: [{ addSheet: { properties: { title: TOKENS_SHEET_NAME } } }] }
-      });
-    }
-    // 헤더 행 확인 / 보충
-    const head = await sheetsClient.spreadsheets.values.get({
-      spreadsheetId,
-      range: `${TOKENS_SHEET_NAME}!A1:F1`
-    });
-    const row = (head.data.values && head.data.values[0]) || [];
-    if (row.length === 0) {
-      await sheetsClient.spreadsheets.values.update({
-        spreadsheetId,
-        range: `${TOKENS_SHEET_NAME}!A1:F1`,
-        valueInputOption: "RAW",
-        requestBody: { values: [TOKENS_HEADER] }
-      });
-    }
-  }
-
-  async function readTokensRows(spreadsheetId) {
-    const res = await sheetsClient.spreadsheets.values.get({
-      spreadsheetId,
-      range: `${TOKENS_SHEET_NAME}!A2:F`
-    });
-    const rows = res.data.values || [];
-    return rows.map((r, idx) => ({
-      rowNum: idx + 2, // 시트 행 번호 (1-based, 헤더 1행 제외)
-      name: r[0] || "",
-      role: r[1] || "",
-      token: r[2] || "",
-      issuedAt: r[3] || "",
-      status: r[4] || "",
-      lastSeen: r[5] || ""
-    }));
-  }
-
-  function generateToken(byteLen = 24) {
-    return crypto.randomBytes(byteLen).toString("hex");
-  }
-
-  // staff 앱이 자기 토큰 유효성 확인. lastSeen 도 같이 갱신.
-  // 매칭: name(NFC 정규화) + token + role 모두 일치하는 첫 active 행.
-  ipcMain.handle("tokens-verify", async (_event, { sheetUrl, name, role, token }) => {
-    try {
-      if (!sheetsClient) return { ok: false, error: "Sheets 인증이 초기화되지 않았습니다." };
-      const spreadsheetId = extractSpreadsheetId(sheetUrl);
-      if (!spreadsheetId) return { ok: false, error: "유효한 시트 URL이 아닙니다." };
-      const normName = (s) => (s || "").normalize("NFC").trim();
-      const wanted = normName(name);
-      await ensureTokensSheet(spreadsheetId);
-      const rows = await readTokensRows(spreadsheetId);
-      const match = rows.find((r) => normName(r.name) === wanted && r.token === token && (role ? r.role === role : true));
-      if (!match) {
-        return { ok: true, valid: false, status: "not-found" };
-      }
-      // status 별 결과
-      const status = (match.status || "").toLowerCase();
-      if (status !== "active") {
-        return { ok: true, valid: false, status: match.status || "(empty)" };
-      }
-      // lastSeen 갱신 (실패해도 검증 결과엔 영향 X)
-      try {
-        const now = new Date().toISOString();
-        await sheetsClient.spreadsheets.values.update({
-          spreadsheetId,
-          range: `${TOKENS_SHEET_NAME}!F${match.rowNum}`,
-          valueInputOption: "RAW",
-          requestBody: { values: [[now]] }
-        });
-      } catch (_e) { /* ignore */ }
-      return { ok: true, valid: true, status: "active", name: match.name, role: match.role };
-    } catch (err) {
-      return { ok: false, error: err.message };
-    }
-  });
-
-  // 관리자가 새 편집자/썸네일러 토큰 발급. _tokens 시트에 행 추가.
-  // 이미 (name+role) 조합의 active 토큰이 있으면 새 토큰으로 갱신 (rotate).
-  ipcMain.handle("tokens-issue", async (_event, { sheetUrl, name, role }) => {
-    try {
-      if (!sheetsClient) return { ok: false, error: "Sheets 인증이 초기화되지 않았습니다." };
-      const spreadsheetId = extractSpreadsheetId(sheetUrl);
-      if (!spreadsheetId) return { ok: false, error: "유효한 시트 URL이 아닙니다." };
-      if (!name || !role) return { ok: false, error: "name, role 필수" };
-      await ensureTokensSheet(spreadsheetId);
-      const rows = await readTokensRows(spreadsheetId);
-      const normName = (s) => (s || "").normalize("NFC").trim();
-      const wanted = normName(name);
-      const token = generateToken(24);
-      const now = new Date().toISOString();
-      const existing = rows.find((r) => normName(r.name) === wanted && r.role === role);
-      if (existing) {
-        // 기존 행 갱신 (새 토큰, status=active, issuedAt 갱신, lastSeen 비움)
-        await sheetsClient.spreadsheets.values.update({
-          spreadsheetId,
-          range: `${TOKENS_SHEET_NAME}!A${existing.rowNum}:F${existing.rowNum}`,
-          valueInputOption: "RAW",
-          requestBody: { values: [[name, role, token, now, "active", ""]] }
-        });
-        return { ok: true, token, rotated: true };
-      }
-      // 새 행 append
-      await sheetsClient.spreadsheets.values.append({
-        spreadsheetId,
-        range: `${TOKENS_SHEET_NAME}!A:F`,
-        valueInputOption: "RAW",
-        requestBody: { values: [[name, role, token, now, "active", ""]] }
-      });
-      return { ok: true, token, rotated: false };
-    } catch (err) {
-      return { ok: false, error: err.message };
-    }
-  });
-
   // 인스톨러 출력 폴더 선택 다이얼로그 (관리자가 빌드 시 호출)
   ipcMain.handle("pick-output-dir", async (_event, { defaultPath } = {}) => {
     const result = await dialog.showOpenDialog(win, {
@@ -808,15 +627,11 @@ function createWindow() {
   });
 
   // 관리자 UI 에서 편집자/썸네일러 인스톨러를 자동 빌드.
-  //   1) 토큰 발급 (_tokens 시트)
-  //   2) SA JSON 을 base64 인코딩
-  //   3) 자식 프로세스 spawn 으로 npm run dist:editor / dist:thumbnailer
-  //      (환경변수 IWS_NAME / ROLE / TOKEN / SHEET_URL / SA_KEY_B64 주입)
-  //   4) release/ 의 산출물을 outputDir 로 이동
-  //   5) 진행 로그를 chunk 단위로 BrowserWindow.webContents.send("build-installer-log") emit
-  // 1.2.0 — OAuth 전환 후 단순화된 인스톨러 빌드.
-  // 토큰 발급 / SA 키 임베드 제거. email + name + role + 시트 URL 만 빌드 환경변수로 forward.
-  // 스태프 앱은 본인 Google 계정으로 로그인하고 임베드 email 과 일치하는지 검증한다.
+  //   1) 자식 프로세스 spawn 으로 npm run dist:editor / dist:thumbnailer
+  //      (환경변수 IWS_NAME / IWS_EMAIL / IWS_ROLE / IWS_SHEET_URL 주입)
+  //   2) release/ 의 산출물을 outputDir 로 이동
+  //   3) 진행 로그를 chunk 단위로 BrowserWindow.webContents.send("build-installer-log") emit
+  // 스태프 앱은 본인 Google 계정으로 로그인 → 임베드 email 과 일치하는지 검증.
   ipcMain.handle("build-editor-installer", async (_event, { name, email, role, sheetUrl, outputDir }) => {
     try {
       if (!name || !role) return { ok: false, error: "name, role 필수" };
@@ -841,8 +656,6 @@ function createWindow() {
         IWS_EMAIL: email,
         IWS_ROLE: role,
         IWS_SHEET_URL: sheetUrl
-        // 1.1.x 의 IWS_TOKEN / IWS_SA_KEY_B64 는 더 이상 사용하지 않음.
-        // 스태프 앱이 자기 Google 계정으로 직접 로그인 → 시트 공유 권한이 진실의 단일 소스.
       };
       // Windows + npm.cmd 조합은 shell: true 없이 spawn 하면 EINVAL 발생.
       // shell 모드에서는 argv 가 한 줄 명령으로 합쳐지므로 경로/특수문자가 있으면 따옴표 처리 필요.
@@ -883,28 +696,6 @@ function createWindow() {
       }
       emit(`     완료. 출력 폴더: ${outputDir}`);
       return { ok: true, outputDir, files: moved };
-    } catch (err) {
-      return { ok: false, error: err.message };
-    }
-  });
-
-  // 편집자/썸네일러 빌드에 임베드된 SA JSON (base64) 을 첫 실행 시 userData 에 풀어 저장.
-  // 이후엔 같은 파일을 그대로 사용 (재생성 안 함). 인증 초기화까지 처리.
-  ipcMain.handle("setup-embed-sa", async (_event, saKeyB64) => {
-    try {
-      if (typeof saKeyB64 !== "string" || saKeyB64.length === 0) {
-        return { ok: false, error: "saKeyB64 가 비어있습니다." };
-      }
-      const credPath = path.join(app.getPath("userData"), "google-credentials.json");
-      if (!fs.existsSync(credPath)) {
-        const json = Buffer.from(saKeyB64, "base64").toString("utf8");
-        // JSON 으로 한 번 parse 해서 유효성 검증 후 저장
-        JSON.parse(json);
-        fs.mkdirSync(path.dirname(credPath), { recursive: true });
-        fs.writeFileSync(credPath, json, "utf8");
-      }
-      await initSheetsAuth(credPath);
-      return { ok: true, path: credPath, clientEmail: sheetsClientEmail };
     } catch (err) {
       return { ok: false, error: err.message };
     }
@@ -1017,7 +808,7 @@ function createWindow() {
       });
       const title = meta.data.properties?.title || "";
       const sheetTitles = (meta.data.sheets || []).map((s) => s.properties.title);
-      return { ok: true, title, sheets: sheetTitles, clientEmail: sheetsClientEmail };
+      return { ok: true, title, sheets: sheetTitles };
     } catch (err) {
       return { ok: false, error: err.message };
     }

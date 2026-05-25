@@ -22,11 +22,7 @@ const EMBED = {
   name: __IWS_NAME__,
   email: __IWS_EMAIL__,
   role: __IWS_ROLE__,
-  sheetUrl: __IWS_SHEET_URL__,
-  // 1.1.x 의 토큰/SA 임베드 흐름은 phase 3-6 에서 OAuth 검증으로 완전 교체된다.
-  // 그 동안 옛 코드의 EMBED.hasSaKey / EMBED.token 참조가 컴파일 깨지지 않도록 stub.
-  hasSaKey: false,
-  token: ""
+  sheetUrl: __IWS_SHEET_URL__
 };
 
 // 모듈 최상위 const → Rollup/esbuild 가 boolean literal 로 inline 시켜
@@ -50,17 +46,10 @@ declare global {
       onChzzkCategoryChange: (cb: (data: ChzzkCategoryChange) => void) => () => void;
       onChzzkTitleChange: (cb: (data: ChzzkTitleChange) => void) => () => void;
       onChzzkError: (cb: (data: { message: string }) => void) => () => void;
-      sheetsPickKeyfile: () => Promise<{ ok: boolean; path?: string; clientEmail?: string; error?: string }>;
-      sheetsInitAuth: (keyFilePath: string) => Promise<{ ok: boolean; clientEmail?: string; error?: string }>;
-      setupEmbedSa: (saKeyB64: string) => Promise<{ ok: boolean; path?: string; clientEmail?: string; error?: string }>;
       oauthLogin: () => Promise<{ ok: boolean; email?: string; error?: string }>;
       oauthLogout: () => Promise<{ ok: boolean }>;
-      oauthStatus: () => Promise<{ ok: boolean; loggedIn?: boolean; email?: string | null; authMode?: string }>;
+      oauthStatus: () => Promise<{ ok: boolean; loggedIn?: boolean; email?: string | null }>;
       onOAuthAutoRestored: (cb: (data: { email?: string }) => void) => () => void;
-      tokensVerify: (sheetUrl: string, name: string, role: string, token: string) =>
-        Promise<{ ok: boolean; valid?: boolean; status?: string; name?: string; role?: string; error?: string }>;
-      tokensIssue: (sheetUrl: string, name: string, role: string) =>
-        Promise<{ ok: boolean; token?: string; rotated?: boolean; error?: string }>;
       settingsSheetLoad: (sheetUrl: string) =>
         Promise<{ ok: boolean; kv?: Record<string, any>; count?: number; error?: string }>;
       settingsSheetWrite: (sheetUrl: string, kv: Record<string, any>) =>
@@ -84,7 +73,7 @@ declare global {
         rowValues: Record<string, string>
       ) => Promise<{ ok: boolean; action?: "updated" | "appended"; rowNum?: number; error?: string }>;
       sheetsTestConnection: (sheetUrl: string) =>
-        Promise<{ ok: boolean; title?: string; sheets?: string[]; clientEmail?: string; error?: string }>;
+        Promise<{ ok: boolean; title?: string; sheets?: string[]; error?: string }>;
       categoriesLoadUser: () =>
         Promise<{ ok: boolean; categories?: Array<{ categoryId: string; categoryValue: string; categoryType: string; addedAt?: string }>; path?: string }>;
       categoriesAddUser: (categoryId: string, categoryValue: string, categoryType?: string) =>
@@ -118,7 +107,6 @@ declare global {
         error?: string;
         trace?: string[];
       }>;
-      getFilePath: (file: File) => string;
     };
   }
 }
@@ -515,35 +503,28 @@ function App() {
   const [installerResult, setInstallerResult] = useState<{ ok: boolean; outputDir?: string; files?: string[]; error?: string } | null>(null);
   const UNINSTALL_CONFIRM_PHRASE = "이늘 스케쥴러 삭제합니다";
   const [sheetLink, setSheetLink] = useState(() => EMBED.sheetUrl || "");
-  const [serviceAccountPath, setServiceAccountPath] = useState("");
 
   // ── OAuth 2.0 (Google 계정 로그인) ──
-  // 1.2.0 부터 시트 인증을 OAuth 로 전환. SA JSON 등록 UI 는 점진적으로 deprecated.
   // 앱 시작 시 main 이 저장된 refresh_token 으로 자동 복원하면 onOAuthAutoRestored 이벤트 발생.
   const [oauthLoggedIn, setOauthLoggedIn] = useState(false);
   const [oauthEmail, setOauthEmail] = useState<string | null>(null);
-  const [oauthAuthMode, setOauthAuthMode] = useState<string>("none");
   const [oauthBusy, setOauthBusy] = useState(false);
   const [oauthError, setOauthError] = useState<string>("");
   useEffect(() => {
     const api = (window as any).electronAPI;
     if (!api?.oauthStatus) return;
-    // 마운트 시 한 번 상태 조회
     (async () => {
       try {
         const res = await api.oauthStatus();
         if (res?.ok) {
           setOauthLoggedIn(!!res.loggedIn);
           setOauthEmail(res.email || null);
-          setOauthAuthMode(res.authMode || "none");
         }
       } catch (_e) { /* ignore */ }
     })();
-    // 자동 복원 이벤트 구독 (main 이 시작 시 토큰 복원 성공하면 늦게 호출됨)
     const off = api.onOAuthAutoRestored?.((data: { email?: string }) => {
       setOauthLoggedIn(true);
       setOauthEmail(data?.email || null);
-      setOauthAuthMode("oauth");
       dlog(`[OAuth] 자동 복원 완료: ${data?.email || "(이메일 미상)"}`);
     });
     return () => { if (typeof off === "function") off(); };
@@ -560,7 +541,6 @@ function App() {
       if (res?.ok) {
         setOauthLoggedIn(true);
         setOauthEmail(res.email || null);
-        setOauthAuthMode("oauth");
         dlog(`[OAuth] 로그인 성공: ${res.email}`);
       } else {
         setOauthError(res?.error || "알 수 없는 오류");
@@ -581,9 +561,6 @@ function App() {
     await api.oauthLogout();
     setOauthLoggedIn(false);
     setOauthEmail(null);
-    setOauthAuthMode("none");
-    setServiceAccountPath("");
-    setClientEmail("");
     dlog("[OAuth] 로그아웃 완료");
   };
 
@@ -652,8 +629,6 @@ function App() {
     label: ""
   });
   const autoSyncDoneRef = useRef(false);
-  const [clientEmail, setClientEmail] = useState("");
-  const [isDraggingJson, setIsDraggingJson] = useState(false);
   const [settingsTab, setSettingsTab] = useState<"sheet" | "connection" | "ai" | "etc">(
     isAdmin ? "connection" : "etc"
   );
@@ -2229,7 +2204,7 @@ function App() {
 
 
   // 시트로 push 할 settings 페이로드를 만든다.
-  // sheetLink / serviceAccountPath 는 "부트스트랩 정보" 라 시트엔 안 올림.
+  // sheetLink 는 "부트스트랩 정보" 라 시트엔 안 올림.
   const buildSettingsPayload = useCallback((): Record<string, any> => ({
     chzzkLink,
     pollingInterval,
@@ -2250,7 +2225,6 @@ function App() {
     try {
       const data = {
         sheetLink,
-        serviceAccountPath,
         chzzkLink,
         pollingInterval,
         statusOptions,
@@ -2378,7 +2352,6 @@ function App() {
       if (!raw) return;
       const data = JSON.parse(raw);
       if (data.sheetLink) setSheetLink(data.sheetLink);
-      if (data.serviceAccountPath) setServiceAccountPath(data.serviceAccountPath);
       if (data.chzzkLink) setChzzkLink(data.chzzkLink);
       if (typeof data.pollingInterval === "number") setPollingInterval(data.pollingInterval);
       if (Array.isArray(data.statusOptions)) setStatusOptions(data.statusOptions);
@@ -2554,92 +2527,6 @@ function App() {
       await runImport({ silent: false });
     })();
   }, [sheetLink, oauthLoggedIn]);
-
-  const pickServiceAccount = async () => {
-    const api = window.electronAPI;
-    if (!api) { dlog("electronAPI not available"); return; }
-    const result = await api.sheetsPickKeyfile();
-    if (result.ok && result.path) {
-      setServiceAccountPath(result.path);
-      setClientEmail(result.clientEmail || "");
-      dlog(`Service Account 설정 완료: ${result.path}`);
-      setSheetsStatus("인증 완료");
-    } else if (result.error) {
-      dlog(`Service Account 에러: ${result.error}`);
-      setSheetsStatus(`에러: ${result.error}`);
-    }
-  };
-
-  const registerJsonByPath = async (filePath: string) => {
-    const api = window.electronAPI;
-    if (!api) { dlog("electronAPI not available"); return; }
-    const result = await api.sheetsInitAuth(filePath);
-    if (result.ok) {
-      setServiceAccountPath(filePath);
-      setClientEmail(result.clientEmail || "");
-      setSheetsStatus("인증 완료");
-      dlog(`JSON 등록(드래그&드롭): ${filePath}`);
-    } else {
-      setSheetsStatus(`에러: ${result.error}`);
-      dlog(`JSON 등록 실패: ${result.error}`);
-    }
-  };
-
-  const handleJsonDrop = async (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDraggingJson(false);
-
-    const items = Array.from(e.dataTransfer.items || []);
-    const files = Array.from(e.dataTransfer.files || []);
-    dlog(`JSON drop: items=${items.length}, files=${files.length}`);
-
-    const file = files[0];
-    if (!file) {
-      dlog("드롭에 파일이 없음 (텍스트 등 다른 데이터일 수 있음)");
-      setSheetsStatus("파일을 직접 드래그&드롭해주세요.");
-      return;
-    }
-
-    if (!file.name.toLowerCase().endsWith(".json")) {
-      dlog(`드롭한 파일이 JSON이 아님: ${file.name}`);
-      setSheetsStatus("JSON 파일만 등록 가능합니다.");
-      return;
-    }
-
-    const api = window.electronAPI;
-    let filePath = "";
-    if (api?.getFilePath) {
-      try {
-        filePath = api.getFilePath(file) || "";
-      } catch (err) {
-        dlog(`getFilePath 호출 실패: ${err instanceof Error ? err.message : String(err)}`);
-      }
-    }
-    if (!filePath) {
-      filePath = (file as unknown as { path?: string }).path || "";
-    }
-
-    if (!filePath) {
-      dlog(`경로를 얻을 수 없음. 파일명='${file.name}', size=${file.size}, electronAPI=${!!api}`);
-      setSheetsStatus("파일 경로를 얻을 수 없습니다. [파일 선택] 버튼을 사용해주세요.");
-      return;
-    }
-
-    dlog(`드롭한 JSON 경로: ${filePath}`);
-    await registerJsonByPath(filePath);
-  };
-
-  const copyClientEmail = async () => {
-    if (!clientEmail) return;
-    try {
-      await navigator.clipboard.writeText(clientEmail);
-      setSheetsStatus("이메일이 클립보드에 복사되었습니다.");
-      dlog(`이메일 복사: ${clientEmail}`);
-    } catch (err: unknown) {
-      dlog(`복사 실패: ${err instanceof Error ? err.message : String(err)}`);
-    }
-  };
 
   const testConnection = async () => {
     const api = window.electronAPI;
@@ -4417,11 +4304,11 @@ function App() {
                 <div className="oauth-card">
                   <div className="oauth-card-head">
                     <strong>Google 계정 연결</strong>
-                    {oauthLoggedIn && oauthAuthMode === "oauth" && (
+                    {oauthLoggedIn && (
                       <span className="oauth-status ok">● 연결됨</span>
                     )}
                   </div>
-                  {oauthLoggedIn && oauthAuthMode === "oauth" ? (
+                  {oauthLoggedIn ? (
                     <>
                       <p className="oauth-card-desc">
                         현재 <strong>{oauthEmail || "(이메일 미상)"}</strong> 계정으로 로그인
