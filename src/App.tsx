@@ -4241,14 +4241,28 @@ function App() {
                   <p>편집자 / 썸네일러 등록</p>
                   <p className="staff-help">스태프 인스톨러에 임베드되어 본인 Google 계정 로그인 확인 + 시트 공유 권한 매칭에 사용됩니다.</p>
                   <div className="staff-add-row">
-                    <select
-                      className="staff-role-select"
-                      value={newStaffRole}
-                      onChange={(e) => setNewStaffRole(e.target.value as EditorRole)}
-                    >
-                      <option value="thumbnailer">썸네일러</option>
-                      <option value="editor">영상편집자</option>
-                    </select>
+                    <div className="staff-role-radio">
+                      <label className={`staff-role-option role-editor ${newStaffRole === "editor" ? "active" : ""}`}>
+                        <input
+                          type="radio"
+                          name="newStaffRole"
+                          value="editor"
+                          checked={newStaffRole === "editor"}
+                          onChange={() => setNewStaffRole("editor")}
+                        />
+                        <span>편집자</span>
+                      </label>
+                      <label className={`staff-role-option role-thumbnailer ${newStaffRole === "thumbnailer" ? "active" : ""}`}>
+                        <input
+                          type="radio"
+                          name="newStaffRole"
+                          value="thumbnailer"
+                          checked={newStaffRole === "thumbnailer"}
+                          onChange={() => setNewStaffRole("thumbnailer")}
+                        />
+                        <span>썸네일러</span>
+                      </label>
+                    </div>
                     <input
                       className="staff-name-input"
                       type="text"

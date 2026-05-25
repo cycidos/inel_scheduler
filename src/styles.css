@@ -2342,6 +2342,47 @@ tbody td.role-cell.role-editor::before {
   gap: 6px;
 }
 
+/* 라디오 버튼 그룹 (편집자 / 썸네일러) — 시트 행 색 */
+.staff-role-radio {
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  gap: 6px;
+}
+.staff-role-option {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+  border: 1px solid transparent;
+  background: #f9fafb;
+  color: #6b7280;
+  transition: all 0.12s ease;
+}
+.staff-role-option input[type="radio"] {
+  display: none;
+}
+.staff-role-option.role-editor.active {
+  background: #eff6ff;
+  border-color: #3b82f6;
+  color: #1e3a8a;
+}
+.staff-role-option.role-thumbnailer.active {
+  background: #fff7ed;
+  border-color: #fb923c;
+  color: #9a3412;
+}
+.staff-role-option:hover:not(.active) {
+  background: #f3f4f6;
+}
+
 .staff-role-select {
   grid-column: 1;
   grid-row: 1;

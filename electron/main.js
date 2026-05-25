@@ -831,16 +831,25 @@ function createWindow() {
         // 1.1.x 의 IWS_TOKEN / IWS_SA_KEY_B64 는 더 이상 사용하지 않음.
         // 스태프 앱이 자기 Google 계정으로 직접 로그인 → 시트 공유 권한이 진실의 단일 소스.
       };
+      // Windows + npm.cmd 조합은 shell: true 없이 spawn 하면 EINVAL 발생.
+      // shell 모드에서는 argv 가 한 줄 명령으로 합쳐지므로 경로/특수문자가 있으면 따옴표 처리 필요.
+      const useShell = process.platform === "win32";
       const exitCode = await new Promise((resolve) => {
         const child = spawn(npmCmd, ["run", `dist:${role}`], {
           cwd: projectRoot,
           env: childEnv,
-          windowsHide: true
+          windowsHide: true,
+          shell: useShell
         });
-        child.stdout.on("data", (buf) => buf.toString("utf8").split(/\r?\n/).forEach((l) => l && emit(`  ${l}`)));
-        child.stderr.on("data", (buf) => buf.toString("utf8").split(/\r?\n/).forEach((l) => l && emit(`  ! ${l}`)));
+        child.stdout && child.stdout.on("data", (buf) => buf.toString("utf8").split(/\r?\n/).forEach((l) => l && emit(`  ${l}`)));
+        child.stderr && child.stderr.on("data", (buf) => buf.toString("utf8").split(/\r?\n/).forEach((l) => l && emit(`  ! ${l}`)));
         child.on("close", (code) => resolve(code));
-        child.on("error", (err) => { emit(`  ! spawn 에러: ${err.message}`); resolve(-1); });
+        child.on("error", (err) => {
+          emit(`  ! spawn 에러: ${err.message}`);
+          emit(`     code=${err.code || "(none)"} errno=${err.errno || "(none)"} syscall=${err.syscall || "(none)"}`);
+          emit(`     cmd=${npmCmd} cwd=${projectRoot} shell=${useShell}`);
+          resolve(-1);
+        });
       });
       if (exitCode !== 0) return { ok: false, error: `빌드 실패 (exit ${exitCode})` };
       emit(`     빌드 성공`);
