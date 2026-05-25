@@ -4226,8 +4226,11 @@ function App() {
                     {staffList.length === 0
                       ? <p className="staff-empty">등록된 인원이 없습니다.</p>
                       : staffList.map((staff) => (
-                          <span key={staff.id} className={`staff-chip role-${staff.role}`}>
-                            <span className="staff-role-tag">{ROLE_LABEL[staff.role]}</span>
+                          <span
+                            key={staff.id}
+                            className={`staff-chip role-${staff.role}`}
+                            title={`${ROLE_LABEL[staff.role]} · ${staff.name}${staff.email ? ` · ${staff.email}` : ""}`}
+                          >
                             <span className="staff-name">{staff.name}</span>
                             {staff.email && <span className="staff-email">{staff.email}</span>}
                             <button type="button" onClick={() => removeStaff(staff.id)}>x</button>
@@ -4685,8 +4688,11 @@ function App() {
                 return (
                   <>
                     <div className="installer-target">
-                      <span className={`staff-chip role-${target.role}`}>
-                        {ROLE_LABEL[target.role]} · {target.name}
+                      <span
+                        className={`staff-chip role-${target.role}`}
+                        title={`${ROLE_LABEL[target.role]} · ${target.name}${target.email ? ` · ${target.email}` : ""}`}
+                      >
+                        <span className="staff-name">{target.name}</span>
                         {target.email && <span className="staff-email">{target.email}</span>}
                       </span>
                     </div>
