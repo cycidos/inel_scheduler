@@ -25,6 +25,15 @@ const EMBED = {
   sheetUrl: __IWS_SHEET_URL__
 };
 
+// 스태프 빌드는 윈도우 타이틀에 본인 이름을 붙여 다른 스태프 PC 와 구분.
+// Electron BrowserWindow 가 webContents.title 을 자동 반영하므로 document.title
+// 만 갱신해도 타이틀바가 즉시 바뀐다.
+if (typeof document !== "undefined") {
+  document.title = EMBED.name
+    ? `Inel Work Scheduler - ${EMBED.name}`
+    : "Inel Work Scheduler";
+}
+
 // 모듈 최상위 const → Rollup/esbuild 가 boolean literal 로 inline 시켜
 // `{IS_ADMIN && (...)}` JSX 가 editor/thumbnailer 빌드 산출물에서 통째로 제거된다.
 // runtime dev 토글용 `isAdmin` 과 별도. JSX 조건은 두 가지를 합쳐 사용.
