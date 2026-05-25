@@ -2518,24 +2518,16 @@ function App() {
 
   useEffect(() => {
     if (autoSyncDoneRef.current) return;
-    if (!sheetLink || !serviceAccountPath) return;
+    if (!sheetLink) return;
+    if (!oauthLoggedIn) return; // OAuth 로그인 후에만 자동 동기화
     const api = window.electronAPI;
     if (!api) return;
     autoSyncDoneRef.current = true;
     (async () => {
-      dlog("앱 시작 자동 동기화 시작");
-      setSheetsStatus("앱 시작 - 인증 중...");
-      const auth = await api.sheetsInitAuth(serviceAccountPath);
-      if (!auth.ok) {
-        dlog(`자동 인증 실패: ${auth.error}`);
-        setSheetsStatus(`인증 실패: ${auth.error}`);
-        setSyncPhase("error");
-        return;
-      }
-      if (auth.clientEmail) setClientEmail(auth.clientEmail);
+      dlog("앱 시작 자동 동기화 시작 (OAuth)");
       await runImport({ silent: false });
     })();
-  }, [sheetLink, serviceAccountPath]);
+  }, [sheetLink, oauthLoggedIn]);
 
   const pickServiceAccount = async () => {
     const api = window.electronAPI;
@@ -2630,8 +2622,8 @@ function App() {
       setSheetsStatus("Google Sheets 링크를 입력하세요.");
       return;
     }
-    if (!serviceAccountPath) {
-      setSheetsStatus("Service Account JSON을 먼저 등록하세요.");
+    if (!oauthLoggedIn) {
+      setSheetsStatus("먼저 Google 계정으로 로그인하세요.");
       return;
     }
     setSheetsStatus("연결 테스트 중...");
@@ -2700,8 +2692,8 @@ function App() {
       if (!opts.silent) { dlog("Google Sheets 링크를 입력하세요"); setSheetsStatus("시트 링크 없음"); }
       return false;
     }
-    if (!serviceAccountPath) {
-      if (!opts.silent) { dlog("Service Account JSON을 먼저 설정하세요"); setSheetsStatus("인증 필요"); }
+    if (!oauthLoggedIn) {
+      if (!opts.silent) { dlog("Google 계정으로 먼저 로그인하세요"); setSheetsStatus("로그인 필요"); }
       return false;
     }
 
@@ -2791,7 +2783,7 @@ function App() {
     const api = window.electronAPI;
     if (!api) { dlog("electronAPI not available"); return false; }
     if (!sheetLink) { dlog("Google Sheets 링크를 입력하세요"); setSheetsStatus("시트 링크 없음"); return false; }
-    if (!serviceAccountPath) { dlog("Service Account JSON을 먼저 설정하세요"); setSheetsStatus("인증 필요"); return false; }
+    if (!oauthLoggedIn) { dlog("Google 계정으로 먼저 로그인하세요"); setSheetsStatus("로그인 필요"); return false; }
 
     const year = new Date().getFullYear();
     const tabKeys: TabKey[] = ["shorts", "longform", "fullReplay"];
@@ -4602,9 +4594,9 @@ function App() {
                     ) : (
                       staffList.map((s) => (
                         <div key={s.id} className="staff-installer-row">
-                          <span className={`staff-chip role-${s.role}`}>
-                            {ROLE_LABEL[s.role]} · {s.name}
-                            {s.email && <span className="staff-email">{s.email}</span>}
+                          <span className={`installer-staff-chip role-${s.role}`} title={`${ROLE_LABEL[s.role]} · ${s.name}${s.email ? ` · ${s.email}` : ""}`}>
+                            <strong>{s.name}</strong>
+                            {s.email && <span>{s.email}</span>}
                           </span>
                           <button
                             type="button"
@@ -4627,21 +4619,6 @@ function App() {
                       ))
                     )}
                   </div>
-                </div>
-
-                <div className="etc-card etc-card-info">
-                  <strong>토큰(_tokens) 시트 / 권한 회수 안내</strong>
-                  <p className="etc-card-desc">
-                    편집자별 인스톨러는 빌드 시 <code>_tokens</code> 시트에 토큰을 <code>active</code> 로 자동 등록합니다.
-                    시트가 없으면 첫 빌드 시 자동으로 만들어져요. 헤더는
-                    <code> name | role | token | issuedAt | status | lastSeen </code>.
-                  </p>
-                  <p className="etc-card-desc">
-                    <strong>일시 회수</strong>: 시트의 해당 행 <code>status</code> 를 <code>revoked</code> 로 변경 →
-                    편집자 앱은 10분 주기 재검증 또는 재시작 시 자동 잠금 화면.
-                    <strong> 재발급</strong>: 같은 이름으로 다시 [인스톨러 빌드] 누르면 토큰 갱신(rotate) + 새 .exe.
-                    <strong> 영구 차단</strong>: 시트 공유 권한에서 해당 SA 이메일 제거 (Google Cloud Console).
-                  </p>
                 </div>
 
                 <div className="etc-card etc-danger-card">
@@ -4813,7 +4790,7 @@ function App() {
                   type="button"
                   className="installer-build-btn"
                   onClick={handleRunInstallerBuild}
-                  disabled={installerBuilding || !installerOutputDir || !sheetLink || !serviceAccountPath}
+                  disabled={installerBuilding || !installerOutputDir || !sheetLink || !oauthLoggedIn}
                 >
                   {installerBuilding ? "빌드 중…" : "빌드 시작"}
                 </button>
