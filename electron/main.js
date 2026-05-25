@@ -1560,31 +1560,35 @@ function createWindow() {
  *     (Electron 의 getLoginItemSettings 가 자기 형식으로 등록된 키만 정확히 인식)
  */
 function applyPendingAutoStart() {
-  if (process.platform !== "win32") return;
-  if (!app.isPackaged) return;
-  try {
-    const productName = app.getName();
-    const subKey = `HKCU\\Software\\${productName}`;
-    execFile("reg.exe", ["query", subKey, "/v", "PendingAutoStart"], (err, stdout) => {
-      if (err) return;
-      const m = String(stdout || "").match(/PendingAutoStart\s+REG_SZ\s+(\d)/i);
-      if (!m) return;
-      const enabled = m[1] === "1";
-      try {
-        app.setLoginItemSettings({
-          openAtLogin: enabled,
-          path: process.execPath,
-          args: []
-        });
-      } catch (_) {}
-      execFile("reg.exe", ["delete", subKey, "/v", "PendingAutoStart", "/f"], () => {});
-    });
-  } catch (_) {}
+  return new Promise((resolve) => {
+    if (process.platform !== "win32") return resolve();
+    if (!app.isPackaged) return resolve();
+    try {
+      const productName = app.getName();
+      const subKey = `HKCU\\Software\\${productName}`;
+      execFile("reg.exe", ["query", subKey, "/v", "PendingAutoStart"], (err, stdout) => {
+        if (err) return resolve();
+        const m = String(stdout || "").match(/PendingAutoStart\s+REG_SZ\s+(\d)/i);
+        if (!m) return resolve();
+        const enabled = m[1] === "1";
+        try {
+          app.setLoginItemSettings({
+            openAtLogin: enabled,
+            path: process.execPath,
+            args: []
+          });
+        } catch (_) { /* ignore */ }
+        execFile("reg.exe", ["delete", subKey, "/v", "PendingAutoStart", "/f"], () => resolve());
+      });
+    } catch (_) { resolve(); }
+  });
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
-  applyPendingAutoStart();
+  // PendingAutoStart 레지스트리 처리 완료 후 createWindow → renderer 의 autostartGet 호출
+  // 시점엔 이미 setLoginItemSettings 가 끝나있어 [기타 설정] 토글이 정확한 ON 상태 표시.
+  await applyPendingAutoStart();
   createWindow();
 
   app.on("activate", () => {
