@@ -34,12 +34,11 @@ const EMBED = {
 // runtime dev 토글용 `isAdmin` 과 별도. JSX 조건은 두 가지를 합쳐 사용.
 const IS_ADMIN: boolean = __IWS_EDITION__ === "admin";
 
-// 라벨도 모듈 레벨 상수로 분기 → 빌드 시점에 한쪽 문자열만 산출물에 남는다.
-// (ternary 를 JSX 안에 쓰면 양쪽 문자열이 모두 코드에 남으므로 모듈 const 사용)
-const LABEL_SYNC_DOWNLOAD = IS_ADMIN ? "구글시트 다운로드" : "일정 새로고침";
-const LABEL_SYNC_UPLOAD = IS_ADMIN ? "구글시트 업로드" : "변경사항 저장";
-const LABEL_SYNC_DOWNLOADING = IS_ADMIN ? "시트 내려받는 중" : "새로고침 중";
-const LABEL_SYNC_UPLOADING = IS_ADMIN ? "시트 올리는 중" : "저장 중";
+// 라벨 — admin / staff 모두 동일한 직관적 라벨 사용 (1.2.0 OAuth 전환 후 통일).
+const LABEL_SYNC_DOWNLOAD = "일정 새로고침";
+const LABEL_SYNC_UPLOAD = "변경사항 저장";
+const LABEL_SYNC_DOWNLOADING = "새로고침 중";
+const LABEL_SYNC_UPLOADING = "저장 중";
 
 declare global {
   interface Window {
@@ -268,7 +267,31 @@ const tableSchema: Record<TabKey, ColumnDef[]> = {
     { key: "broadcastDate", label: "방송일", type: "date", width: 140, shared: true },
     { key: "broadcastStartTime", label: "방송시작시간", type: "text", width: 120, shared: true },
     { key: "videoTitle", label: "영상제목 타임라인", type: "text", width: 320, shared: true },
-    { key: "categoryTimeline", label: "카테고리 타임라인", type: "text", width: 320, shared: true }
+    { key: "categoryTimeline", label: "카테고리 타임라인", type: "text", width: 320, shared: true },
+    // 다시보기 1-row 모드 유지 + 썸네일러 일정 컬럼들 (shared=true 라 1 row 그대로).
+    // 담당자 셀에 등록된 썸네일러를 선택해 매핑.
+    { key: "assignee", label: "담당자", type: "text", width: 160, shared: true },
+    {
+      key: "editType",
+      label: "편집 유형",
+      type: "preset",
+      width: 150,
+      shared: true,
+      presetOptions: EDIT_TYPE_OPTIONS
+    },
+    {
+      key: "subtitle",
+      label: "자막",
+      type: "preset",
+      width: 140,
+      shared: true,
+      presetOptions: SUBTITLE_OPTIONS
+    },
+    { key: "editStartDate", label: "작업시작일", type: "date", width: 150, shared: true },
+    { key: "workStatus", label: "작업상태", type: "status", width: 140, shared: true },
+    { key: "deliveryDate", label: "납품일", type: "date", width: 140, shared: true },
+    { key: "sourceShare", label: "원본 공유", type: "url", width: 180, shared: true },
+    { key: "deliveryShare", label: "납품 공유", type: "url", width: 180, shared: true }
   ]
 };
 
@@ -3134,12 +3157,16 @@ function App() {
     }
 
     if (column.key === "assignee") {
-      const candidates = cellRole
-        ? staffList.filter((s) => s.role === cellRole)
+      // 다시보기 탭의 담당자는 1-row 구조이지만 썸네일러 일정용이므로
+      // 후보를 썸네일러만으로 제한 + 셀 색도 썸네일러 (주황).
+      const isReplayAssignee = activeTab === "fullReplay";
+      const effectiveRole: EditorRole | null = cellRole || (isReplayAssignee ? "thumbnailer" : null);
+      const candidates = effectiveRole
+        ? staffList.filter((s) => s.role === effectiveRole)
         : staffList;
-      const placeholder = cellRole === "thumbnailer"
+      const placeholder = effectiveRole === "thumbnailer"
         ? "썸네일러 선택"
-        : cellRole === "editor"
+        : effectiveRole === "editor"
         ? "영상편집자 선택"
         : "담당자 선택";
       return (
@@ -3155,15 +3182,15 @@ function App() {
             <div className="assignee-dropdown">
               {candidates.length === 0 ? (
                 <p className="assignee-empty">
-                  {cellRole
-                    ? `등록된 ${ROLE_LABEL[cellRole]}이(가) 없습니다.`
+                  {effectiveRole
+                    ? `등록된 ${ROLE_LABEL[effectiveRole]}이(가) 없습니다.`
                     : "설정에서 편집자를 먼저 등록하세요"}
                 </p>
               ) : (
                 <>
-                  {cellRole ? (
+                  {effectiveRole ? (
                     <div className="assignee-group">
-                      <p>{ROLE_LABEL[cellRole]}</p>
+                      <p>{ROLE_LABEL[effectiveRole]}</p>
                       <div className="assignee-option-list">
                         {candidates.map((staff) => (
                           <button
@@ -3646,19 +3673,21 @@ function App() {
         </div>
         <div className="actions">
           <div className="action-group action-group-data" data-label="데이터">
-            <div className="detect-toggle-wrap">
-              <button
-                type="button"
-                className={`detect-toggle ${isDetecting ? "on" : "off"}`}
-                onClick={toggleDetection}
-              >
-                {isDetecting ? "방송감지 On" : "방송감지 Off"}
-              </button>
-              <span className={`live-badge ${chzzkLive && isDetecting ? "active" : ""}`}>LIVE</span>
-              {chzzkLive && isDetecting && chzzkCategory && (
-                <span className="live-category">{chzzkCategory}</span>
-              )}
-            </div>
+            {IS_ADMIN && isAdmin && (
+              <div className="detect-toggle-wrap">
+                <button
+                  type="button"
+                  className={`detect-toggle ${isDetecting ? "on" : "off"}`}
+                  onClick={toggleDetection}
+                >
+                  {isDetecting ? "방송감지 On" : "방송감지 Off"}
+                </button>
+                <span className={`live-badge ${chzzkLive && isDetecting ? "active" : ""}`}>LIVE</span>
+                {chzzkLive && isDetecting && chzzkCategory && (
+                  <span className="live-category">{chzzkCategory}</span>
+                )}
+              </div>
+            )}
             <button type="button" onClick={handleImport}>{LABEL_SYNC_DOWNLOAD}</button>
             <button type="button" onClick={handleExport}>{LABEL_SYNC_UPLOAD}</button>
             {IS_ADMIN && isAdmin && (
@@ -3983,9 +4012,16 @@ function App() {
                         tdProps.rowSpan = 2;
                       }
                       const isUploadCol = column.key === "upload";
+                      // 다시보기 탭의 썸네일러 일정 컬럼들 (assignee 이후) 은 shared=true 지만
+                      // 시각적으로 썸네일러 영역임을 좌측 색 바로 표시.
+                      const replayThumbnailerCol = activeTab === "fullReplay" && [
+                        "assignee", "editType", "subtitle", "editStartDate",
+                        "workStatus", "deliveryDate", "sourceShare", "deliveryShare"
+                      ].includes(column.key);
                       const cellClassName = [
                         isShared ? "shared-cell" : "role-cell",
                         role ? `role-${role}` : "",
+                        replayThumbnailerCol ? "role-cell role-thumbnailer" : "",
                         isRowLocked && !isUploadCol ? "is-locked" : ""
                       ].filter(Boolean).join(" ") || undefined;
                       return (
@@ -4153,6 +4189,7 @@ function App() {
               ×
             </button>
           </div>
+          {IS_ADMIN && isAdmin && (
           <nav className="settings-tabs" role="tablist">
             {IS_ADMIN && isAdmin && (
               <button
@@ -4197,6 +4234,7 @@ function App() {
               기타 설정
             </button>
           </nav>
+          )}
 
           <div className="settings-tabpanel">
             {IS_ADMIN && isAdmin && settingsTab === "sheet" && (
@@ -4583,13 +4621,11 @@ function App() {
                     </button>
                   </div>
                   <p className="etc-card-desc">
-                    AI API 키, 시트 링크, 그룹 표시 상태 등 앱 설정과 사용자 카테고리는
-                    Windows 표준 위치인 <code>%APPDATA%\Inel Work Scheduler\</code> 에 저장됩니다.
-                    설치 폴더(내문서)와는 다른 위치이므로, 백업하거나 다른 PC 로 옮길 때
-                    이 폴더를 함께 복사하세요.
+                    앱 설정과 캐시는 Windows 표준 위치인 <code>%APPDATA%\Inel Work Scheduler\</code> 에 저장됩니다.
                   </p>
                 </div>
 
+                {IS_ADMIN && isAdmin && (
                 <div className="etc-card">
                   <div className="etc-card-head">
                     <strong>편집자/썸네일러 전용 설치 파일 만들기</strong>
@@ -4641,6 +4677,7 @@ function App() {
                     )}
                   </div>
                 </div>
+                )}
 
                 <div className="etc-card etc-danger-card">
                   <div className="etc-card-head">
