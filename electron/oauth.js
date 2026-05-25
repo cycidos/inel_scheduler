@@ -65,7 +65,11 @@ let currentUserEmail = null;
 function createClient() {
   const cfg = loadClientFile();
   // redirect_uri 는 authenticate() 가 동적으로 loopback 설정. 여기선 placeholder.
-  return new google.auth.OAuth2(cfg.client_id, cfg.client_secret);
+  const client = new google.auth.OAuth2(cfg.client_id, cfg.client_secret);
+  // 액세스 토큰 만료 5분 전부터 미리 refresh — googleapis 호출이 만료된 토큰을
+  // 사용해 401/403 "unregistered callers" 받는 케이스 방지.
+  client.eagerRefreshThresholdMillis = 5 * 60 * 1000;
+  return client;
 }
 
 /**
@@ -232,6 +236,21 @@ function isLoggedIn() {
   return oauthClient !== null;
 }
 
+/**
+ * sheets API 호출 직전에 토큰이 만료됐으면 강제 refresh. eagerRefreshThresholdMillis
+ * 가 있어 보통은 자동 처리되지만, 일부 케이스 (앱이 오래 켜져있다가 갑자기 호출 등)
+ * 에서는 명시 호출이 더 안전.
+ */
+async function ensureFreshToken() {
+  if (!oauthClient) return false;
+  try {
+    await oauthClient.getAccessToken();
+    return true;
+  } catch (_e) {
+    return false;
+  }
+}
+
 module.exports = {
   SCOPES,
   login,
@@ -239,5 +258,6 @@ module.exports = {
   logout,
   getClient,
   getUserEmail,
-  isLoggedIn
+  isLoggedIn,
+  ensureFreshToken
 };

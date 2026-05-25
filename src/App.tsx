@@ -3904,8 +3904,15 @@ function App() {
               const isDropRow = dropTargetRowId === row.id && dragRowId && dragRowId !== row.id;
               const isDragRow = dragRowId === row.id;
               const isSelected = selectedRowByTab[activeTab] === row.id;
-              const hasTwoRows = activeTab !== "fullReplay" && row.thumbnailer !== undefined && row.editor !== undefined;
-              const subRoles: Array<EditorRole | null> = hasTwoRows ? ["thumbnailer", "editor"] : [null];
+              // staff 시점에서는 본인 role 의 1행만 표시 (다른 사람 행은 안 보임).
+              // admin 시점에서는 종전대로 썸네일러 + 영상편집자 2행 펼쳐서 표시.
+              const staffOwnRole: EditorRole | null = !isAdmin && (EMBED.role === "editor" || EMBED.role === "thumbnailer")
+                ? (EMBED.role as EditorRole)
+                : null;
+              const hasTwoRows = activeTab !== "fullReplay" && row.thumbnailer !== undefined && row.editor !== undefined && !staffOwnRole;
+              const subRoles: Array<EditorRole | null> = hasTwoRows
+                ? ["thumbnailer", "editor"]
+                : (staffOwnRole && activeTab !== "fullReplay" ? [staffOwnRole] : [null]);
               const isRowLocked = (row.values.upload || "") === "완";
 
               const rowDragOver = (e: React.DragEvent) => {

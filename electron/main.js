@@ -425,6 +425,16 @@ function createWindow() {
     authMode = "oauth";
   }
 
+  /**
+   * sheets API 호출 직전 토큰 신선화 보장. OAuth 모드에서만 의미 있음.
+   * 매 IPC 핸들러 시작에서 호출.
+   */
+  async function ensureAuthReady() {
+    if (authMode === "oauth") {
+      await oauth.ensureFreshToken();
+    }
+  }
+
   // 앱 시작 시 저장된 refresh_token 으로 자동 복원 시도.
   (async () => {
     try {
@@ -623,6 +633,7 @@ function createWindow() {
 
   ipcMain.handle("settings-sheet-load", async (_event, { sheetUrl }) => {
     try {
+      await ensureAuthReady();
       if (!sheetsClient) return { ok: false, error: "Sheets 인증 미초기화" };
       const spreadsheetId = extractSpreadsheetId(sheetUrl);
       if (!spreadsheetId) return { ok: false, error: "유효한 시트 URL이 아닙니다." };
@@ -636,6 +647,7 @@ function createWindow() {
 
   ipcMain.handle("settings-sheet-write", async (_event, { sheetUrl, kv }) => {
     try {
+      await ensureAuthReady();
       if (!sheetsClient) return { ok: false, error: "Sheets 인증 미초기화" };
       const spreadsheetId = extractSpreadsheetId(sheetUrl);
       if (!spreadsheetId) return { ok: false, error: "유효한 시트 URL이 아닙니다." };
@@ -648,6 +660,7 @@ function createWindow() {
 
   ipcMain.handle("settings-sheet-patch", async (_event, { sheetUrl, patch }) => {
     try {
+      await ensureAuthReady();
       if (!sheetsClient) return { ok: false, error: "Sheets 인증 미초기화" };
       const spreadsheetId = extractSpreadsheetId(sheetUrl);
       if (!spreadsheetId) return { ok: false, error: "유효한 시트 URL이 아닙니다." };
@@ -989,8 +1002,9 @@ function createWindow() {
   });
 
   ipcMain.handle("sheets-test-connection", async (_event, { sheetUrl }) => {
+    await ensureAuthReady();
     if (!sheetsClient) {
-      return { ok: false, error: "Service Account JSON이 등록되지 않았습니다." };
+      return { ok: false, error: "Sheets 인증이 초기화되지 않았습니다. Google 계정으로 먼저 로그인하세요." };
     }
     const spreadsheetId = extractSpreadsheetId(sheetUrl);
     if (!spreadsheetId) {
@@ -1010,7 +1024,8 @@ function createWindow() {
   });
 
   ipcMain.handle("sheets-import", async (_event, { sheetUrl, tabKey, year, headers }) => {
-    if (!sheetsClient) return { ok: false, error: "인증되지 않음. Service Account JSON을 먼저 설정하세요." };
+    await ensureAuthReady();
+    if (!sheetsClient) return { ok: false, error: "Sheets 인증이 초기화되지 않음. Google 계정으로 먼저 로그인하세요." };
     const spreadsheetId = extractSpreadsheetId(sheetUrl);
     if (!spreadsheetId) return { ok: false, error: "잘못된 Google Sheets URL" };
 
@@ -1088,7 +1103,8 @@ function createWindow() {
   });
 
   ipcMain.handle("sheets-export", async (_event, { sheetUrl, tabKey, year, headers, rows }) => {
-    if (!sheetsClient) return { ok: false, error: "인증되지 않음. Service Account JSON을 먼저 설정하세요." };
+    await ensureAuthReady();
+    if (!sheetsClient) return { ok: false, error: "Sheets 인증이 초기화되지 않음. Google 계정으로 먼저 로그인하세요." };
     const spreadsheetId = extractSpreadsheetId(sheetUrl);
     if (!spreadsheetId) return { ok: false, error: "잘못된 Google Sheets URL" };
 
@@ -1184,7 +1200,8 @@ function createWindow() {
   // 시트에서 해당 행을 식별 → 그 행 전체를 rowValues 로 update. 매칭 행이 없으면 append.
   // 카테고리 변경마다 호출되므로 빠르고 가벼운 단일 행 작업만 수행.
   ipcMain.handle("sheets-patch-row", async (_event, { sheetUrl, tabKey, year, headers, matchPairs, rowValues }) => {
-    if (!sheetsClient) return { ok: false, error: "인증되지 않음. Service Account JSON을 먼저 설정하세요." };
+    await ensureAuthReady();
+    if (!sheetsClient) return { ok: false, error: "Sheets 인증이 초기화되지 않음. Google 계정으로 먼저 로그인하세요." };
     const spreadsheetId = extractSpreadsheetId(sheetUrl);
     if (!spreadsheetId) return { ok: false, error: "잘못된 Google Sheets URL" };
     const sheetName = getSheetName(tabKey, year);
