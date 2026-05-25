@@ -107,12 +107,22 @@ Get-ChildItem docs\site\*.html | ForEach-Object {
 
 ## 신청 양식에 들어갈 URL (예시)
 
-| 항목 | URL |
+Google 검토팀이 글로벌(영어)이므로 신청 폼에는 **영어 버전 URL** 을 제출하는 것을 권장.
+한국어 사용자에게는 한국어 URL 을 따로 안내 (가이드 페이지 / 앱 안 등).
+
+| 항목 | URL (신청 폼 제출용 = 영어) |
 |---|---|
-| Application home page | `https://{{GITHUB_USERNAME}}.github.io/inel_scheduler/site/` |
-| Privacy policy | `https://{{GITHUB_USERNAME}}.github.io/inel_scheduler/site/privacy.html` |
+| Application home page | `https://{{GITHUB_USERNAME}}.github.io/inel_scheduler/site/index-en.html` |
+| Privacy policy | `https://{{GITHUB_USERNAME}}.github.io/inel_scheduler/site/privacy-en.html` |
 | Authorized domain | `{{GITHUB_USERNAME}}.github.io` |
 | YouTube demo video | (영상 업로드 후 unlisted URL) |
+
+한국어 버전도 그대로 살아있어서, 같은 페이지의 우상단 [한국어] 토글로 전환 가능.
+
+| 항목 | URL (한국어) |
+|---|---|
+| 홈 | `https://{{GITHUB_USERNAME}}.github.io/inel_scheduler/site/` |
+| 개인정보처리방침 | `https://{{GITHUB_USERNAME}}.github.io/inel_scheduler/site/privacy.html` |
 
 ---
 

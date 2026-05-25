@@ -30,6 +30,21 @@
     }
     .layout { max-width: 820px; margin: 0 auto; padding: 48px 24px 80px; }
 
+    .lang-toggle {
+      position: absolute;
+      top: 24px; right: 24px;
+      font-size: 12px;
+    }
+    .lang-toggle a {
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: #ffffff;
+      border: 1px solid var(--pink-200);
+      color: var(--pink-700);
+      text-decoration: none;
+      font-weight: 700;
+    }
+
     header.topbar {
       padding: 22px 28px;
       background: #ffffff;
@@ -99,6 +114,9 @@
   </style>
 </head>
 <body>
+  <div class="lang-toggle">
+    <a href="./privacy-en.html">English</a>
+  </div>
   <div class="layout">
     <header class="topbar">
       <h1>개인정보처리방침</h1>

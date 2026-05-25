@@ -34,9 +34,12 @@ git push
 
 ### 1-4. URL 발급 + 접속 확인 (1~3분 대기 후)
 - 발급 URL 형태: `https://{본인username}.github.io/inel_scheduler/`
-- 다음 두 페이지 모두 404 없이 열리는지 확인:
-  - [ ] `https://{본인username}.github.io/inel_scheduler/site/`
-  - [ ] `https://{본인username}.github.io/inel_scheduler/site/privacy.html`
+- 다음 네 페이지 모두 404 없이 열리는지 확인 (한국어 + 영어):
+  - [ ] `https://{본인username}.github.io/inel_scheduler/site/` (한국어 홈)
+  - [ ] `https://{본인username}.github.io/inel_scheduler/site/privacy.html` (한국어 개인정보처리방침)
+  - [ ] `https://{본인username}.github.io/inel_scheduler/site/index-en.html` (영어 홈)
+  - [ ] `https://{본인username}.github.io/inel_scheduler/site/privacy-en.html` (영어 개인정보처리방침)
+- 각 페이지 우상단 [English] / [한국어] 토글이 정상 동작하는지도 클릭해 확인
 
 > docs/ 폴더를 Pages source 로 쓰면 `docs/site/index.html` 의 경로는 `/site/` 로 노출됨.
 
@@ -85,9 +88,12 @@ Google 의 OAuth Consent Screen 의 "Authorized domains" 에 등록한 도메인
 - [ ] App logo: 본 레포의 `build/icon.png` 업로드 (또는 120x120 PNG)
 
 **App domain**:
-- [ ] Application home page: `https://{본인username}.github.io/inel_scheduler/site/`
-- [ ] Application privacy policy link: `https://{본인username}.github.io/inel_scheduler/site/privacy.html`
+- [ ] Application home page: `https://{본인username}.github.io/inel_scheduler/site/index-en.html` (영어 권장)
+- [ ] Application privacy policy link: `https://{본인username}.github.io/inel_scheduler/site/privacy-en.html` (영어 권장)
 - [ ] Application terms of service link: (비워둠 — 약관은 필수 아님)
+
+> Google 검토팀은 글로벌(영어)이라 영어 페이지 URL 을 제출하는 게 통과율을 높입니다.
+> 한국어 페이지는 같은 페이지의 우상단 [한국어] 토글로 접근 가능하니 한국어 사용자에게도 문제 없음.
 
 **Authorized domains**:
 - [ ] `{본인username}.github.io` 추가
