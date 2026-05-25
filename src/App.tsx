@@ -4239,10 +4239,9 @@ function App() {
           <div className="settings-tabpanel">
             {IS_ADMIN && isAdmin && settingsTab === "sheet" && (
               <>
-                <div className="connection-help-banner">
-                  <strong>스케줄러 앱 사용 방법</strong>
+                <div className="connection-help-banner" style={{ justifyContent: "flex-start" }}>
                   <button type="button" className="connection-help-btn" onClick={openAppGuideHelp}>
-                    자세히 보기 ↗
+                    스케줄러 앱 사용 방법 자세히 보기 ↗
                   </button>
                 </div>
                 <label>
@@ -4422,8 +4421,7 @@ function App() {
                   {oauthLoggedIn && oauthAuthMode === "oauth" ? (
                     <>
                       <p className="oauth-card-desc">
-                        현재 <strong>{oauthEmail || "(이메일 미상)"}</strong> 계정으로 시트 API 인증이 활성화되어 있습니다.
-                        다른 계정으로 바꾸려면 로그아웃 후 재로그인하세요.
+                        현재 <strong>{oauthEmail || "(이메일 미상)"}</strong> 계정으로 로그인
                       </p>
                       <button
                         type="button"
@@ -4575,6 +4573,12 @@ function App() {
             )}
             {settingsTab === "etc" && (
               <>
+                {!IS_ADMIN && oauthLoggedIn && (
+                  <div className="staff-login-banner">
+                    <span className="staff-login-email">{oauthEmail || "(이메일 미상)"}</span>
+                    <span className="staff-login-suffix"> 계정으로 로그인</span>
+                  </div>
+                )}
                 <div className="etc-card">
                   <div className="etc-card-head">
                     <strong>윈도우 시작 시 자동 실행</strong>
