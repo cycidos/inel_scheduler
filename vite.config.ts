@@ -13,11 +13,13 @@ import obfuscator from "vite-plugin-javascript-obfuscator";
 // Rollup tree-shaking 으로 다른 edition 의 코드 블록이 산출물에서 제거된다.
 //
 // 추가 메타데이터(편집자 인스톨러 한정, admin 빌드에는 모두 빈 문자열):
-//   IWS_NAME       편집자/썸네일러 이름. 임베드 시 자동 본인 식별
-//   IWS_ROLE       "editor" | "thumbnailer" (UI 분기 외 _tokens 매칭에 사용)
-//   IWS_TOKEN      32-48 hex 토큰. _tokens 시트와 대조
+//   IWS_NAME       편집자/썸네일러 이름. 시트의 담당자 셀 매칭용 표시명
+//   IWS_EMAIL      편집자/썸네일러 Google 계정 이메일. 본인 OAuth 로그인 시 일치 검증 + 시트 공유 권한 매칭
+//   IWS_ROLE       "editor" | "thumbnailer"
 //   IWS_SHEET_URL  연결할 Google Sheet URL
-//   IWS_SA_KEY_B64 Service Account JSON 의 base64. 첫 실행 시 main 이 userData 에 풀어 저장
+//
+// 1.2.0 — OAuth 전환 후 IWS_TOKEN / IWS_SA_KEY_B64 제거. 스태프 앱은 본인 Google
+// 계정으로 직접 로그인 → 시트 공유 권한이 진실의 단일 소스.
 // ────────────────────────────────────────────────────────────────────
 const EDITION = process.env.IWS_EDITION || "admin";
 const VALID = ["admin", "editor", "thumbnailer"];
@@ -29,10 +31,9 @@ if (!VALID.includes(EDITION)) {
 const IS_ADMIN = EDITION === "admin";
 const EMBED = {
   name: IS_ADMIN ? "" : (process.env.IWS_NAME || ""),
+  email: IS_ADMIN ? "" : (process.env.IWS_EMAIL || ""),
   role: IS_ADMIN ? "" : (process.env.IWS_ROLE || EDITION),
-  token: IS_ADMIN ? "" : (process.env.IWS_TOKEN || ""),
-  sheetUrl: IS_ADMIN ? "" : (process.env.IWS_SHEET_URL || ""),
-  saKeyB64: IS_ADMIN ? "" : (process.env.IWS_SA_KEY_B64 || "")
+  sheetUrl: IS_ADMIN ? "" : (process.env.IWS_SHEET_URL || "")
 };
 
 // staff 빌드에 한해 경량 난독화 적용 (Lv.1 — 호기심 추출 차단 수준).
@@ -71,9 +72,8 @@ export default defineConfig({
   define: {
     __IWS_EDITION__: JSON.stringify(EDITION),
     __IWS_NAME__: JSON.stringify(EMBED.name),
+    __IWS_EMAIL__: JSON.stringify(EMBED.email),
     __IWS_ROLE__: JSON.stringify(EMBED.role),
-    __IWS_TOKEN__: JSON.stringify(EMBED.token),
-    __IWS_SHEET_URL__: JSON.stringify(EMBED.sheetUrl),
-    __IWS_SA_KEY_B64__: JSON.stringify(EMBED.saKeyB64)
+    __IWS_SHEET_URL__: JSON.stringify(EMBED.sheetUrl)
   }
 });

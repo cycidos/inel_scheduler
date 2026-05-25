@@ -9,22 +9,24 @@ import chzzkCategoriesSeed from "./data/chzzk-categories.seed.json";
 declare const __IWS_EDITION__: "admin" | "editor" | "thumbnailer";
 
 // 편집자 인스톨러에 임베드되는 메타 (admin 빌드는 모두 빈 문자열).
-// 빌드 시점에 string literal 로 inline. base64 키도 그대로 inline 되어
-// main 프로세스의 시작 코드가 첫 실행 때 userData 폴더에 풀어 저장한다.
+// 1.2.0 — OAuth 전환 후 토큰 / SA 키 임베드 폐기. email 만 임베드해서 본인 OAuth
+// 로그인 시 일치 검증에 사용.
 declare const __IWS_NAME__: string;
+declare const __IWS_EMAIL__: string;
 declare const __IWS_ROLE__: string;
-declare const __IWS_TOKEN__: string;
 declare const __IWS_SHEET_URL__: string;
-declare const __IWS_SA_KEY_B64__: string;
 
 type Edition = "admin" | "editor" | "thumbnailer";
 const BUILD_EDITION: Edition = __IWS_EDITION__;
 const EMBED = {
   name: __IWS_NAME__,
+  email: __IWS_EMAIL__,
   role: __IWS_ROLE__,
-  token: __IWS_TOKEN__,
   sheetUrl: __IWS_SHEET_URL__,
-  hasSaKey: __IWS_SA_KEY_B64__.length > 0
+  // 1.1.x 의 토큰/SA 임베드 흐름은 phase 3-6 에서 OAuth 검증으로 완전 교체된다.
+  // 그 동안 옛 코드의 EMBED.hasSaKey / EMBED.token 참조가 컴파일 깨지지 않도록 stub.
+  hasSaKey: false,
+  token: ""
 };
 
 // 모듈 최상위 const → Rollup/esbuild 가 boolean literal 로 inline 시켜
@@ -67,8 +69,8 @@ declare global {
       settingsSheetPatch: (sheetUrl: string, patch: Record<string, any>) =>
         Promise<{ ok: boolean; count?: number; error?: string }>;
       pickOutputDir: (defaultPath?: string) => Promise<{ ok: boolean; path?: string; canceled?: boolean }>;
-      buildEditorInstaller: (payload: { name: string; role: string; sheetUrl: string; outputDir: string }) =>
-        Promise<{ ok: boolean; token?: string; outputDir?: string; files?: string[]; rotated?: boolean; error?: string }>;
+      buildEditorInstaller: (payload: { name: string; email: string; role: string; sheetUrl: string; outputDir: string }) =>
+        Promise<{ ok: boolean; outputDir?: string; files?: string[]; error?: string }>;
       onBuildInstallerLog: (cb: (line: string) => void) => () => void;
       sheetsImport: (sheetUrl: string, tabKey: string, year: number, headers: Array<{ key: string; label: string }>) =>
         Promise<{ ok: boolean; rows?: RowItem[]; headerRow?: string[]; sheetNotFound?: boolean; error?: string }>;
@@ -194,6 +196,7 @@ type EditorRole = "thumbnailer" | "editor";
 type StaffMember = {
   id: string;
   name: string;
+  email: string; // Google 계정 이메일 — OAuth 로그인 시 본인 확인 + 시트 공유 권한 매칭
   role: EditorRole;
 };
 
@@ -575,97 +578,49 @@ function App() {
     try { localStorage.setItem("inel.settingsMigrated.v1", v ? "1" : "0"); } catch (_e) { /* ignore */ }
   };
 
-  // ── staff 빌드 잠금/검증 state ──
-  // dev 모드는 검증 우회 (admin 빌드를 dev 띄울 때 staff 시점 토글해도 통과).
-  // prod staff 빌드는 마운트 직후 토큰 검증 결과가 나올 때까지 "verifying".
-  type LockState = "ok" | "verifying" | "locked";
-  const initialLock: LockState = IS_ADMIN ? "ok" : (import.meta.env.DEV ? "ok" : "verifying");
+  // ── 잠금 상태 (admin/staff 공용) ──
+  // 1.2.0 OAuth 전환 후, 잠금 사유는 두 가지로 단순화:
+  //   • admin 빌드: OAuth 미로그인 또는 Sheet URL 미설정 → "logged-out"
+  //   • staff 빌드: OAuth 미로그인 / 임베드 email 불일치 / 시트 공유 권한 없음 → 각각 상이 사유
+  // dev 모드는 모두 우회 (편의).
+  type LockState = "ok" | "verifying" | "locked" | "logged-out";
+  const initialLock: LockState = import.meta.env.DEV
+    ? "ok"
+    : (IS_ADMIN ? "logged-out" : "verifying");
   const [lockState, setLockState] = useState<LockState>(initialLock);
   const [lockReason, setLockReason] = useState<string>("");
 
-  // staff 빌드의 임베드된 SA 키를 main 에 한 번 forward → userData/google-credentials.json 풀어 저장 + 자동 인증
-  const embedSetupDoneRef = useRef(false);
-  const tokenVerifyDoneRef = useRef(false);
+  // staff 빌드 OAuth 검증:
+  //   1) OAuth 로그인 안 됨 → "logged-out" (로그인 화면)
+  //   2) 로그인됨 + 이메일이 EMBED.email 과 다름 → "locked" (계정 불일치)
+  //   3) 일치 → "ok" (단지 시트 접근은 시트 공유 권한 따라감. 그건 sheets-import 가 401/403 으로 알려줌)
   useEffect(() => {
-    if (embedSetupDoneRef.current) return;
-    if (!EMBED.hasSaKey) return;
-    if (IS_ADMIN) return; // 안전망 (admin 빌드에는 hasSaKey=false 지만 이중 가드)
-    embedSetupDoneRef.current = true;
-    (async () => {
-      try {
-        const res = await (window as any).electronAPI?.setupEmbedSa(__IWS_SA_KEY_B64__);
-        if (res?.ok) {
-          if (res.path) setServiceAccountPath(res.path);
-          if (res.clientEmail) setClientEmail(res.clientEmail);
-          dlog(`임베드 SA 셋업 완료: ${res.path || "(path n/a)"}`);
-          // SA 인증이 끝나야 토큰 검증 가능. 셋업 완료 후 곧바로 검증 트리거.
-          void verifyEmbedToken("startup");
-        } else {
-          dlog(`임베드 SA 셋업 실패: ${res?.error || "unknown"}`);
-          setLockState("locked");
-          setLockReason("인증 초기화에 실패했습니다. 관리자에게 새 설치 파일을 요청하세요.");
-        }
-      } catch (err: any) {
-        dlog(`임베드 SA 셋업 예외: ${err?.message || err}`);
-        setLockState("locked");
-        setLockReason("초기화 중 예외가 발생했습니다.");
-      }
-    })();
-  }, []);
-
-  // 토큰 검증 (시작 시 1회 + 주기적 재검증)
-  const verifyEmbedToken = useCallback(async (reason: "startup" | "periodic") => {
-    if (IS_ADMIN) return;
     if (import.meta.env.DEV) { setLockState("ok"); return; }
-    if (!EMBED.token || !EMBED.name || !EMBED.sheetUrl) {
-      setLockState("locked");
-      setLockReason("설치 파일에 토큰 정보가 없습니다. 관리자에게 새 설치 파일을 요청하세요.");
+    if (IS_ADMIN) {
+      // admin: 로그인 안 됐으면 logged-out, 됐으면 ok
+      setLockState(oauthLoggedIn ? "ok" : "logged-out");
       return;
     }
-    try {
-      const res = await (window as any).electronAPI?.tokensVerify(
-        EMBED.sheetUrl, EMBED.name, EMBED.role, EMBED.token
-      );
-      if (!res?.ok) {
-        // 인증/네트워크 실패: 시작 시점이면 잠금, 주기 검증이면 기존 상태 유지 (일시 장애 톨러런스)
-        dlog(`토큰 검증 통신 실패 (${reason}): ${res?.error || "unknown"}`);
-        if (reason === "startup") {
-          setLockState("locked");
-          setLockReason("권한 확인 중 통신 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
-        }
-        return;
-      }
-      if (res.valid) {
-        if (lockState !== "ok") dlog(`토큰 검증 OK (${reason})`);
-        setLockState("ok");
-        setLockReason("");
-        tokenVerifyDoneRef.current = true;
-      } else {
-        dlog(`토큰 검증 실패 (${reason}): status=${res.status}`);
-        setLockState("locked");
-        setLockReason(
-          res.status === "not-found"
-            ? "등록되지 않은 사용자입니다. 관리자에게 문의하세요."
-            : `권한이 회수되었습니다 (status: ${res.status}). 관리자에게 문의하세요.`
-        );
-      }
-    } catch (err: any) {
-      dlog(`토큰 검증 예외: ${err?.message || err}`);
-      if (reason === "startup") {
-        setLockState("locked");
-        setLockReason("권한 확인 중 예외가 발생했습니다.");
-      }
+    // staff
+    if (!oauthLoggedIn) {
+      setLockState("logged-out");
+      setLockReason("");
+      return;
     }
-  }, [lockState]);
-
-  // 주기적 재검증 (staff prod 빌드 한정, 10분 간격).
-  useEffect(() => {
-    if (IS_ADMIN) return;
-    if (import.meta.env.DEV) return;
-    if (!EMBED.token) return;
-    const id = setInterval(() => { void verifyEmbedToken("periodic"); }, 10 * 60 * 1000);
-    return () => clearInterval(id);
-  }, [verifyEmbedToken]);
+    if (!EMBED.email) {
+      setLockState("locked");
+      setLockReason("설치 파일에 본인 이메일 정보가 없습니다. 관리자에게 새 설치 파일을 요청하세요.");
+      return;
+    }
+    const norm = (s: string | null | undefined) => (s || "").trim().toLowerCase();
+    if (norm(oauthEmail) !== norm(EMBED.email)) {
+      setLockState("locked");
+      setLockReason(`로그인된 계정(${oauthEmail || "?"}) 이 등록된 계정(${EMBED.email}) 과 다릅니다. 본인 Gmail 로 로그아웃 후 다시 로그인하세요.`);
+      return;
+    }
+    setLockState("ok");
+    setLockReason("");
+  }, [oauthLoggedIn, oauthEmail]);
   const [sheetsStatus, setSheetsStatus] = useState("");
   const [syncPhase, setSyncPhase] = useState<"idle" | "downloading" | "uploading" | "success" | "error">("idle");
   const [syncProgress, setSyncProgress] = useState<{ current: number; total: number; label: string }>({
@@ -694,6 +649,7 @@ function App() {
   const [newStatus, setNewStatus] = useState("");
   const [staffList, setStaffList] = useState<StaffMember[]>([]);
   const [newStaffName, setNewStaffName] = useState("");
+  const [newStaffEmail, setNewStaffEmail] = useState("");
   const [newStaffRole, setNewStaffRole] = useState<EditorRole>("editor");
   const [openAssigneeMenuKey, setOpenAssigneeMenuKey] = useState<string | null>(null);
   const [userCategories, setUserCategories] = useState<ChzzkCategory[]>([]);
@@ -1539,19 +1495,35 @@ function App() {
 
   const addStaff = () => {
     const trimmed = normalizeName(newStaffName);
+    const trimmedEmail = newStaffEmail.trim().toLowerCase();
     if (!trimmed) return;
+    if (!trimmedEmail) {
+      dlog(`이메일을 입력하세요 (시트 공유 + OAuth 본인 확인용)`);
+      return;
+    }
+    // 간단한 이메일 형식 검증
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      dlog(`이메일 형식이 올바르지 않습니다: ${trimmedEmail}`);
+      return;
+    }
     if (staffList.some((s) => normalizeName(s.name) === trimmed && s.role === newStaffRole)) {
       dlog(`이미 등록된 ${ROLE_LABEL[newStaffRole]}: ${trimmed}`);
+      return;
+    }
+    if (staffList.some((s) => (s.email || "").toLowerCase() === trimmedEmail)) {
+      dlog(`이미 등록된 이메일: ${trimmedEmail}`);
       return;
     }
     const member: StaffMember = {
       id: `stf_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
       name: trimmed,
+      email: trimmedEmail,
       role: newStaffRole
     };
     setStaffList((prev) => [...prev, member]);
     setNewStaffName("");
-    dlog(`${ROLE_LABEL[member.role]} 등록: ${member.name}`);
+    setNewStaffEmail("");
+    dlog(`${ROLE_LABEL[member.role]} 등록: ${member.name} <${member.email}>`);
   };
 
   const removeStaff = (id: string) => {
@@ -1576,11 +1548,11 @@ function App() {
   const handleRunInstallerBuild = async () => {
     const target = staffList.find((s) => s.id === installerTargetStaffId);
     if (!target) { setInstallerResult({ ok: false, error: "편집자 미선택" }); return; }
+    if (!target.email) { setInstallerResult({ ok: false, error: "해당 스태프의 Gmail 이 등록되어 있지 않습니다. [시트 설정] 탭에서 이메일 입력 후 다시 시도하세요." }); return; }
     if (!installerOutputDir) { setInstallerResult({ ok: false, error: "출력 폴더 미선택" }); return; }
-    if (!sheetLink) { setInstallerResult({ ok: false, error: "시트 URL 이 없습니다. 구글 시트 탭에서 설정 후 다시 시도하세요." }); return; }
-    if (!serviceAccountPath) { setInstallerResult({ ok: false, error: "Service Account JSON 이 없습니다." }); return; }
+    if (!sheetLink) { setInstallerResult({ ok: false, error: "시트 URL 이 없습니다. [구글 시트] 탭에서 설정 후 다시 시도하세요." }); return; }
     setInstallerBuilding(true);
-    setInstallerLogs((prev) => [...prev, `▶ ${ROLE_LABEL[target.role]} ${target.name} 빌드 시작`]);
+    setInstallerLogs((prev) => [...prev, `▶ ${ROLE_LABEL[target.role]} ${target.name} <${target.email}> 빌드 시작`]);
     setInstallerResult(null);
     const off = (window as any).electronAPI?.onBuildInstallerLog((line: string) => {
       setInstallerLogs((prev) => [...prev, line]);
@@ -1588,6 +1560,7 @@ function App() {
     try {
       const res = await (window as any).electronAPI?.buildEditorInstaller({
         name: target.name,
+        email: target.email,
         role: target.role,
         sheetUrl: sheetLink,
         outputDir: installerOutputDir
@@ -2303,7 +2276,10 @@ function App() {
         if (typeof kv.pollingInterval === "number") setPollingInterval(kv.pollingInterval);
         if (Array.isArray(kv.statusOptions)) setStatusOptions(kv.statusOptions);
         if (typeof kv.showDebugPanel === "boolean") setShowDebugPanel(kv.showDebugPanel);
-        if (Array.isArray(kv.staffList)) setStaffList(kv.staffList);
+        if (Array.isArray(kv.staffList)) {
+          // 옛 데이터에 email 필드 없으면 빈 문자열로 보정 (마이그레이션)
+          setStaffList(kv.staffList.map((s: any) => ({ ...s, email: s.email || "" })));
+        }
         if (typeof kv.maxUndoSize === "number") setMaxUndoSize(Math.min(50, Math.max(5, kv.maxUndoSize)));
         if (kv.schemaByTab && typeof kv.schemaByTab === "object") {
           // schemaByTab 머지 (코드 default 와 시트값 + 새 컬럼 자동 보충)
@@ -2381,7 +2357,10 @@ function App() {
       if (typeof data.pollingInterval === "number") setPollingInterval(data.pollingInterval);
       if (Array.isArray(data.statusOptions)) setStatusOptions(data.statusOptions);
       if (typeof data.showDebugPanel === "boolean") setShowDebugPanel(data.showDebugPanel);
-      if (Array.isArray(data.staffList)) setStaffList(data.staffList);
+      if (Array.isArray(data.staffList)) {
+        // 옛 데이터에 email 필드 없으면 빈 문자열로 보정 (마이그레이션)
+        setStaffList(data.staffList.map((s: any) => ({ ...s, email: s.email || "" })));
+      }
       if (typeof data.maxUndoSize === "number") {
         setMaxUndoSize(Math.min(50, Math.max(5, data.maxUndoSize)));
       }
@@ -3609,34 +3588,58 @@ function App() {
     );
   };
 
-  // staff 빌드 잠금 화면 — 검증 중이거나 잠금이면 본문 대신 안내만 표시
-  if (!IS_ADMIN && lockState !== "ok") {
+  // 잠금 화면 (admin + staff 공용) — OAuth 미로그인 / 계정 불일치 / 검증 중
+  if (lockState !== "ok") {
+    const isLoggedOut = lockState === "logged-out";
+    const isVerifying = lockState === "verifying";
+    const icon = isVerifying ? "⏳" : (isLoggedOut ? "🔑" : "🔒");
+    const title = isVerifying ? "권한 확인 중" : (isLoggedOut ? "Google 계정으로 로그인" : "사용 권한이 없습니다");
     return (
       <div className="lock-overlay">
         <section className="lock-card">
-          <div className="lock-icon" aria-hidden="true">{lockState === "verifying" ? "⏳" : "🔒"}</div>
-          <h1 className="lock-title">
-            {lockState === "verifying" ? "권한 확인 중" : "사용 권한이 없습니다"}
-          </h1>
-          {EMBED.name && (
-            <p className="lock-user">사용자: <strong>{EMBED.name}</strong> ({EMBED.role || "staff"})</p>
+          <div className="lock-icon" aria-hidden="true">{icon}</div>
+          <h1 className="lock-title">{title}</h1>
+          {!IS_ADMIN && EMBED.name && (
+            <p className="lock-user">사용자: <strong>{EMBED.name}</strong>{EMBED.email ? ` · ${EMBED.email}` : ""} ({ROLE_LABEL[EMBED.role as EditorRole] || EMBED.role})</p>
+          )}
+          {isLoggedOut && (
+            <>
+              <p className="lock-reason">
+                {IS_ADMIN
+                  ? "Google 계정으로 로그인하면 시트 동기화가 시작됩니다."
+                  : `등록된 본인 Gmail (${EMBED.email}) 로 로그인하세요.`}
+              </p>
+              <button
+                type="button"
+                className="lock-retry-btn"
+                onClick={handleOAuthLogin}
+                disabled={oauthBusy}
+              >
+                {oauthBusy ? "로그인 중…" : "Google 계정으로 로그인"}
+              </button>
+              {oauthError && <p className="lock-reason" style={{ color: "#b91c1c" }}>{oauthError}</p>}
+            </>
           )}
           {lockState === "locked" && (
-            <p className="lock-reason">{lockReason || "권한이 회수되었습니다. 관리자에게 문의해주세요."}</p>
+            <>
+              <p className="lock-reason">{lockReason || "권한이 없습니다. 관리자에게 문의해주세요."}</p>
+              <button
+                type="button"
+                className="lock-retry-btn"
+                onClick={handleOAuthLogout}
+              >
+                로그아웃 후 다시 로그인
+              </button>
+            </>
           )}
-          {lockState === "verifying" && (
+          {isVerifying && (
             <p className="lock-reason">잠시만 기다려주세요…</p>
           )}
-          {lockState === "locked" && (
-            <button
-              type="button"
-              className="lock-retry-btn"
-              onClick={() => { setLockState("verifying"); void verifyEmbedToken("startup"); }}
-            >
-              다시 시도
-            </button>
-          )}
-          <p className="lock-hint">문제 지속 시 관리자에게 새 설치 파일을 요청하세요.</p>
+          <p className="lock-hint">
+            {IS_ADMIN
+              ? "처음 사용 시 시스템 브라우저에서 Google 로그인 페이지가 열립니다."
+              : "문제 지속 시 관리자에게 본인 Gmail 이 시트 공유 권한에 추가되어 있는지 확인 요청하세요."}
+          </p>
         </section>
       </div>
     );
@@ -4244,6 +4247,7 @@ function App() {
 
                 <div className="staff-config">
                   <p>편집자 / 썸네일러 등록</p>
+                  <p className="staff-help">스태프 인스톨러에 임베드되어 본인 Google 계정 로그인 확인 + 시트 공유 권한 매칭에 사용됩니다.</p>
                   <div className="staff-add-row">
                     <select
                       className="staff-role-select"
@@ -4261,6 +4265,16 @@ function App() {
                       placeholder="이름"
                       onKeyDown={(e) => { if (e.key === "Enter") addStaff(); }}
                     />
+                    <input
+                      className="staff-email-input"
+                      type="email"
+                      value={newStaffEmail}
+                      onChange={(e) => setNewStaffEmail(e.target.value)}
+                      placeholder="Gmail (예: hong@gmail.com)"
+                      autoComplete="off"
+                      spellCheck={false}
+                      onKeyDown={(e) => { if (e.key === "Enter") addStaff(); }}
+                    />
                     <button type="button" className="staff-add-btn" onClick={addStaff} title="추가">
                       추가
                     </button>
@@ -4272,6 +4286,7 @@ function App() {
                           <span key={staff.id} className={`staff-chip role-${staff.role}`}>
                             <span className="staff-role-tag">{ROLE_LABEL[staff.role]}</span>
                             <span className="staff-name">{staff.name}</span>
+                            {staff.email && <span className="staff-email">{staff.email}</span>}
                             <button type="button" onClick={() => removeStaff(staff.id)}>x</button>
                           </span>
                         ))
@@ -4391,20 +4406,6 @@ function App() {
                   )}
                 </div>
 
-                <div className="connection-help-banner">
-                  <div className="connection-help-text">
-                    <strong>(레거시) Service Account JSON 인증</strong>
-                    <span>1.1.x 호환용. 새 운영에는 위 Google 계정 로그인 권장.</span>
-                  </div>
-                  <button
-                    type="button"
-                    className="connection-help-btn"
-                    onClick={openSheetsSetupHelp}
-                  >
-                    설정 방법 자세히 보기 ↗
-                  </button>
-                </div>
-
                 <label>
                   Google Sheets 링크
                   <input
@@ -4415,47 +4416,26 @@ function App() {
                   />
                 </label>
 
-                <div className="service-account-row">
-                  <label>
-                    Service Account JSON
-                    <div className="sa-file-row">
-                      <input
-                        type="text"
-                        value={serviceAccountPath}
-                        readOnly
-                        placeholder="파일을 선택하세요"
-                      />
-                      <button type="button" onClick={pickServiceAccount}>파일 선택</button>
-                    </div>
-                  </label>
-                  <div
-                    className={`sa-dropzone ${isDraggingJson ? "dragging" : ""}`}
-                    onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingJson(true); }}
-                    onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingJson(true); }}
-                    onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingJson(false); }}
-                    onDrop={handleJsonDrop}
+                <div className="sheet-action-row">
+                  <button
+                    type="button"
+                    className="sa-test-btn"
+                    onClick={testConnection}
+                    disabled={!oauthLoggedIn || !sheetLink}
+                    title={
+                      !oauthLoggedIn ? "먼저 위에서 Google 계정으로 로그인하세요" :
+                      !sheetLink ? "Sheet URL 을 입력하세요" :
+                      "현재 로그인된 계정으로 시트 접근 가능 여부를 확인합니다"
+                    }
                   >
-                    <p className="sa-dropzone-text">
-                      {isDraggingJson ? "여기에 놓으세요" : "JSON 파일을 여기에 드래그&드롭"}
-                    </p>
-                  </div>
-                  {clientEmail && (
-                    <div className="sa-email-row">
-                      <span className="sa-email-label">서비스 계정 이메일</span>
-                      <code className="sa-email-value" title={clientEmail}>{clientEmail}</code>
-                      <button type="button" className="sa-email-copy" onClick={copyClientEmail}>이메일 복사</button>
-                    </div>
-                  )}
-                  <div className="sa-action-row">
-                    <button type="button" className="sa-test-btn" onClick={testConnection}>
-                      연결 테스트
-                    </button>
-                  </div>
+                    연결 테스트
+                  </button>
                   {sheetsStatus && <p className="sheets-status">{sheetsStatus}</p>}
-                  <p className="sa-hint">
-                    시트 이름 규칙: 숏폼_{new Date().getFullYear()} / 롱폼_{new Date().getFullYear()} / 다시보기_{new Date().getFullYear()}
-                  </p>
                 </div>
+
+                <p className="sa-hint">
+                  시트 이름 규칙: 숏폼_{new Date().getFullYear()} / 롱폼_{new Date().getFullYear()} / 다시보기_{new Date().getFullYear()}
+                </p>
               </>
             )}
             {IS_ADMIN && isAdmin && settingsTab === "ai" && (
@@ -4624,17 +4604,20 @@ function App() {
                         <div key={s.id} className="staff-installer-row">
                           <span className={`staff-chip role-${s.role}`}>
                             {ROLE_LABEL[s.role]} · {s.name}
+                            {s.email && <span className="staff-email">{s.email}</span>}
                           </span>
                           <button
                             type="button"
                             className="etc-installer-btn"
                             onClick={() => openInstallerModal(s.id)}
-                            disabled={!sheetLink || !serviceAccountPath}
+                            disabled={!sheetLink || !oauthLoggedIn || !s.email}
                             title={
                               !sheetLink
                                 ? "[구글 시트] 탭에서 시트 URL 부터 설정하세요"
-                                : !serviceAccountPath
-                                ? "[구글 시트] 탭에서 Service Account JSON 부터 등록하세요"
+                                : !oauthLoggedIn
+                                ? "[구글 시트] 탭에서 Google 계정으로 로그인하세요"
+                                : !s.email
+                                ? "이 스태프의 Gmail 을 [시트 설정] 탭에서 먼저 등록하세요"
                                 : "인스톨러 빌드 시작"
                             }
                           >
@@ -4759,12 +4742,14 @@ function App() {
                 if (!target) return <p>편집자 정보 없음</p>;
                 const prereqMissing: string[] = [];
                 if (!sheetLink) prereqMissing.push("Sheet URL 미입력 ([설정] → [구글 시트])");
-                if (!serviceAccountPath) prereqMissing.push("Service Account JSON 미등록 ([설정] → [구글 시트])");
+                if (!oauthLoggedIn) prereqMissing.push("Google 계정 미로그인 ([설정] → [구글 시트] → [Google 계정으로 로그인])");
+                if (!target.email) prereqMissing.push("이 스태프의 Gmail 미등록 ([설정] → [시트 설정] → 편집자/썸네일러 등록 시 이메일 입력)");
                 return (
                   <>
                     <div className="installer-target">
                       <span className={`staff-chip role-${target.role}`}>
                         {ROLE_LABEL[target.role]} · {target.name}
+                        {target.email && <span className="staff-email">{target.email}</span>}
                       </span>
                     </div>
                     {prereqMissing.length > 0 && (

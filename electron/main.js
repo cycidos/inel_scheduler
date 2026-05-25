@@ -801,75 +801,35 @@ function createWindow() {
   //      (환경변수 IWS_NAME / ROLE / TOKEN / SHEET_URL / SA_KEY_B64 주입)
   //   4) release/ 의 산출물을 outputDir 로 이동
   //   5) 진행 로그를 chunk 단위로 BrowserWindow.webContents.send("build-installer-log") emit
-  ipcMain.handle("build-editor-installer", async (_event, { name, role, sheetUrl, outputDir }) => {
+  // 1.2.0 — OAuth 전환 후 단순화된 인스톨러 빌드.
+  // 토큰 발급 / SA 키 임베드 제거. email + name + role + 시트 URL 만 빌드 환경변수로 forward.
+  // 스태프 앱은 본인 Google 계정으로 로그인하고 임베드 email 과 일치하는지 검증한다.
+  ipcMain.handle("build-editor-installer", async (_event, { name, email, role, sheetUrl, outputDir }) => {
     try {
       if (!name || !role) return { ok: false, error: "name, role 필수" };
       if (!["editor", "thumbnailer"].includes(role)) return { ok: false, error: "role 은 editor 또는 thumbnailer" };
+      if (!email) return { ok: false, error: "스태프 Gmail (email) 필수 — 본인 인증 매칭용" };
       if (!sheetUrl) return { ok: false, error: "시트 URL 이 없습니다." };
       if (!outputDir) return { ok: false, error: "출력 폴더 미지정" };
-      if (!sheetsClient) return { ok: false, error: "Sheets 인증을 먼저 초기화하세요." };
-      const saPath = path.join(app.getPath("userData"), "google-credentials.json");
-      if (!fs.existsSync(saPath)) return { ok: false, error: "Service Account JSON 이 없습니다." };
 
       const emit = (line) => {
         try { if (win && !win.isDestroyed()) win.webContents.send("build-installer-log", line); } catch (_e) { /* ignore */ }
       };
-      emit(`[1/4] 토큰 발급 중…`);
-      // 1) 토큰 발급
-      const issueRes = await new Promise((resolve) => {
-        ipcMain.emit; // (no-op, lint silence)
-        (async () => {
-          try {
-            const spreadsheetId = extractSpreadsheetId(sheetUrl);
-            if (!spreadsheetId) return resolve({ ok: false, error: "유효한 시트 URL이 아닙니다." });
-            await ensureTokensSheet(spreadsheetId);
-            const rows = await readTokensRows(spreadsheetId);
-            const normName = (s) => (s || "").normalize("NFC").trim();
-            const wanted = normName(name);
-            const token = generateToken(24);
-            const now = new Date().toISOString();
-            const existing = rows.find((r) => normName(r.name) === wanted && r.role === role);
-            if (existing) {
-              await sheetsClient.spreadsheets.values.update({
-                spreadsheetId,
-                range: `${TOKENS_SHEET_NAME}!A${existing.rowNum}:F${existing.rowNum}`,
-                valueInputOption: "RAW",
-                requestBody: { values: [[name, role, token, now, "active", ""]] }
-              });
-              resolve({ ok: true, token, rotated: true });
-            } else {
-              await sheetsClient.spreadsheets.values.append({
-                spreadsheetId,
-                range: `${TOKENS_SHEET_NAME}!A:F`,
-                valueInputOption: "RAW",
-                requestBody: { values: [[name, role, token, now, "active", ""]] }
-              });
-              resolve({ ok: true, token, rotated: false });
-            }
-          } catch (err) { resolve({ ok: false, error: err.message }); }
-        })();
-      });
-      if (!issueRes.ok) return { ok: false, error: `토큰 발급 실패: ${issueRes.error}` };
-      const token = issueRes.token;
-      emit(`     발급 완료 (${issueRes.rotated ? "기존 토큰 갱신" : "신규"})`);
+      emit(`[1/2] 인스톨러 빌드 시작 (npm run dist:${role})…`);
+      emit(`     스태프: ${name} <${email}> · ${role}`);
 
-      // 2) SA JSON → base64
-      emit(`[2/4] SA 키 임베드 준비…`);
-      const saJson = fs.readFileSync(saPath, "utf8");
-      const saB64 = Buffer.from(saJson, "utf8").toString("base64");
-
-      // 3) 자식 프로세스 spawn — npm run dist:<role>
-      emit(`[3/4] 인스톨러 빌드 시작 (npm run dist:${role})…`);
+      // 자식 프로세스 spawn — npm run dist:<role>
       const projectRoot = path.resolve(__dirname, "..");
       const npmCmd = process.platform === "win32" ? "npm.cmd" : "npm";
       const childEnv = {
         ...process.env,
         IWS_EDITION: role,
         IWS_NAME: name,
+        IWS_EMAIL: email,
         IWS_ROLE: role,
-        IWS_TOKEN: token,
-        IWS_SHEET_URL: sheetUrl,
-        IWS_SA_KEY_B64: saB64
+        IWS_SHEET_URL: sheetUrl
+        // 1.1.x 의 IWS_TOKEN / IWS_SA_KEY_B64 는 더 이상 사용하지 않음.
+        // 스태프 앱이 자기 Google 계정으로 직접 로그인 → 시트 공유 권한이 진실의 단일 소스.
       };
       const exitCode = await new Promise((resolve) => {
         const child = spawn(npmCmd, ["run", `dist:${role}`], {
@@ -885,8 +845,8 @@ function createWindow() {
       if (exitCode !== 0) return { ok: false, error: `빌드 실패 (exit ${exitCode})` };
       emit(`     빌드 성공`);
 
-      // 4) 산출물을 outputDir 로 이동 (release/Inel Scheduler-<role>-Setup-<ver>.exe)
-      emit(`[4/4] 산출물 이동…`);
+      // 산출물을 outputDir 로 이동
+      emit(`[2/2] 산출물 이동…`);
       const releaseDir = path.join(projectRoot, "release");
       const roleLabel = role === "editor" ? "Editor" : "Thumbnailer";
       const exeName = `Inel Scheduler-${roleLabel}-Setup-`;
@@ -900,7 +860,7 @@ function createWindow() {
         try { fs.copyFileSync(src, dst); moved.push(dst); } catch (e) { emit(`  ! 복사 실패 ${f}: ${e.message}`); }
       }
       emit(`     완료. 출력 폴더: ${outputDir}`);
-      return { ok: true, token, outputDir, files: moved, rotated: issueRes.rotated };
+      return { ok: true, outputDir, files: moved };
     } catch (err) {
       return { ok: false, error: err.message };
     }

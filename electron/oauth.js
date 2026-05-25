@@ -16,12 +16,14 @@
  */
 const path = require("path");
 const fs = require("fs");
+const https = require("https");
 const { google } = require("googleapis");
 const { authenticate } = require("@google-cloud/local-auth");
 
 const SCOPES = [
   "https://www.googleapis.com/auth/spreadsheets",
-  "https://www.googleapis.com/auth/drive.file"
+  "https://www.googleapis.com/auth/drive.file",
+  "https://www.googleapis.com/auth/userinfo.email"
 ];
 
 const KEYFILE_PATH = path.join(__dirname, "oauth-client.json");
@@ -64,6 +66,44 @@ function createClient() {
   const cfg = loadClientFile();
   // redirect_uri 는 authenticate() 가 동적으로 loopback 설정. 여기선 placeholder.
   return new google.auth.OAuth2(cfg.client_id, cfg.client_secret);
+}
+
+/**
+ * Google userinfo endpoint 를 직접 호출해 이메일 조회.
+ * googleapis 의 oauth2.userinfo.get() 이 가끔 빈 결과를 반환하는 케이스가 있어 우회.
+ * scope userinfo.email 필요.
+ * @param {OAuth2Client} client
+ * @returns {Promise<string|null>}
+ */
+async function fetchUserEmail(client) {
+  try {
+    if (!client) return null;
+    const tokenInfo = await client.getAccessToken();
+    const accessToken = (tokenInfo && (tokenInfo.token || tokenInfo)) || null;
+    if (!accessToken || typeof accessToken !== "string") return null;
+    return await new Promise((resolve) => {
+      const req = https.request({
+        hostname: "www.googleapis.com",
+        path: "/oauth2/v2/userinfo",
+        method: "GET",
+        headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" }
+      }, (res) => {
+        let buf = "";
+        res.on("data", (chunk) => { buf += chunk; });
+        res.on("end", () => {
+          try {
+            const json = JSON.parse(buf);
+            resolve(json && typeof json.email === "string" ? json.email : null);
+          } catch (_e) { resolve(null); }
+        });
+      });
+      req.on("error", () => resolve(null));
+      req.setTimeout(10000, () => { try { req.destroy(); } catch (_e) { /* ignore */ } resolve(null); });
+      req.end();
+    });
+  } catch (_e) {
+    return null;
+  }
 }
 
 function saveRefreshToken(app, refreshToken, userEmail) {
@@ -139,13 +179,9 @@ async function login(app) {
     if (!refresh) {
       return { ok: false, error: "refresh_token 발급 실패 (이미 발급된 적이 있을 수 있음. 본인 Google 계정 → 보안 → 연결된 앱에서 'Inel Scheduler' 제거 후 다시 시도)" };
     }
-    // 사용자 이메일 조회
-    let email = null;
-    try {
-      const oauth2 = google.oauth2({ version: "v2", auth: result });
-      const info = await oauth2.userinfo.get();
-      email = info.data.email || null;
-    } catch (_e) { /* ignore */ }
+    // 사용자 이메일 조회 — googleapis 의 oauth2.userinfo.get() 이 빈 결과를 줄 때가
+    // 있어서 더 신뢰성 있는 userinfo endpoint 를 직접 호출.
+    const email = await fetchUserEmail(result);
 
     saveRefreshToken(app, refresh, email);
     oauthClient = result;
