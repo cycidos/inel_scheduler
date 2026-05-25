@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Inel Work Scheduler</title>
+  <meta name="description" content="Chzzk 스트리머와 영상 편집 협업자를 위한 데스크톱 스케줄러" />
+  <link rel="icon" href="./icon.png" />
+  <style>
+    :root {
+      --pink-50: #fff7fb;
+      --pink-100: #fdf2f8;
+      --pink-200: #fce7f3;
+      --pink-300: #fbcfe8;
+      --pink-500: #f472b6;
+      --pink-600: #db2777;
+      --pink-700: #9d174d;
+      --gray-500: #6b7280;
+      --gray-700: #374151;
+      --gray-900: #111827;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      background: linear-gradient(180deg, var(--pink-50) 0%, #ffffff 320px);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+      color: var(--gray-900);
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+    .layout { max-width: 920px; margin: 0 auto; padding: 60px 24px 80px; }
+
+    header.hero {
+      display: flex; align-items: center; gap: 24px;
+      padding: 40px 36px;
+      background: #ffffff;
+      border: 1px solid var(--pink-200);
+      border-radius: 20px;
+      box-shadow: 0 10px 28px rgba(244, 114, 182, 0.10);
+      margin-bottom: 36px;
+    }
+    .hero-logo {
+      width: 96px; height: 96px;
+      background: linear-gradient(135deg, var(--pink-500), var(--pink-600));
+      border-radius: 24px;
+      display: inline-flex; align-items: center; justify-content: center;
+      color: #ffffff; font-size: 28px; font-weight: 800;
+      box-shadow: 0 6px 16px rgba(244, 114, 182, 0.35);
+    }
+    .hero-text h1 { margin: 0; font-size: 28px; color: var(--pink-700); }
+    .hero-text p { margin: 6px 0 0; color: var(--gray-700); font-size: 15px; }
+
+    section.card {
+      margin: 24px 0;
+      padding: 28px 32px;
+      background: #ffffff;
+      border: 1px solid var(--pink-200);
+      border-radius: 16px;
+      box-shadow: 0 4px 16px rgba(244, 114, 182, 0.06);
+    }
+    .card h2 {
+      margin: 0 0 14px;
+      font-size: 18px;
+      color: var(--pink-700);
+    }
+    .card p { margin: 6px 0; color: var(--gray-700); font-size: 14px; }
+    .card ul { margin: 8px 0; padding-left: 22px; color: var(--gray-700); font-size: 14px; }
+    .card li { margin: 6px 0; }
+    .card a { color: var(--pink-600); }
+
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 14px;
+      margin-top: 14px;
+    }
+    .feature {
+      padding: 16px 18px;
+      background: var(--pink-50);
+      border: 1px solid var(--pink-200);
+      border-radius: 12px;
+    }
+    .feature strong {
+      display: block;
+      font-size: 14px;
+      color: var(--pink-700);
+      margin-bottom: 4px;
+    }
+    .feature span { font-size: 12.5px; color: var(--gray-700); }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-top: 14px;
+      font-size: 13px;
+      color: var(--gray-700);
+    }
+    .meta strong { color: var(--pink-700); margin-right: 6px; }
+
+    footer {
+      margin-top: 50px;
+      text-align: center;
+      font-size: 12px;
+      color: var(--gray-500);
+    }
+    footer a { color: var(--pink-600); margin: 0 8px; }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <header class="hero">
+      <div class="hero-logo">IWS</div>
+      <div class="hero-text">
+        <h1>Inel Work Scheduler</h1>
+        <p>Chzzk 스트리머와 영상 편집 협업자를 위한 데스크톱 스케줄러</p>
+      </div>
+    </header>
+
+    <section class="card">
+      <h2>이 앱은 무엇인가요?</h2>
+      <p>
+        개인 방송인이 외주 영상 편집자 / 썸네일러와 함께 작업할 때, 영상 제작 진행 상황과 방송 기록을
+        한 곳에서 관리할 수 있도록 만든 Windows 데스크톱 앱입니다.
+      </p>
+      <p>
+        모든 작업 데이터는 <strong>사용자 본인이 소유한 Google Sheet</strong> 한 장과 양방향으로 동기화됩니다.
+        앱이 별도의 서버를 거치지 않으며, 사용자 본인의 Google 계정 권한으로 본인의 시트만 접근합니다.
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>주요 기능</h2>
+      <div class="feature-grid">
+        <div class="feature">
+          <strong>일정 관리</strong>
+          <span>숏폼 / 롱폼 / 다시보기 탭별 작업 일정 관리. 월별 페이지 + 할 일 / 완료됨 분리.</span>
+        </div>
+        <div class="feature">
+          <strong>편집자 협업</strong>
+          <span>편집자 / 썸네일러별 본인 권한 인스톨러 발급. 본인 담당 작업만 표시.</span>
+        </div>
+        <div class="feature">
+          <strong>방송 자동 기록</strong>
+          <span>Chzzk 라이브 감지 → 다시보기 탭에 카테고리 / 제목 타임라인 자동 누적.</span>
+        </div>
+        <div class="feature">
+          <strong>Google Sheet 동기화</strong>
+          <span>사용자가 소유한 Google Sheet 와 양방향 동기화. 모든 작업 데이터의 단일 원본.</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>다운로드 / 사용 안내</h2>
+      <p>
+        현재 비공개 베타 단계로 소수의 개별 사용자에게만 배포되고 있습니다.
+        사용을 원하시면 아래 이메일로 문의해 주세요.
+      </p>
+      <p>
+        Windows 10 / 11 64-bit 환경에서 동작합니다.
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>OAuth 권한 안내 (Google 계정 로그인)</h2>
+      <p>
+        앱이 사용자에게 요청하는 Google OAuth 권한은 다음과 같습니다.
+        모든 권한은 <strong>사용자 본인이 소유한 시트</strong> 의 범위 안에서만 사용됩니다.
+      </p>
+      <ul>
+        <li>
+          <strong>Google Sheets 접근</strong> (<code>spreadsheets</code>) —
+          사용자가 입력한 시트 URL 의 일정 데이터를 앱과 양방향 동기화합니다.
+          앱이 자기 데이터베이스를 따로 두지 않고 사용자의 시트를 그대로 저장소로 사용합니다.
+        </li>
+        <li>
+          <strong>Google Drive (앱이 만든 파일 한정)</strong> (<code>drive.file</code>) —
+          시트 생성 / 메타데이터 조회 등 시트가 작동하는 데 필요한 최소 범위로만 사용합니다.
+        </li>
+        <li>
+          <strong>이메일 조회</strong> (<code>userinfo.email</code>) —
+          로그인한 본인 계정 식별 + 편집자 빌드에서 임베드된 이메일과 일치하는지 확인용으로만 사용합니다.
+        </li>
+      </ul>
+      <p>
+        앱 외부로 데이터를 전송하지 않으며, 개발자 서버 / 통계 / 트래킹 / 광고는 사용하지 않습니다.
+        자세한 내용은 <a href="./privacy.html">개인정보처리방침</a> 을 참고하세요.
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>연락처</h2>
+      <div class="meta">
+        <span><strong>개발자:</strong> {{DEVELOPER_NAME}}</span>
+        <span><strong>이메일:</strong> <a href="mailto:{{CONTACT_EMAIL}}">{{CONTACT_EMAIL}}</a></span>
+      </div>
+    </section>
+
+    <footer>
+      <a href="./privacy.html">개인정보처리방침</a>
+      · <span>© 2026 {{DEVELOPER_NAME}}. All rights reserved.</span>
+    </footer>
+  </div>
+</body>
+</html>
