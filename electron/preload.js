@@ -1,7 +1,17 @@
 const { contextBridge, ipcRenderer } = require("electron");
 
+// 1.2.0+ — 스태프 본인 정보를 사이드카 .json 으로 받는다. preload 가 main 에 동기
+// 호출하여 renderer 의 EMBED 가 모듈 최상위에서 즉시 사용 가능하도록.
+// admin 빌드 또는 .json 미설치 시 모두 빈 값.
+let embed = { name: "", email: "", role: "", sheetUrl: "" };
+try {
+  const got = ipcRenderer.sendSync("embed-get-sync");
+  if (got && typeof got === "object") embed = { ...embed, ...got };
+} catch (_e) { /* preload 실패해도 앱 자체는 동작해야 함 */ }
+
 contextBridge.exposeInMainWorld("electronAPI", {
   appName: "Inel Work Scheduler",
+  embed,
 
   startChzzkPolling: (url, intervalMs) =>
     ipcRenderer.invoke("chzzk-start-polling", { url, intervalMs }),

@@ -24,6 +24,10 @@ release-*/
 release.old.*/
 *.log
 
+# Staff installer templates (admin 빌드 시 동적으로 채워짐)
+build/installer-templates/*.exe
+build/installer-templates/*.blockmap
+
 # build/ is for electron-builder resources (icon.png 등) → 추적함
 # 만약 build 산출물 디렉토리는 따로 dist-electron / release 사용
 

@@ -144,6 +144,19 @@ FunctionEnd
       DetailPrint "Restored user data from upgrade backup"
   noRestore:
 
+  ; ── 스태프 인스톨러 사이드카 흡수 (1.2.0+ 인스톨러 빌드 흐름) ──
+  ;
+  ; 관리자가 admin 앱의 [인스톨러 빌드] 로 만든 두 파일:
+  ;   1) Inel Scheduler-Editor-Setup-X.Y.Z.exe
+  ;   2) inel-staff-config.json
+  ; 이 같은 폴더에 있는 채로 .exe 가 실행되면, $EXEDIR 의 .json 을 설치 폴더로
+  ; 복사한다. 앱 첫 실행 시 main.js 가 그 .json 을 userData/embed.json 으로
+  ; 흡수하고 설치 폴더의 .json 은 정리한다.
+  IfFileExists "$EXEDIR\inel-staff-config.json" 0 noStaffSidecar
+    CopyFiles /SILENT "$EXEDIR\inel-staff-config.json" "$INSTDIR\inel-staff-config.json"
+    DetailPrint "Staff sidecar config copied to install dir"
+  noStaffSidecar:
+
   ${If} $InelDesktopShortcutState == ${BST_CHECKED}
     ; 아이콘 명시 — staff 빌드의 시작메뉴/바탕화면 단축키도 본체 .exe 안의 아이콘 사용.
     CreateShortCut "$DESKTOP\${PRODUCT_NAME}.lnk" "$INSTDIR\${APP_EXECUTABLE_FILENAME}" "" "$INSTDIR\${APP_EXECUTABLE_FILENAME}" 0

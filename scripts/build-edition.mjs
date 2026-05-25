@@ -78,6 +78,17 @@ if (!pkg.build) {
 // IWS_OUTPUT_DIR 환경변수로 임시 폴더에 빌드할 수 있다.
 const outputDir = process.env.IWS_OUTPUT_DIR || (pkg.build.directories && pkg.build.directories.output) || "release";
 
+// admin 빌드만 build/installer-templates/ 를 extraResources 로 동봉.
+// editor/thumbnailer 빌드에는 자기 자신을 동봉할 일이 없고, 동봉하면 무한 재귀.
+const extraResources = [...(pkg.build.extraResources || [])];
+if (edition === "admin") {
+  extraResources.push({
+    from: "build/installer-templates",
+    to: "installer-templates",
+    filter: ["**/*"]
+  });
+}
+
 const builderConfig = {
   ...pkg.build,
   appId: cfg.appId,
@@ -86,6 +97,7 @@ const builderConfig = {
     ...(pkg.build.directories || {}),
     output: outputDir
   },
+  extraResources,
   win: {
     ...pkg.build.win,
     artifactName: cfg.artifactName

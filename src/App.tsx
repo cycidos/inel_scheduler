@@ -8,21 +8,18 @@ import chzzkCategoriesSeed from "./data/chzzk-categories.seed.json";
 // dead code 로 제거되어 산출물 .asar 에 admin 전용 UI 코드가 남지 않는다.
 declare const __IWS_EDITION__: "admin" | "editor" | "thumbnailer";
 
-// 편집자 인스톨러에 임베드되는 메타 (admin 빌드는 모두 빈 문자열).
-// 1.2.0 — OAuth 전환 후 토큰 / SA 키 임베드 폐기. email 만 임베드해서 본인 OAuth
-// 로그인 시 일치 검증에 사용.
-declare const __IWS_NAME__: string;
-declare const __IWS_EMAIL__: string;
-declare const __IWS_ROLE__: string;
-declare const __IWS_SHEET_URL__: string;
-
 type Edition = "admin" | "editor" | "thumbnailer";
 const BUILD_EDITION: Edition = __IWS_EDITION__;
-const EMBED = {
-  name: __IWS_NAME__,
-  email: __IWS_EMAIL__,
-  role: __IWS_ROLE__,
-  sheetUrl: __IWS_SHEET_URL__
+
+// 스태프 본인 정보 (name / email / role / sheetUrl) 는 vite define 이 아니라
+// 런타임에 main process 가 사이드카 inel-staff-config.json 을 읽어 preload 의
+// 동기 IPC 로 주입한다. admin 빌드 또는 .json 없는 경우 모두 빈 문자열.
+type EmbedInfo = { name: string; email: string; role: string; sheetUrl: string };
+const EMBED: EmbedInfo = ((typeof window !== "undefined" && (window as any).electronAPI?.embed) as EmbedInfo | undefined) || {
+  name: "",
+  email: "",
+  role: "",
+  sheetUrl: ""
 };
 
 // 스태프 빌드는 윈도우 타이틀에 본인 이름을 붙여 다른 스태프 PC 와 구분.
@@ -49,6 +46,7 @@ declare global {
   interface Window {
     electronAPI?: {
       appName: string;
+      embed: { name: string; email: string; role: string; sheetUrl: string };
       startChzzkPolling: (url: string, intervalMs: number) => Promise<{ ok: boolean; error?: string; channelId?: string }>;
       stopChzzkPolling: () => Promise<{ ok: boolean }>;
       onChzzkStatus: (cb: (data: ChzzkStatus) => void) => () => void;

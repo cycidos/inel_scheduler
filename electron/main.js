@@ -11,6 +11,67 @@ let lastCategory = null;
 let lastTitle = null;
 let pollingStartTime = null;
 
+/* ──────────────────────────────────────────────
+ * 스태프 빌드 사이드카 설정 (1.2.0+ 인스톨러 빌드 흐름)
+ *
+ * 관리자가 설치본의 [인스톨러 빌드] 버튼으로 만들어 스태프에게 전달하는 파일:
+ *   1) Inel Scheduler-Editor-Setup-X.Y.Z.exe   ← 사전 빌드된 template (임베드 빈 값)
+ *   2) inel-staff-config.json                  ← 스태프 본인 정보 (name/email/role/sheetUrl)
+ *
+ * 스태프가 두 파일이 같은 폴더에 있는 채로 .exe 실행 → NSIS 가 .json 도 설치
+ * 폴더로 함께 복사 (build/installer.nsh 의 customInstall) → 첫 실행 시 main 이
+ * 그것을 userData/embed.json 으로 옮겨 보관하고 설치 폴더 .json 은 제거.
+ *
+ * 다음 실행부터는 userData/embed.json 만 읽어 EMBED 정보로 사용.
+ * ──────────────────────────────────────────────
+ */
+let embedInfo = { name: "", email: "", role: "", sheetUrl: "" };
+
+function loadEmbedInfo() {
+  try {
+    const userEmbed = path.join(app.getPath("userData"), "embed.json");
+
+    // 1) 첫 실행 후처리 — 설치 폴더에 사이드카 .json 이 있으면 userData 로 옮긴다.
+    //    NSIS customInstall 이 인스톨러 옆 .json 을 $INSTDIR 로 복사한 케이스.
+    const installDirSidecar = path.join(path.dirname(app.getPath("exe")), "inel-staff-config.json");
+    if (fs.existsSync(installDirSidecar) && !fs.existsSync(userEmbed)) {
+      try {
+        const raw = fs.readFileSync(installDirSidecar, "utf8");
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") {
+          fs.writeFileSync(userEmbed, JSON.stringify({
+            name: String(parsed.name || ""),
+            email: String(parsed.email || ""),
+            role: String(parsed.role || ""),
+            sheetUrl: String(parsed.sheetUrl || "")
+          }, null, 2), "utf8");
+        }
+      } catch (_e) { /* malformed sidecar 무시 */ }
+      // 설치 폴더 .json 은 정리 — 다음 실행에 오염 방지.
+      try { fs.unlinkSync(installDirSidecar); } catch (_e) { /* ignore */ }
+    }
+
+    // 2) userData/embed.json 읽기
+    if (fs.existsSync(userEmbed)) {
+      const raw = fs.readFileSync(userEmbed, "utf8");
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") {
+        embedInfo = {
+          name: String(parsed.name || ""),
+          email: String(parsed.email || ""),
+          role: String(parsed.role || ""),
+          sheetUrl: String(parsed.sheetUrl || "")
+        };
+      }
+    }
+  } catch (_e) { /* embedInfo 빈 값으로 유지 */ }
+}
+
+// preload 가 contextBridge 노출 시 동기로 받는다 (renderer 의 EMBED 가 모듈 최상위에서 즉시 사용).
+ipcMain.on("embed-get-sync", (event) => {
+  event.returnValue = embedInfo;
+});
+
 function extractChannelId(url) {
   const match = url.match(/chzzk\.naver\.com\/(?:live\/)?([a-f0-9]{32})/);
   return match ? match[1] : null;
@@ -626,12 +687,15 @@ function createWindow() {
     return { ok: true, path: result.filePaths[0] };
   });
 
-  // 관리자 UI 에서 편집자/썸네일러 인스톨러를 자동 빌드.
-  //   1) 자식 프로세스 spawn 으로 npm run dist:editor / dist:thumbnailer
-  //      (환경변수 IWS_NAME / IWS_EMAIL / IWS_ROLE / IWS_SHEET_URL 주입)
-  //   2) release/ 의 산출물을 outputDir 로 이동
-  //   3) 진행 로그를 chunk 단위로 BrowserWindow.webContents.send("build-installer-log") emit
-  // 스태프 앱은 본인 Google 계정으로 로그인 → 임베드 email 과 일치하는지 검증.
+  // 관리자 UI 에서 편집자/썸네일러 인스톨러를 즉시 발급 (1.2.0+ 흐름).
+  //
+  // 동작:
+  //   1) admin 설치본 안에 동봉된 template .exe (build/installer-templates/) 를
+  //      복사해서 출력 폴더로 둠 — 자식 프로세스 spawn 없음, 즉시 끝남.
+  //   2) 같은 폴더에 inel-staff-config.json 생성 (name/email/role/sheetUrl).
+  //   3) 두 파일을 함께 스태프에게 전달하면, 스태프가 같은 폴더에서 .exe 실행 시
+  //      NSIS 의 customInstall 이 .json 을 설치 폴더로 복사 → 첫 실행 시 main.js 가
+  //      userData/embed.json 으로 흡수한다.
   ipcMain.handle("build-editor-installer", async (_event, { name, email, role, sheetUrl, outputDir }) => {
     try {
       if (!name || !role) return { ok: false, error: "name, role 필수" };
@@ -643,59 +707,49 @@ function createWindow() {
       const emit = (line) => {
         try { if (win && !win.isDestroyed()) win.webContents.send("build-installer-log", line); } catch (_e) { /* ignore */ }
       };
-      emit(`[1/2] 인스톨러 빌드 시작 (npm run dist:${role})…`);
+      emit(`[1/3] 사전 빌드된 template 검색…`);
       emit(`     스태프: ${name} <${email}> · ${role}`);
 
-      // 자식 프로세스 spawn — npm run dist:<role>
-      const projectRoot = path.resolve(__dirname, "..");
-      const npmCmd = process.platform === "win32" ? "npm.cmd" : "npm";
-      const childEnv = {
-        ...process.env,
-        IWS_EDITION: role,
-        IWS_NAME: name,
-        IWS_EMAIL: email,
-        IWS_ROLE: role,
-        IWS_SHEET_URL: sheetUrl
-      };
-      // Windows + npm.cmd 조합은 shell: true 없이 spawn 하면 EINVAL 발생.
-      // shell 모드에서는 argv 가 한 줄 명령으로 합쳐지므로 경로/특수문자가 있으면 따옴표 처리 필요.
-      const useShell = process.platform === "win32";
-      const exitCode = await new Promise((resolve) => {
-        const child = spawn(npmCmd, ["run", `dist:${role}`], {
-          cwd: projectRoot,
-          env: childEnv,
-          windowsHide: true,
-          shell: useShell
-        });
-        child.stdout && child.stdout.on("data", (buf) => buf.toString("utf8").split(/\r?\n/).forEach((l) => l && emit(`  ${l}`)));
-        child.stderr && child.stderr.on("data", (buf) => buf.toString("utf8").split(/\r?\n/).forEach((l) => l && emit(`  ! ${l}`)));
-        child.on("close", (code) => resolve(code));
-        child.on("error", (err) => {
-          emit(`  ! spawn 에러: ${err.message}`);
-          emit(`     code=${err.code || "(none)"} errno=${err.errno || "(none)"} syscall=${err.syscall || "(none)"}`);
-          emit(`     cmd=${npmCmd} cwd=${projectRoot} shell=${useShell}`);
-          resolve(-1);
-        });
-      });
-      if (exitCode !== 0) return { ok: false, error: `빌드 실패 (exit ${exitCode})` };
-      emit(`     빌드 성공`);
-
-      // 산출물을 outputDir 로 이동
-      emit(`[2/2] 산출물 이동…`);
-      const releaseDir = path.join(projectRoot, "release");
-      const roleLabel = role === "editor" ? "Editor" : "Thumbnailer";
-      const exeName = `Inel Scheduler-${roleLabel}-Setup-`;
-      const matched = fs.readdirSync(releaseDir).filter((f) => f.startsWith(exeName) && (f.endsWith(".exe") || f.endsWith(".blockmap")));
-      if (matched.length === 0) return { ok: false, error: "산출물 .exe 를 찾을 수 없습니다." };
-      fs.mkdirSync(outputDir, { recursive: true });
-      const moved = [];
-      for (const f of matched) {
-        const src = path.join(releaseDir, f);
-        const dst = path.join(outputDir, f);
-        try { fs.copyFileSync(src, dst); moved.push(dst); } catch (e) { emit(`  ! 복사 실패 ${f}: ${e.message}`); }
+      // template 위치 — packaged 빌드는 process.resourcesPath/installer-templates,
+      // dev 빌드는 프로젝트 루트의 build/installer-templates/.
+      const candidates = [
+        path.join(process.resourcesPath || "", "installer-templates"),
+        path.resolve(__dirname, "..", "build", "installer-templates")
+      ];
+      let templateDir = null;
+      for (const p of candidates) {
+        if (p && fs.existsSync(p)) { templateDir = p; break; }
       }
-      emit(`     완료. 출력 폴더: ${outputDir}`);
-      return { ok: true, outputDir, files: moved };
+      if (!templateDir) {
+        return { ok: false, error: "스태프 인스톨러 template 폴더를 찾을 수 없습니다 (build/installer-templates 또는 resources/installer-templates)." };
+      }
+
+      const roleLabel = role === "editor" ? "Editor" : "Thumbnailer";
+      const prefix = `Inel Scheduler-${roleLabel}-Setup-`;
+      const templateExe = (fs.readdirSync(templateDir).find((f) => f.startsWith(prefix) && f.endsWith(".exe"))) || null;
+      if (!templateExe) {
+        return { ok: false, error: `${roleLabel} template .exe 가 없습니다. 빌드 시 'npm run dist:full' 로 다시 빌드하세요.` };
+      }
+      emit(`     template: ${templateExe}`);
+
+      // 출력 폴더 보장
+      fs.mkdirSync(outputDir, { recursive: true });
+
+      // [2/3] template .exe 복사
+      emit(`[2/3] 출력 폴더로 복사…`);
+      const dstExe = path.join(outputDir, templateExe);
+      fs.copyFileSync(path.join(templateDir, templateExe), dstExe);
+      emit(`     → ${dstExe}`);
+
+      // [3/3] 사이드카 .json 생성 (스태프 본인 정보)
+      emit(`[3/3] inel-staff-config.json 생성…`);
+      const sidecar = path.join(outputDir, "inel-staff-config.json");
+      const payload = JSON.stringify({ name, email, role, sheetUrl }, null, 2);
+      fs.writeFileSync(sidecar, payload, "utf8");
+      emit(`     → ${sidecar}`);
+
+      emit(`완료. 두 파일 (.exe + .json) 을 같은 폴더에 두고 스태프에게 전달하세요.`);
+      return { ok: true, outputDir, files: [dstExe, sidecar] };
     } catch (err) {
       return { ok: false, error: err.message };
     }
@@ -1387,6 +1441,9 @@ function applyPendingAutoStart() {
 
 app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
+  // 사이드카 설정 (스태프 인스톨러용 inel-staff-config.json) 이 있으면 흡수 → userData/embed.json
+  // createWindow 이전에 호출하여 preload 의 sync IPC 가 빈값을 반환하지 않게 한다.
+  loadEmbedInfo();
   // PendingAutoStart 레지스트리 처리 완료 후 createWindow → renderer 의 autostartGet 호출
   // 시점엔 이미 setLoginItemSettings 가 끝나있어 [기타 설정] 토글이 정확한 ON 상태 표시.
   await applyPendingAutoStart();
