@@ -735,7 +735,10 @@ function App() {
   }, [categorySearchQuery, filteredCategories.length, allCategories]);
   const [undoStack, setUndoStack] = useState<UndoSnapshot[]>([]);
   const [redoStack, setRedoStack] = useState<UndoSnapshot[]>([]);
-  const [maxUndoSize, setMaxUndoSize] = useState(10);
+  // staff 빌드는 15단계 고정 (시트 동기화로 관리자의 설정 영향 받지 않게 staff setter 는 no-op).
+  // admin 은 종전대로 10 기본값 + 슬라이더로 5~50 조절.
+  const [maxUndoSize, _setMaxUndoSizeRaw] = useState<number>(IS_ADMIN ? 10 : 15);
+  const setMaxUndoSize = IS_ADMIN ? _setMaxUndoSizeRaw : ((_v: number) => { /* staff 는 무시 */ }) as React.Dispatch<React.SetStateAction<number>>;
   /** 같은 (cellKey) 연속 편집은 한 번의 history entry로 묶기 위한 ref */
   const lastEditCellRef = useRef<string | null>(null);
   const [historyLogs, setHistoryLogs] = useState<string[]>([]);

@@ -1389,7 +1389,17 @@ function createWindow() {
       }
       const installDir = path.dirname(process.execPath);
       // electron-builder NSIS 디폴트 패턴: "Uninstall <productName>.exe"
-      const uninstallerPath = path.join(installDir, "Uninstall Inel Work Scheduler.exe");
+      // staff 빌드 (Inel Scheduler Editor / Inel Scheduler Thumbnailer) 에서도 동작하도록 동적 결정.
+      const productName = app.getName();
+      let uninstallerPath = path.join(installDir, `Uninstall ${productName}.exe`);
+      if (!fs.existsSync(uninstallerPath)) {
+        // fallback: install dir 의 모든 파일 중 "Uninstall ... .exe" 패턴을 찾는다.
+        try {
+          const candidate = fs.readdirSync(installDir)
+            .find((f) => /^Uninstall .+\.exe$/i.test(f));
+          if (candidate) uninstallerPath = path.join(installDir, candidate);
+        } catch (_e) { /* ignore */ }
+      }
       if (!fs.existsSync(uninstallerPath)) {
         return { ok: false, error: `uninstaller 를 찾을 수 없음: ${uninstallerPath}` };
       }
