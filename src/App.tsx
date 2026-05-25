@@ -655,7 +655,7 @@ function App() {
   const [clientEmail, setClientEmail] = useState("");
   const [isDraggingJson, setIsDraggingJson] = useState(false);
   const [settingsTab, setSettingsTab] = useState<"sheet" | "connection" | "ai" | "etc">(
-    isAdmin ? "sheet" : "etc"
+    isAdmin ? "connection" : "etc"
   );
   // staff 시점이면 admin 전용 설정 탭에 들어가 있지 않도록 보정 (dev 토글 케이스 대비)
   useEffect(() => {
@@ -4198,22 +4198,22 @@ function App() {
               <button
                 type="button"
                 role="tab"
-                aria-selected={settingsTab === "sheet"}
-                className={`settings-tab ${settingsTab === "sheet" ? "active" : ""}`}
-                onClick={() => setSettingsTab("sheet")}
+                aria-selected={settingsTab === "connection"}
+                className={`settings-tab ${settingsTab === "connection" ? "active" : ""}`}
+                onClick={() => setSettingsTab("connection")}
               >
-                시트 설정
+                구글 시트
               </button>
             )}
             {IS_ADMIN && isAdmin && (
               <button
                 type="button"
                 role="tab"
-                aria-selected={settingsTab === "connection"}
-                className={`settings-tab ${settingsTab === "connection" ? "active" : ""}`}
-                onClick={() => setSettingsTab("connection")}
+                aria-selected={settingsTab === "sheet"}
+                className={`settings-tab ${settingsTab === "sheet" ? "active" : ""}`}
+                onClick={() => setSettingsTab("sheet")}
               >
-                구글 시트
+                시트 설정
               </button>
             )}
             {IS_ADMIN && isAdmin && (
