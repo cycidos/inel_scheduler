@@ -4240,12 +4240,9 @@ function App() {
             {IS_ADMIN && isAdmin && settingsTab === "sheet" && (
               <>
                 <div className="connection-help-banner">
-                  <div className="connection-help-text">
-                    <strong>스케줄러 앱 사용 방법</strong>
-                    <p>시트 컬럼 기능, 행/열 다루기, 그리고 시트설정과 시트의 연계 (예: 영상편집자는 아래 [편집자/썸네일러 등록]에 추가해야 시트의 담당자 셀에서 선택할 수 있어요) 등을 자세히 안내합니다.</p>
-                  </div>
+                  <strong>스케줄러 앱 사용 방법</strong>
                   <button type="button" className="connection-help-btn" onClick={openAppGuideHelp}>
-                    사용 방법 자세히 보기 ↗
+                    자세히 보기 ↗
                   </button>
                 </div>
                 <label>
@@ -4284,7 +4281,6 @@ function App() {
 
                 <div className="staff-config">
                   <p>편집자 / 썸네일러 등록</p>
-                  <p className="staff-help">스태프 인스톨러에 임베드되어 본인 Google 계정 로그인 확인 + 시트 공유 권한 매칭에 사용됩니다.</p>
                   <div className="staff-add-row">
                     <div className="staff-role-radio">
                       <label className={`staff-role-option role-editor ${newStaffRole === "editor" ? "active" : ""}`}>
@@ -4691,6 +4687,9 @@ function App() {
                     </button>
                   </div>
                   <p className="etc-card-desc">
+                    {IS_ADMIN && isAdmin && (
+                      <>Google Login 정보와 Google Sheet URL은 삭제되어 재설치 시 재입력이 필요합니다.{" "}</>
+                    )}
                     [변경사항 저장] 한 데이터는 재설치 후 [일정 새로고침] 으로 다시 가져올 수 있습니다.
                   </p>
                 </div>
