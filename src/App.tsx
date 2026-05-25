@@ -1321,7 +1321,24 @@ function App() {
     // 데이터가 한 건도 없으면 그대로 (월 필터 적용 안 함)
     if (data.length === 0) return data;
     // selectedMonth 에 해당하는 행만. 데이터가 다른 달에만 있어도 빈 배열 반환 (의도된 동작)
-    const inMonth = data.filter((row) => parseMonthKey(row.values.broadcastDate || "") === selectedMonth);
+    let inMonth = data.filter((row) => parseMonthKey(row.values.broadcastDate || "") === selectedMonth);
+
+    // 스태프 빌드: 본인이 담당자인 행만 통과. admin 빌드는 모든 행 표시.
+    //   · fullReplay (1행 모드): row.values.assignee 가 담당자
+    //   · shorts/longform (2행 모드): row.{role}?.assignee 가 담당자
+    //   · editor 가 다시보기 탭 보면 본인 담당 task 가 없어 빈 배열 → 자연스럽게 빈 화면.
+    if (!IS_ADMIN && !isAdmin && EMBED.name && (EMBED.role === "thumbnailer" || EMBED.role === "editor")) {
+      const myName = EMBED.name;
+      const myRole = EMBED.role as EditorRole;
+      inMonth = inMonth.filter((row) => {
+        if (activeTab === "fullReplay") {
+          return (row.values.assignee || "") === myName;
+        }
+        const roleData = myRole === "thumbnailer" ? row.thumbnailer : row.editor;
+        return ((roleData && roleData.assignee) || "") === myName;
+      });
+    }
+
     // 사용자가 선택한 정렬 적용 (디폴트 desc = 최신 위)
     const sign = sortOrder === "asc" ? 1 : -1;
     const indexed = inMonth.map((row, idx) => ({ row, idx }));
@@ -1339,7 +1356,7 @@ function App() {
       return a.idx - b.idx;
     });
     return indexed.map((x) => x.row);
-  }, [data, selectedMonth, sortOrder]);
+  }, [data, selectedMonth, sortOrder, activeTab, isAdmin]);
   // 월 이동은 데이터 유무와 무관하게 ±1개월씩 자유롭게.
   // 화살표는 항상 활성화 (사용자가 직접 조작). 데이터 있는 가장 빠른/늦은 달 ±12개월
   // 까지만 허용해서 무한 이동을 살짝 제한한다.
@@ -3654,16 +3671,22 @@ function App() {
       </header>
 
       <nav className="tabbar">
-        {tabs.map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            className={activeTab === tab.key ? "tab active" : "tab"}
-            onClick={() => setActiveTab(tab.key)}
-          >
-            {tab.label}
-          </button>
-        ))}
+        {tabs
+          .filter((tab) => {
+            // editor 빌드는 다시보기(썸네일러 task 영역) 탭 숨김. admin 또는 thumbnailer 는 그대로.
+            if (tab.key === "fullReplay" && !IS_ADMIN && !isAdmin && EMBED.role === "editor") return false;
+            return true;
+          })
+          .map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              className={activeTab === tab.key ? "tab active" : "tab"}
+              onClick={() => setActiveTab(tab.key)}
+            >
+              {tab.label}
+            </button>
+          ))}
       </nav>
 
       <section className="meta">
