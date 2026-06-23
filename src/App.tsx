@@ -3,18 +3,70 @@ import settingsIcon from "./assets/settings-gear.svg";
 import logoImage from "./assets/logo.png";
 import chzzkCategoriesSeed from "./data/chzzk-categories.seed.json";
 
+// Vite define 으로 빌드 시점에 "admin" / "editor" / "thumbnailer" 중 하나로 inline 치환된다.
+// editor / thumbnailer 빌드에서는 if (__IWS_EDITION__ === "admin") 블록이 Rollup 에 의해
+// dead code 로 제거되어 산출물 .asar 에 admin 전용 UI 코드가 남지 않는다.
+declare const __IWS_EDITION__: "admin" | "editor" | "thumbnailer";
+
+type Edition = "admin" | "editor" | "thumbnailer";
+const BUILD_EDITION: Edition = __IWS_EDITION__;
+
+// 스태프 본인 정보 (name / email / role / sheetUrl) 는 vite define 이 아니라
+// 런타임에 main process 가 사이드카 inel-staff-config.json 을 읽어 preload 의
+// 동기 IPC 로 주입한다. admin 빌드 또는 .json 없는 경우 모두 빈 문자열.
+type EmbedInfo = { name: string; email: string; role: string; sheetUrl: string };
+const EMBED: EmbedInfo = ((typeof window !== "undefined" && (window as any).electronAPI?.embed) as EmbedInfo | undefined) || {
+  name: "",
+  email: "",
+  role: "",
+  sheetUrl: ""
+};
+
+// 스태프 빌드는 윈도우 타이틀에 본인 이름을 붙여 다른 스태프 PC 와 구분.
+// Electron BrowserWindow 가 webContents.title 을 자동 반영하므로 document.title
+// 만 갱신해도 타이틀바가 즉시 바뀐다.
+if (typeof document !== "undefined") {
+  document.title = EMBED.name
+    ? `Inel Work Scheduler - ${EMBED.name}`
+    : "Inel Work Scheduler";
+}
+
+// 모듈 최상위 const → Rollup/esbuild 가 boolean literal 로 inline 시켜
+// `{IS_ADMIN && (...)}` JSX 가 editor/thumbnailer 빌드 산출물에서 통째로 제거된다.
+// runtime dev 토글용 `isAdmin` 과 별도. JSX 조건은 두 가지를 합쳐 사용.
+const IS_ADMIN: boolean = __IWS_EDITION__ === "admin";
+
+// 라벨 — admin / staff 모두 동일한 직관적 라벨 사용 (1.2.0 OAuth 전환 후 통일).
+const LABEL_SYNC_DOWNLOAD = "일정 새로고침";
+const LABEL_SYNC_UPLOAD = "변경사항 저장";
+const LABEL_SYNC_DOWNLOADING = "새로고침 중";
+const LABEL_SYNC_UPLOADING = "저장 중";
+
 declare global {
   interface Window {
     electronAPI?: {
       appName: string;
+      embed: { name: string; email: string; role: string; sheetUrl: string };
       startChzzkPolling: (url: string, intervalMs: number) => Promise<{ ok: boolean; error?: string; channelId?: string }>;
       stopChzzkPolling: () => Promise<{ ok: boolean }>;
       onChzzkStatus: (cb: (data: ChzzkStatus) => void) => () => void;
       onChzzkCategoryChange: (cb: (data: ChzzkCategoryChange) => void) => () => void;
       onChzzkTitleChange: (cb: (data: ChzzkTitleChange) => void) => () => void;
       onChzzkError: (cb: (data: { message: string }) => void) => () => void;
-      sheetsPickKeyfile: () => Promise<{ ok: boolean; path?: string; clientEmail?: string; error?: string }>;
-      sheetsInitAuth: (keyFilePath: string) => Promise<{ ok: boolean; clientEmail?: string; error?: string }>;
+      oauthLogin: () => Promise<{ ok: boolean; email?: string; error?: string }>;
+      oauthLogout: () => Promise<{ ok: boolean }>;
+      oauthStatus: () => Promise<{ ok: boolean; loggedIn?: boolean; email?: string | null }>;
+      onOAuthAutoRestored: (cb: (data: { email?: string }) => void) => () => void;
+      settingsSheetLoad: (sheetUrl: string) =>
+        Promise<{ ok: boolean; kv?: Record<string, any>; count?: number; error?: string }>;
+      settingsSheetWrite: (sheetUrl: string, kv: Record<string, any>) =>
+        Promise<{ ok: boolean; count?: number; error?: string }>;
+      settingsSheetPatch: (sheetUrl: string, patch: Record<string, any>) =>
+        Promise<{ ok: boolean; count?: number; error?: string }>;
+      pickOutputDir: (defaultPath?: string) => Promise<{ ok: boolean; path?: string; canceled?: boolean }>;
+      buildEditorInstaller: (payload: { name: string; email: string; role: string; sheetUrl: string; outputDir: string }) =>
+        Promise<{ ok: boolean; outputDir?: string; files?: string[]; error?: string }>;
+      onBuildInstallerLog: (cb: (line: string) => void) => () => void;
       sheetsImport: (sheetUrl: string, tabKey: string, year: number, headers: Array<{ key: string; label: string }>) =>
         Promise<{ ok: boolean; rows?: RowItem[]; headerRow?: string[]; sheetNotFound?: boolean; error?: string }>;
       sheetsExport: (sheetUrl: string, tabKey: string, year: number, headers: Array<{ key: string; label: string }>, rows: RowItem[]) =>
@@ -28,7 +80,7 @@ declare global {
         rowValues: Record<string, string>
       ) => Promise<{ ok: boolean; action?: "updated" | "appended"; rowNum?: number; error?: string }>;
       sheetsTestConnection: (sheetUrl: string) =>
-        Promise<{ ok: boolean; title?: string; sheets?: string[]; clientEmail?: string; error?: string }>;
+        Promise<{ ok: boolean; title?: string; sheets?: string[]; error?: string }>;
       categoriesLoadUser: () =>
         Promise<{ ok: boolean; categories?: Array<{ categoryId: string; categoryValue: string; categoryType: string; addedAt?: string }>; path?: string }>;
       categoriesAddUser: (categoryId: string, categoryValue: string, categoryType?: string) =>
@@ -37,6 +89,7 @@ declare global {
         Promise<{ ok: boolean; categories?: Array<{ categoryId: string; categoryValue: string; categoryType: string }>; keyword?: string; error?: string }>;
       helpOpenSheetsSetup: () => Promise<{ ok: boolean; url?: string; error?: string }>;
       helpOpenAppGuide: () => Promise<{ ok: boolean; url?: string; error?: string }>;
+      helpOpenStaffInstaller: () => Promise<{ ok: boolean; url?: string; error?: string }>;
       helpOpenAiSetup: () => Promise<{ ok: boolean; url?: string; error?: string }>;
       aiListModels: (provider: string, apiKey: string) => Promise<{
         ok: boolean;
@@ -61,7 +114,6 @@ declare global {
         error?: string;
         trace?: string[];
       }>;
-      getFilePath: (file: File) => string;
     };
   }
 }
@@ -138,6 +190,7 @@ type EditorRole = "thumbnailer" | "editor";
 type StaffMember = {
   id: string;
   name: string;
+  email: string; // Google 계정 이메일 — OAuth 로그인 시 본인 확인 + 시트 공유 권한 매칭
   role: EditorRole;
 };
 
@@ -209,7 +262,31 @@ const tableSchema: Record<TabKey, ColumnDef[]> = {
     { key: "broadcastDate", label: "방송일", type: "date", width: 140, shared: true },
     { key: "broadcastStartTime", label: "방송시작시간", type: "text", width: 120, shared: true },
     { key: "videoTitle", label: "영상제목 타임라인", type: "text", width: 320, shared: true },
-    { key: "categoryTimeline", label: "카테고리 타임라인", type: "text", width: 320, shared: true }
+    { key: "categoryTimeline", label: "카테고리 타임라인", type: "text", width: 320, shared: true },
+    // 다시보기 1-row 모드 유지 + 썸네일러 일정 컬럼들 (shared=true 라 1 row 그대로).
+    // 담당자 셀에 등록된 썸네일러를 선택해 매핑.
+    { key: "assignee", label: "담당자", type: "text", width: 160, shared: true },
+    {
+      key: "editType",
+      label: "편집 유형",
+      type: "preset",
+      width: 150,
+      shared: true,
+      presetOptions: EDIT_TYPE_OPTIONS
+    },
+    {
+      key: "subtitle",
+      label: "자막",
+      type: "preset",
+      width: 140,
+      shared: true,
+      presetOptions: SUBTITLE_OPTIONS
+    },
+    { key: "editStartDate", label: "작업시작일", type: "date", width: 150, shared: true },
+    { key: "workStatus", label: "작업상태", type: "status", width: 140, shared: true },
+    { key: "deliveryDate", label: "납품일", type: "date", width: 140, shared: true },
+    { key: "sourceShare", label: "원본 공유", type: "url", width: 180, shared: true },
+    { key: "deliveryShare", label: "납품 공유", type: "url", width: 180, shared: true }
   ]
 };
 
@@ -391,6 +468,28 @@ function loadInitialRows(): Record<TabKey, RowItem[]> {
 }
 
 function App() {
+  // ── role(edition) 시점 ──
+  // production 빌드: BUILD_EDITION 그대로 사용 (dead-code elimination 의 핵심)
+  // dev (npm run dev): 디버그 패널 드롭다운으로 시점 전환 가능 → localStorage 영구화
+  const [devEdition, setDevEdition] = useState<Edition>(() => {
+    if (!import.meta.env.DEV) return BUILD_EDITION;
+    try {
+      const saved = localStorage.getItem("inel.devEdition.v1");
+      if (saved === "admin" || saved === "editor" || saved === "thumbnailer") return saved;
+    } catch (_e) { /* ignore */ }
+    return BUILD_EDITION;
+  });
+  useEffect(() => {
+    if (!import.meta.env.DEV) return;
+    try { localStorage.setItem("inel.devEdition.v1", devEdition); } catch (_e) { /* ignore */ }
+  }, [devEdition]);
+  const edition: Edition = import.meta.env.DEV ? devEdition : BUILD_EDITION;
+  // IS_ADMIN 을 곱해두면 prod editor 빌드에서 isAdmin = false 가 보장되고,
+  // const-propagation 으로 그 아래 JSX 의 `{IS_ADMIN && isAdmin && ...}` 조건이 함께 dead-code 처리된다.
+  const isAdmin = IS_ADMIN && edition === "admin";
+  const isStaff = !isAdmin;
+  void isStaff; // 향후 staff 공통 분기에 사용. 현재 미사용 경고 회피.
+
   const [activeTab, setActiveTab] = useState<TabKey>("shorts");
   const [appData, setAppData] = useState<AppDataState>(() => ({
     schemaByTab: tableSchema,
@@ -401,9 +500,134 @@ function App() {
   const [uninstallModalOpen, setUninstallModalOpen] = useState(false);
   const [uninstallConfirmText, setUninstallConfirmText] = useState("");
   const [uninstalling, setUninstalling] = useState(false);
+
+  // ── 편집자 인스톨러 빌드 모달 (admin only) ──
+  const [installerModalOpen, setInstallerModalOpen] = useState(false);
+  const [installerTargetStaffId, setInstallerTargetStaffId] = useState<string>("");
+  const [installerOutputDir, setInstallerOutputDir] = useState<string>("");
+  const [installerBuilding, setInstallerBuilding] = useState(false);
+  const [installerLogs, setInstallerLogs] = useState<string[]>([]);
+  const [installerResult, setInstallerResult] = useState<{ ok: boolean; outputDir?: string; files?: string[]; error?: string } | null>(null);
   const UNINSTALL_CONFIRM_PHRASE = "이늘 스케쥴러 삭제합니다";
-  const [sheetLink, setSheetLink] = useState("");
-  const [serviceAccountPath, setServiceAccountPath] = useState("");
+  const [sheetLink, setSheetLink] = useState(() => EMBED.sheetUrl || "");
+
+  // ── OAuth 2.0 (Google 계정 로그인) ──
+  // 앱 시작 시 main 이 저장된 refresh_token 으로 자동 복원하면 onOAuthAutoRestored 이벤트 발생.
+  const [oauthLoggedIn, setOauthLoggedIn] = useState(false);
+  const [oauthEmail, setOauthEmail] = useState<string | null>(null);
+  const [oauthBusy, setOauthBusy] = useState(false);
+  const [oauthError, setOauthError] = useState<string>("");
+  useEffect(() => {
+    const api = (window as any).electronAPI;
+    if (!api?.oauthStatus) return;
+    (async () => {
+      try {
+        const res = await api.oauthStatus();
+        if (res?.ok) {
+          setOauthLoggedIn(!!res.loggedIn);
+          setOauthEmail(res.email || null);
+        }
+      } catch (_e) { /* ignore */ }
+    })();
+    const off = api.onOAuthAutoRestored?.((data: { email?: string }) => {
+      setOauthLoggedIn(true);
+      setOauthEmail(data?.email || null);
+      dlog(`[OAuth] 자동 복원 완료: ${data?.email || "(이메일 미상)"}`);
+    });
+    return () => { if (typeof off === "function") off(); };
+  }, []);
+
+  const handleOAuthLogin = async () => {
+    const api = (window as any).electronAPI;
+    if (!api?.oauthLogin) { dlog("[OAuth] electronAPI 없음"); return; }
+    setOauthBusy(true);
+    setOauthError("");
+    dlog("[OAuth] 로그인 시작 — 시스템 브라우저가 열립니다");
+    try {
+      const res = await api.oauthLogin();
+      if (res?.ok) {
+        setOauthLoggedIn(true);
+        setOauthEmail(res.email || null);
+        dlog(`[OAuth] 로그인 성공: ${res.email}`);
+      } else {
+        setOauthError(res?.error || "알 수 없는 오류");
+        dlog(`[OAuth] 로그인 실패: ${res?.error}`);
+      }
+    } catch (err: any) {
+      setOauthError(err?.message || String(err));
+      dlog(`[OAuth] 로그인 예외: ${err?.message || err}`);
+    } finally {
+      setOauthBusy(false);
+    }
+  };
+
+  const handleOAuthLogout = async () => {
+    const api = (window as any).electronAPI;
+    if (!api?.oauthLogout) return;
+    if (!window.confirm("Google 계정 로그아웃합니다. 다시 시트에 접근하려면 재로그인이 필요해요. 계속하시겠어요?")) return;
+    await api.oauthLogout();
+    setOauthLoggedIn(false);
+    setOauthEmail(null);
+    dlog("[OAuth] 로그아웃 완료");
+  };
+
+  // ── 시트 settings 마이그레이션 마커 (admin 전용) ──
+  // 시트의 _settings 시트가 진실의 단일 소스. localStorage 는 캐시.
+  // 마이그레이션 = 기존 1.x 사용자의 localStorage settings 를 시트로 1회 push.
+  // 마커가 true 면 이미 시트와 동기화된 상태로 간주, 이후엔 saveSettings 가
+  // 시트로도 push 한다.
+  const settingsMigratedRef = useRef<boolean>(false);
+  useEffect(() => {
+    try { settingsMigratedRef.current = localStorage.getItem("inel.settingsMigrated.v1") === "1"; } catch (_e) { /* ignore */ }
+  }, []);
+  const setSettingsMigrated = (v: boolean) => {
+    settingsMigratedRef.current = v;
+    try { localStorage.setItem("inel.settingsMigrated.v1", v ? "1" : "0"); } catch (_e) { /* ignore */ }
+  };
+
+  // ── 잠금 상태 (admin/staff 공용) ──
+  // 1.2.0 OAuth 전환 후, 잠금 사유는 두 가지로 단순화:
+  //   • admin 빌드: OAuth 미로그인 또는 Sheet URL 미설정 → "logged-out"
+  //   • staff 빌드: OAuth 미로그인 / 임베드 email 불일치 / 시트 공유 권한 없음 → 각각 상이 사유
+  // dev 모드는 모두 우회 (편의).
+  type LockState = "ok" | "verifying" | "locked" | "logged-out";
+  const initialLock: LockState = import.meta.env.DEV
+    ? "ok"
+    : (IS_ADMIN ? "logged-out" : "verifying");
+  const [lockState, setLockState] = useState<LockState>(initialLock);
+  const [lockReason, setLockReason] = useState<string>("");
+
+  // staff 빌드 OAuth 검증:
+  //   1) OAuth 로그인 안 됨 → "logged-out" (로그인 화면)
+  //   2) 로그인됨 + 이메일이 EMBED.email 과 다름 → "locked" (계정 불일치)
+  //   3) 일치 → "ok" (단지 시트 접근은 시트 공유 권한 따라감. 그건 sheets-import 가 401/403 으로 알려줌)
+  useEffect(() => {
+    if (import.meta.env.DEV) { setLockState("ok"); return; }
+    if (IS_ADMIN) {
+      // admin: 로그인 안 됐으면 logged-out, 됐으면 ok
+      setLockState(oauthLoggedIn ? "ok" : "logged-out");
+      return;
+    }
+    // staff
+    if (!oauthLoggedIn) {
+      setLockState("logged-out");
+      setLockReason("");
+      return;
+    }
+    if (!EMBED.email) {
+      setLockState("locked");
+      setLockReason("설치 파일에 본인 이메일 정보가 없습니다. 관리자에게 새 설치 파일을 요청하세요.");
+      return;
+    }
+    const norm = (s: string | null | undefined) => (s || "").trim().toLowerCase();
+    if (norm(oauthEmail) !== norm(EMBED.email)) {
+      setLockState("locked");
+      setLockReason(`로그인된 계정(${oauthEmail || "?"}) 이 등록된 계정(${EMBED.email}) 과 다릅니다. 본인 Gmail 로 로그아웃 후 다시 로그인하세요.`);
+      return;
+    }
+    setLockState("ok");
+    setLockReason("");
+  }, [oauthLoggedIn, oauthEmail]);
   const [sheetsStatus, setSheetsStatus] = useState("");
   const [syncPhase, setSyncPhase] = useState<"idle" | "downloading" | "uploading" | "success" | "error">("idle");
   const [syncProgress, setSyncProgress] = useState<{ current: number; total: number; label: string }>({
@@ -412,9 +636,14 @@ function App() {
     label: ""
   });
   const autoSyncDoneRef = useRef(false);
-  const [clientEmail, setClientEmail] = useState("");
-  const [isDraggingJson, setIsDraggingJson] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<"sheet" | "connection" | "ai" | "etc">("sheet");
+  const [settingsTab, setSettingsTab] = useState<"sheet" | "connection" | "ai" | "etc">(
+    isAdmin ? "connection" : "etc"
+  );
+  // staff 시점이면 admin 전용 설정 탭에 들어가 있지 않도록 보정 (dev 토글 케이스 대비)
+  useEffect(() => {
+    if (edition === "admin") return;
+    if (settingsTab !== "etc") setSettingsTab("etc");
+  }, [edition, settingsTab]);
   const [autoStartEnabled, setAutoStartEnabled] = useState(false);
   const [autoStartLoading, setAutoStartLoading] = useState(false);
   const [autoStartMessage, setAutoStartMessage] = useState("");
@@ -425,6 +654,7 @@ function App() {
   const [newStatus, setNewStatus] = useState("");
   const [staffList, setStaffList] = useState<StaffMember[]>([]);
   const [newStaffName, setNewStaffName] = useState("");
+  const [newStaffEmail, setNewStaffEmail] = useState("");
   const [newStaffRole, setNewStaffRole] = useState<EditorRole>("editor");
   const [openAssigneeMenuKey, setOpenAssigneeMenuKey] = useState<string | null>(null);
   const [userCategories, setUserCategories] = useState<ChzzkCategory[]>([]);
@@ -487,7 +717,10 @@ function App() {
   }, [categorySearchQuery, filteredCategories.length, allCategories]);
   const [undoStack, setUndoStack] = useState<UndoSnapshot[]>([]);
   const [redoStack, setRedoStack] = useState<UndoSnapshot[]>([]);
-  const [maxUndoSize, setMaxUndoSize] = useState(10);
+  // staff 빌드는 15단계 고정 (시트 동기화로 관리자의 설정 영향 받지 않게 staff setter 는 no-op).
+  // admin 은 종전대로 10 기본값 + 슬라이더로 5~50 조절.
+  const [maxUndoSize, _setMaxUndoSizeRaw] = useState<number>(IS_ADMIN ? 10 : 15);
+  const setMaxUndoSize = IS_ADMIN ? _setMaxUndoSizeRaw : ((_v: number) => { /* staff 는 무시 */ }) as React.Dispatch<React.SetStateAction<number>>;
   /** 같은 (cellKey) 연속 편집은 한 번의 history entry로 묶기 위한 ref */
   const lastEditCellRef = useRef<string | null>(null);
   const [historyLogs, setHistoryLogs] = useState<string[]>([]);
@@ -1088,7 +1321,24 @@ function App() {
     // 데이터가 한 건도 없으면 그대로 (월 필터 적용 안 함)
     if (data.length === 0) return data;
     // selectedMonth 에 해당하는 행만. 데이터가 다른 달에만 있어도 빈 배열 반환 (의도된 동작)
-    const inMonth = data.filter((row) => parseMonthKey(row.values.broadcastDate || "") === selectedMonth);
+    let inMonth = data.filter((row) => parseMonthKey(row.values.broadcastDate || "") === selectedMonth);
+
+    // 스태프 빌드: 본인이 담당자인 행만 통과. admin 빌드는 모든 행 표시.
+    //   · fullReplay (1행 모드): row.values.assignee 가 담당자
+    //   · shorts/longform (2행 모드): row.{role}?.assignee 가 담당자
+    //   · editor 가 다시보기 탭 보면 본인 담당 task 가 없어 빈 배열 → 자연스럽게 빈 화면.
+    if (!IS_ADMIN && !isAdmin && EMBED.name && (EMBED.role === "thumbnailer" || EMBED.role === "editor")) {
+      const myName = EMBED.name;
+      const myRole = EMBED.role as EditorRole;
+      inMonth = inMonth.filter((row) => {
+        if (activeTab === "fullReplay") {
+          return (row.values.assignee || "") === myName;
+        }
+        const roleData = myRole === "thumbnailer" ? row.thumbnailer : row.editor;
+        return ((roleData && roleData.assignee) || "") === myName;
+      });
+    }
+
     // 사용자가 선택한 정렬 적용 (디폴트 desc = 최신 위)
     const sign = sortOrder === "asc" ? 1 : -1;
     const indexed = inMonth.map((row, idx) => ({ row, idx }));
@@ -1106,7 +1356,7 @@ function App() {
       return a.idx - b.idx;
     });
     return indexed.map((x) => x.row);
-  }, [data, selectedMonth, sortOrder]);
+  }, [data, selectedMonth, sortOrder, activeTab, isAdmin]);
   // 월 이동은 데이터 유무와 무관하게 ±1개월씩 자유롭게.
   // 화살표는 항상 활성화 (사용자가 직접 조작). 데이터 있는 가장 빠른/늦은 달 ±12개월
   // 까지만 허용해서 무한 이동을 살짝 제한한다.
@@ -1270,25 +1520,93 @@ function App() {
 
   const addStaff = () => {
     const trimmed = normalizeName(newStaffName);
+    const trimmedEmail = newStaffEmail.trim().toLowerCase();
     if (!trimmed) return;
+    if (!trimmedEmail) {
+      dlog(`이메일을 입력하세요 (시트 공유 + OAuth 본인 확인용)`);
+      return;
+    }
+    // 간단한 이메일 형식 검증
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      dlog(`이메일 형식이 올바르지 않습니다: ${trimmedEmail}`);
+      return;
+    }
     if (staffList.some((s) => normalizeName(s.name) === trimmed && s.role === newStaffRole)) {
       dlog(`이미 등록된 ${ROLE_LABEL[newStaffRole]}: ${trimmed}`);
+      return;
+    }
+    if (staffList.some((s) => (s.email || "").toLowerCase() === trimmedEmail)) {
+      dlog(`이미 등록된 이메일: ${trimmedEmail}`);
       return;
     }
     const member: StaffMember = {
       id: `stf_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
       name: trimmed,
+      email: trimmedEmail,
       role: newStaffRole
     };
     setStaffList((prev) => [...prev, member]);
     setNewStaffName("");
-    dlog(`${ROLE_LABEL[member.role]} 등록: ${member.name}`);
+    setNewStaffEmail("");
+    dlog(`${ROLE_LABEL[member.role]} 등록: ${member.name} <${member.email}>`);
   };
 
   const removeStaff = (id: string) => {
     const target = staffList.find((s) => s.id === id);
     setStaffList((prev) => prev.filter((s) => s.id !== id));
     if (target) dlog(`${ROLE_LABEL[target.role]} 삭제: ${target.name}`);
+  };
+
+  // ── 편집자 인스톨러 빌드 (admin 전용) ──
+  const openInstallerModal = (staffId: string) => {
+    setInstallerTargetStaffId(staffId);
+    setInstallerOutputDir("");
+    setInstallerLogs([]);
+    setInstallerResult(null);
+    setInstallerBuilding(false);
+    setInstallerModalOpen(true);
+  };
+  const handlePickInstallerDir = async () => {
+    const res = await (window as any).electronAPI?.pickOutputDir(installerOutputDir || undefined);
+    if (res?.ok && res.path) setInstallerOutputDir(res.path);
+  };
+  const handleRunInstallerBuild = async () => {
+    const target = staffList.find((s) => s.id === installerTargetStaffId);
+    if (!target) { setInstallerResult({ ok: false, error: "편집자 미선택" }); return; }
+    if (!target.email) { setInstallerResult({ ok: false, error: "해당 스태프의 Gmail 이 등록되어 있지 않습니다. [시트 설정] 탭에서 이메일 입력 후 다시 시도하세요." }); return; }
+    if (!installerOutputDir) { setInstallerResult({ ok: false, error: "출력 폴더 미선택" }); return; }
+    if (!sheetLink) { setInstallerResult({ ok: false, error: "시트 URL 이 없습니다. [구글 시트] 탭에서 설정 후 다시 시도하세요." }); return; }
+    setInstallerBuilding(true);
+    setInstallerLogs((prev) => [...prev, `▶ ${ROLE_LABEL[target.role]} ${target.name} <${target.email}> 빌드 시작`]);
+    setInstallerResult(null);
+    const off = (window as any).electronAPI?.onBuildInstallerLog((line: string) => {
+      setInstallerLogs((prev) => [...prev, line]);
+    });
+    try {
+      const res = await (window as any).electronAPI?.buildEditorInstaller({
+        name: target.name,
+        email: target.email,
+        role: target.role,
+        sheetUrl: sheetLink,
+        outputDir: installerOutputDir
+      });
+      setInstallerResult(res?.ok ? { ok: true, outputDir: res.outputDir, files: res.files } : { ok: false, error: res?.error || "알 수 없는 오류" });
+      if (res?.ok) {
+        setInstallerLogs((prev) => [...prev, `✓ 완료. ${res.files?.length || 0}개 파일 → ${res.outputDir}`]);
+      } else {
+        setInstallerLogs((prev) => [...prev, `✗ 실패: ${res?.error || "unknown"}`]);
+      }
+    } catch (err: any) {
+      setInstallerResult({ ok: false, error: err?.message || "예외 발생" });
+      setInstallerLogs((prev) => [...prev, `✗ 예외: ${err?.message || err}`]);
+    } finally {
+      setInstallerBuilding(false);
+      if (typeof off === "function") off();
+    }
+  };
+  const closeInstallerModal = () => {
+    if (installerBuilding) return;
+    setInstallerModalOpen(false);
   };
 
   /** maxUndoSize 줄이면 기존 스택도 즉시 잘라냄. */
@@ -1909,11 +2227,28 @@ function App() {
   }, [schedulePatchActiveRow]);
 
 
+  // 시트로 push 할 settings 페이로드를 만든다.
+  // sheetLink 는 "부트스트랩 정보" 라 시트엔 안 올림.
+  const buildSettingsPayload = useCallback((): Record<string, any> => ({
+    chzzkLink,
+    pollingInterval,
+    statusOptions,
+    showDebugPanel,
+    staffList,
+    maxUndoSize,
+    schemaByTab: appData.schemaByTab,
+    sortOrderByTab,
+    isDetecting,
+    aiProvider,
+    aiApiKey,
+    aiModel,
+    userCategories
+  }), [chzzkLink, pollingInterval, statusOptions, showDebugPanel, staffList, maxUndoSize, appData.schemaByTab, sortOrderByTab, isDetecting, aiProvider, aiApiKey, aiModel, userCategories]);
+
   const saveSettings = () => {
     try {
       const data = {
         sheetLink,
-        serviceAccountPath,
         chzzkLink,
         pollingInterval,
         statusOptions,
@@ -1931,10 +2266,89 @@ function App() {
       localStorage.setItem("inel.settings.v1", JSON.stringify(data));
       setSheetsStatus("설정 저장 완료");
       dlog("설정 저장됨");
+      // 시트 동기화 — sheetLink + 마이그레이션 마커 true 일 때만
+      if (IS_ADMIN && sheetLink && settingsMigratedRef.current) {
+        void (async () => {
+          try {
+            const res = await (window as any).electronAPI?.settingsSheetPatch(sheetLink, buildSettingsPayload());
+            if (res?.ok) dlog(`[settings→sheet] patch ${res.count}개`);
+            else dlog(`[settings→sheet] patch 실패: ${res?.error || "unknown"}`);
+          } catch (err: any) {
+            dlog(`[settings→sheet] patch 예외: ${err?.message || err}`);
+          }
+        })();
+      }
     } catch (err: unknown) {
       dlog(`설정 저장 실패: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
+
+  // 시트 다운로드 직후 호출: _settings 시트 → state 적용 또는 마이그레이션.
+  const syncSettingsFromSheet = useCallback(async () => {
+    if (!IS_ADMIN) return;
+    if (!sheetLink) return;
+    const api = (window as any).electronAPI;
+    if (!api?.settingsSheetLoad) return;
+    try {
+      const res = await api.settingsSheetLoad(sheetLink);
+      if (!res?.ok) { dlog(`[sheet→settings] load 실패: ${res?.error || "unknown"}`); return; }
+      const kv = res.kv || {};
+      const sheetHasData = Object.keys(kv).length > 0;
+      if (sheetHasData) {
+        // 시트가 진실 → state 적용
+        if (typeof kv.chzzkLink === "string") setChzzkLink(kv.chzzkLink);
+        if (typeof kv.pollingInterval === "number") setPollingInterval(kv.pollingInterval);
+        if (Array.isArray(kv.statusOptions)) setStatusOptions(kv.statusOptions);
+        if (typeof kv.showDebugPanel === "boolean") setShowDebugPanel(kv.showDebugPanel);
+        if (Array.isArray(kv.staffList)) {
+          // 옛 데이터에 email 필드 없으면 빈 문자열로 보정 (마이그레이션)
+          setStaffList(kv.staffList.map((s: any) => ({ ...s, email: s.email || "" })));
+        }
+        if (typeof kv.maxUndoSize === "number") setMaxUndoSize(Math.min(50, Math.max(5, kv.maxUndoSize)));
+        if (kv.schemaByTab && typeof kv.schemaByTab === "object") {
+          // schemaByTab 머지 (코드 default 와 시트값 + 새 컬럼 자동 보충)
+          const merged: Record<TabKey, ColumnDef[]> = { ...tableSchema };
+          (Object.keys(tableSchema) as TabKey[]).forEach((tab) => {
+            const stored: ColumnDef[] = Array.isArray(kv.schemaByTab[tab]) ? kv.schemaByTab[tab] : [];
+            if (stored.length === 0) { merged[tab] = tableSchema[tab]; return; }
+            const storedKeys = new Set(stored.map((c) => c.key));
+            const missing = tableSchema[tab].filter((c) => !storedKeys.has(c.key));
+            merged[tab] = [...stored, ...missing];
+          });
+          setAppData((prev) => ({ ...prev, schemaByTab: merged }));
+        }
+        if (kv.sortOrderByTab && typeof kv.sortOrderByTab === "object") {
+          const valid = (v: unknown): v is SortOrder => v === "asc" || v === "desc";
+          setSortOrderByTab((prev) => ({
+            shorts: valid(kv.sortOrderByTab.shorts) ? kv.sortOrderByTab.shorts : prev.shorts,
+            longform: valid(kv.sortOrderByTab.longform) ? kv.sortOrderByTab.longform : prev.longform,
+            fullReplay: valid(kv.sortOrderByTab.fullReplay) ? kv.sortOrderByTab.fullReplay : prev.fullReplay
+          }));
+        }
+        if (typeof kv.isDetecting === "boolean") wasDetectingRef.current = kv.isDetecting;
+        if (typeof kv.aiProvider === "string") setAiProvider(kv.aiProvider as AiProvider);
+        if (typeof kv.aiApiKey === "string") setAiApiKey(kv.aiApiKey);
+        if (typeof kv.aiModel === "string") setAiModel(kv.aiModel);
+        if (Array.isArray(kv.userCategories)) setUserCategories(kv.userCategories);
+        setSettingsMigrated(true);
+        dlog(`[sheet→settings] 적용 완료 (${Object.keys(kv).length}개)`);
+      } else {
+        // 시트가 비어있음 → 마이그레이션 (현재 localStorage 의 settings 를 시트로 1회 push)
+        if (!settingsMigratedRef.current) {
+          const payload = buildSettingsPayload();
+          const write = await api.settingsSheetWrite(sheetLink, payload);
+          if (write?.ok) {
+            setSettingsMigrated(true);
+            dlog(`[settings 마이그레이션] localStorage → 시트 push 완료 (${write.count}개)`);
+          } else {
+            dlog(`[settings 마이그레이션] 실패: ${write?.error || "unknown"}`);
+          }
+        }
+      }
+    } catch (err: any) {
+      dlog(`[sheet→settings] 예외: ${err?.message || err}`);
+    }
+  }, [sheetLink, buildSettingsPayload]);
 
   useEffect(() => {
     const api = window.electronAPI;
@@ -1962,12 +2376,14 @@ function App() {
       if (!raw) return;
       const data = JSON.parse(raw);
       if (data.sheetLink) setSheetLink(data.sheetLink);
-      if (data.serviceAccountPath) setServiceAccountPath(data.serviceAccountPath);
       if (data.chzzkLink) setChzzkLink(data.chzzkLink);
       if (typeof data.pollingInterval === "number") setPollingInterval(data.pollingInterval);
       if (Array.isArray(data.statusOptions)) setStatusOptions(data.statusOptions);
       if (typeof data.showDebugPanel === "boolean") setShowDebugPanel(data.showDebugPanel);
-      if (Array.isArray(data.staffList)) setStaffList(data.staffList);
+      if (Array.isArray(data.staffList)) {
+        // 옛 데이터에 email 필드 없으면 빈 문자열로 보정 (마이그레이션)
+        setStaffList(data.staffList.map((s: any) => ({ ...s, email: s.email || "" })));
+      }
       if (typeof data.maxUndoSize === "number") {
         setMaxUndoSize(Math.min(50, Math.max(5, data.maxUndoSize)));
       }
@@ -2125,110 +2541,16 @@ function App() {
 
   useEffect(() => {
     if (autoSyncDoneRef.current) return;
-    if (!sheetLink || !serviceAccountPath) return;
+    if (!sheetLink) return;
+    if (!oauthLoggedIn) return; // OAuth 로그인 후에만 자동 동기화
     const api = window.electronAPI;
     if (!api) return;
     autoSyncDoneRef.current = true;
     (async () => {
-      dlog("앱 시작 자동 동기화 시작");
-      setSheetsStatus("앱 시작 - 인증 중...");
-      const auth = await api.sheetsInitAuth(serviceAccountPath);
-      if (!auth.ok) {
-        dlog(`자동 인증 실패: ${auth.error}`);
-        setSheetsStatus(`인증 실패: ${auth.error}`);
-        setSyncPhase("error");
-        return;
-      }
-      if (auth.clientEmail) setClientEmail(auth.clientEmail);
+      dlog("앱 시작 자동 동기화 시작 (OAuth)");
       await runImport({ silent: false });
     })();
-  }, [sheetLink, serviceAccountPath]);
-
-  const pickServiceAccount = async () => {
-    const api = window.electronAPI;
-    if (!api) { dlog("electronAPI not available"); return; }
-    const result = await api.sheetsPickKeyfile();
-    if (result.ok && result.path) {
-      setServiceAccountPath(result.path);
-      setClientEmail(result.clientEmail || "");
-      dlog(`Service Account 설정 완료: ${result.path}`);
-      setSheetsStatus("인증 완료");
-    } else if (result.error) {
-      dlog(`Service Account 에러: ${result.error}`);
-      setSheetsStatus(`에러: ${result.error}`);
-    }
-  };
-
-  const registerJsonByPath = async (filePath: string) => {
-    const api = window.electronAPI;
-    if (!api) { dlog("electronAPI not available"); return; }
-    const result = await api.sheetsInitAuth(filePath);
-    if (result.ok) {
-      setServiceAccountPath(filePath);
-      setClientEmail(result.clientEmail || "");
-      setSheetsStatus("인증 완료");
-      dlog(`JSON 등록(드래그&드롭): ${filePath}`);
-    } else {
-      setSheetsStatus(`에러: ${result.error}`);
-      dlog(`JSON 등록 실패: ${result.error}`);
-    }
-  };
-
-  const handleJsonDrop = async (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDraggingJson(false);
-
-    const items = Array.from(e.dataTransfer.items || []);
-    const files = Array.from(e.dataTransfer.files || []);
-    dlog(`JSON drop: items=${items.length}, files=${files.length}`);
-
-    const file = files[0];
-    if (!file) {
-      dlog("드롭에 파일이 없음 (텍스트 등 다른 데이터일 수 있음)");
-      setSheetsStatus("파일을 직접 드래그&드롭해주세요.");
-      return;
-    }
-
-    if (!file.name.toLowerCase().endsWith(".json")) {
-      dlog(`드롭한 파일이 JSON이 아님: ${file.name}`);
-      setSheetsStatus("JSON 파일만 등록 가능합니다.");
-      return;
-    }
-
-    const api = window.electronAPI;
-    let filePath = "";
-    if (api?.getFilePath) {
-      try {
-        filePath = api.getFilePath(file) || "";
-      } catch (err) {
-        dlog(`getFilePath 호출 실패: ${err instanceof Error ? err.message : String(err)}`);
-      }
-    }
-    if (!filePath) {
-      filePath = (file as unknown as { path?: string }).path || "";
-    }
-
-    if (!filePath) {
-      dlog(`경로를 얻을 수 없음. 파일명='${file.name}', size=${file.size}, electronAPI=${!!api}`);
-      setSheetsStatus("파일 경로를 얻을 수 없습니다. [파일 선택] 버튼을 사용해주세요.");
-      return;
-    }
-
-    dlog(`드롭한 JSON 경로: ${filePath}`);
-    await registerJsonByPath(filePath);
-  };
-
-  const copyClientEmail = async () => {
-    if (!clientEmail) return;
-    try {
-      await navigator.clipboard.writeText(clientEmail);
-      setSheetsStatus("이메일이 클립보드에 복사되었습니다.");
-      dlog(`이메일 복사: ${clientEmail}`);
-    } catch (err: unknown) {
-      dlog(`복사 실패: ${err instanceof Error ? err.message : String(err)}`);
-    }
-  };
+  }, [sheetLink, oauthLoggedIn]);
 
   const testConnection = async () => {
     const api = window.electronAPI;
@@ -2237,8 +2559,8 @@ function App() {
       setSheetsStatus("Google Sheets 링크를 입력하세요.");
       return;
     }
-    if (!serviceAccountPath) {
-      setSheetsStatus("Service Account JSON을 먼저 등록하세요.");
+    if (!oauthLoggedIn) {
+      setSheetsStatus("먼저 Google 계정으로 로그인하세요.");
       return;
     }
     setSheetsStatus("연결 테스트 중...");
@@ -2280,6 +2602,20 @@ function App() {
     }
   };
 
+  const openStaffInstallerHelp = async () => {
+    const api = window.electronAPI;
+    if (!api?.helpOpenStaffInstaller) {
+      dlog("편집자 인스톨러 가이드 열기 불가 (Electron 환경 아님)");
+      return;
+    }
+    const res = await api.helpOpenStaffInstaller();
+    if (res.ok) {
+      dlog(`편집자 인스톨러 가이드 열림: ${res.url}`);
+    } else {
+      dlog(`편집자 인스톨러 가이드 열기 실패: ${res.error}`);
+    }
+  };
+
   const TAB_LABELS: Record<TabKey, string> = {
     shorts: "숏폼",
     longform: "롱폼",
@@ -2293,8 +2629,8 @@ function App() {
       if (!opts.silent) { dlog("Google Sheets 링크를 입력하세요"); setSheetsStatus("시트 링크 없음"); }
       return false;
     }
-    if (!serviceAccountPath) {
-      if (!opts.silent) { dlog("Service Account JSON을 먼저 설정하세요"); setSheetsStatus("인증 필요"); }
+    if (!oauthLoggedIn) {
+      if (!opts.silent) { dlog("Google 계정으로 먼저 로그인하세요"); setSheetsStatus("로그인 필요"); }
       return false;
     }
 
@@ -2315,7 +2651,7 @@ function App() {
       }));
 
       setSyncProgress({ current: i, total: tabKeys.length, label: `${tabLabel}_${year}` });
-      setSheetsStatus(`시트 내려받는 중... (${i + 1}/${tabKeys.length} ${tabLabel})`);
+      setSheetsStatus(`${LABEL_SYNC_DOWNLOADING}... (${i + 1}/${tabKeys.length} ${tabLabel})`);
       dlog(`가져오기: ${tabKey} (${year})`);
 
       const result = await api.sheetsImport(sheetLink, tabKey, year, headers);
@@ -2346,14 +2682,45 @@ function App() {
     setSheetsStatus(`동기화 완료 (총 ${totalImported}행)`);
     setSyncPhase("success");
     dlog(`전체 가져오기 완료: ${totalImported}행`);
+
+    // 시트 다운로드 끝났으면 _settings 시트도 동기화 (admin 전용).
+    // 시트에 settings 가 있으면 state 적용, 없으면 마이그레이션.
+    void syncSettingsFromSheet();
+
     return true;
   };
+
+  // settings 자동 push (디바운스 1.5초)
+  // 마이그레이션이 끝나면 그 이후의 모든 설정 변경을 자동으로 시트의 _settings 에 patch.
+  // 다른 PC 에서 같은 시트 연결 시 다음 [일정 새로고침] 으로 자동 동기화.
+  useEffect(() => {
+    if (!IS_ADMIN) return;
+    if (!sheetLink) return;
+    if (!settingsMigratedRef.current) return;
+    const timer = setTimeout(() => {
+      void (async () => {
+        const api = (window as any).electronAPI;
+        if (!api?.settingsSheetPatch) return;
+        try {
+          const res = await api.settingsSheetPatch(sheetLink, buildSettingsPayload());
+          if (res?.ok) dlog(`[settings→sheet] auto patch ${res.count}개`);
+        } catch (err: any) {
+          dlog(`[settings→sheet] auto patch 예외: ${err?.message || err}`);
+        }
+      })();
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [
+    sheetLink, chzzkLink, pollingInterval, statusOptions, showDebugPanel,
+    staffList, maxUndoSize, appData.schemaByTab, sortOrderByTab, isDetecting,
+    aiProvider, aiApiKey, aiModel, userCategories, buildSettingsPayload
+  ]);
 
   const runExport = async () => {
     const api = window.electronAPI;
     if (!api) { dlog("electronAPI not available"); return false; }
     if (!sheetLink) { dlog("Google Sheets 링크를 입력하세요"); setSheetsStatus("시트 링크 없음"); return false; }
-    if (!serviceAccountPath) { dlog("Service Account JSON을 먼저 설정하세요"); setSheetsStatus("인증 필요"); return false; }
+    if (!oauthLoggedIn) { dlog("Google 계정으로 먼저 로그인하세요"); setSheetsStatus("로그인 필요"); return false; }
 
     const year = new Date().getFullYear();
     const tabKeys: TabKey[] = ["shorts", "longform", "fullReplay"];
@@ -2373,7 +2740,7 @@ function App() {
       const rows = appData.rowsByTab[tabKey];
 
       setSyncProgress({ current: i, total: tabKeys.length, label: `${tabLabel}_${year}` });
-      setSheetsStatus(`시트 올리는 중... (${i + 1}/${tabKeys.length} ${tabLabel})`);
+      setSheetsStatus(`${LABEL_SYNC_UPLOADING}... (${i + 1}/${tabKeys.length} ${tabLabel})`);
       dlog(`내보내기: ${tabKey} (${rows.length}행)`);
 
       const result = await api.sheetsExport(sheetLink, tabKey, year, headers, rows);
@@ -2704,12 +3071,16 @@ function App() {
     }
 
     if (column.key === "assignee") {
-      const candidates = cellRole
-        ? staffList.filter((s) => s.role === cellRole)
+      // 다시보기 탭의 담당자는 1-row 구조이지만 썸네일러 일정용이므로
+      // 후보를 썸네일러만으로 제한 + 셀 색도 썸네일러 (주황).
+      const isReplayAssignee = activeTab === "fullReplay";
+      const effectiveRole: EditorRole | null = cellRole || (isReplayAssignee ? "thumbnailer" : null);
+      const candidates = effectiveRole
+        ? staffList.filter((s) => s.role === effectiveRole)
         : staffList;
-      const placeholder = cellRole === "thumbnailer"
+      const placeholder = effectiveRole === "thumbnailer"
         ? "썸네일러 선택"
-        : cellRole === "editor"
+        : effectiveRole === "editor"
         ? "영상편집자 선택"
         : "담당자 선택";
       return (
@@ -2725,15 +3096,15 @@ function App() {
             <div className="assignee-dropdown">
               {candidates.length === 0 ? (
                 <p className="assignee-empty">
-                  {cellRole
-                    ? `등록된 ${ROLE_LABEL[cellRole]}이(가) 없습니다.`
+                  {effectiveRole
+                    ? `등록된 ${ROLE_LABEL[effectiveRole]}이(가) 없습니다.`
                     : "설정에서 편집자를 먼저 등록하세요"}
                 </p>
               ) : (
                 <>
-                  {cellRole ? (
+                  {effectiveRole ? (
                     <div className="assignee-group">
-                      <p>{ROLE_LABEL[cellRole]}</p>
+                      <p>{ROLE_LABEL[effectiveRole]}</p>
                       <div className="assignee-option-list">
                         {candidates.map((staff) => (
                           <button
@@ -3150,8 +3521,65 @@ function App() {
     );
   };
 
+  // 잠금 화면 (admin + staff 공용) — OAuth 미로그인 / 계정 불일치 / 검증 중
+  if (lockState !== "ok") {
+    const isLoggedOut = lockState === "logged-out";
+    const isVerifying = lockState === "verifying";
+    const icon = isVerifying ? "⏳" : (isLoggedOut ? "🔑" : "🔒");
+    const title = isVerifying ? "권한 확인 중" : (isLoggedOut ? "Google 계정으로 로그인" : "사용 권한이 없습니다");
+    return (
+      <div className="lock-overlay">
+        <section className="lock-card">
+          <div className="lock-icon" aria-hidden="true">{icon}</div>
+          <h1 className="lock-title">{title}</h1>
+          {!IS_ADMIN && EMBED.name && (
+            <p className="lock-user">사용자: <strong>{EMBED.name}</strong>{EMBED.email ? ` · ${EMBED.email}` : ""} ({ROLE_LABEL[EMBED.role as EditorRole] || EMBED.role})</p>
+          )}
+          {isLoggedOut && (
+            <>
+              <p className="lock-reason">
+                {IS_ADMIN
+                  ? "Google 계정으로 로그인하면 시트 동기화가 시작됩니다."
+                  : `등록된 본인 Gmail (${EMBED.email}) 로 로그인하세요.`}
+              </p>
+              <button
+                type="button"
+                className="lock-retry-btn"
+                onClick={handleOAuthLogin}
+                disabled={oauthBusy}
+              >
+                {oauthBusy ? "로그인 중…" : "Google 계정으로 로그인"}
+              </button>
+              {oauthError && <p className="lock-reason" style={{ color: "#b91c1c" }}>{oauthError}</p>}
+            </>
+          )}
+          {lockState === "locked" && (
+            <>
+              <p className="lock-reason">{lockReason || "권한이 없습니다. 관리자에게 문의해주세요."}</p>
+              <button
+                type="button"
+                className="lock-retry-btn"
+                onClick={handleOAuthLogout}
+              >
+                로그아웃 후 다시 로그인
+              </button>
+            </>
+          )}
+          {isVerifying && (
+            <p className="lock-reason">잠시만 기다려주세요…</p>
+          )}
+          <p className="lock-hint">
+            {IS_ADMIN
+              ? "처음 사용 시 시스템 브라우저에서 Google 로그인 페이지가 열립니다."
+              : "문제 지속 시 관리자에게 본인 Gmail 이 시트 공유 권한에 추가되어 있는지 확인 요청하세요."}
+          </p>
+        </section>
+      </div>
+    );
+  }
+
   return (
-    <div className={`app-shell ${showDebugPanel ? "with-debug" : "no-debug"}`}>
+    <div className={`app-shell ${IS_ADMIN && isAdmin && showDebugPanel ? "with-debug" : "no-debug"}`}>
       <header className="topbar">
         <div className="brand-area">
           <img className="brand-logo" src={logoImage} alt="logo" />
@@ -3159,41 +3587,47 @@ function App() {
         </div>
         <div className="actions">
           <div className="action-group action-group-data" data-label="데이터">
-            <div className="detect-toggle-wrap">
+            {IS_ADMIN && isAdmin && (
+              <div className="detect-toggle-wrap">
+                <button
+                  type="button"
+                  className={`detect-toggle ${isDetecting ? "on" : "off"}`}
+                  onClick={toggleDetection}
+                >
+                  {isDetecting ? "방송감지 On" : "방송감지 Off"}
+                </button>
+                <span className={`live-badge ${chzzkLive && isDetecting ? "active" : ""}`}>LIVE</span>
+                {chzzkLive && isDetecting && chzzkCategory && (
+                  <span className="live-category">{chzzkCategory}</span>
+                )}
+              </div>
+            )}
+            <button type="button" onClick={handleImport}>{LABEL_SYNC_DOWNLOAD}</button>
+            <button type="button" onClick={handleExport}>{LABEL_SYNC_UPLOAD}</button>
+            {IS_ADMIN && isAdmin && (
               <button
                 type="button"
-                className={`detect-toggle ${isDetecting ? "on" : "off"}`}
-                onClick={toggleDetection}
+                className="icon-button"
+                onClick={handleCopySheetLink}
+                disabled={!sheetLink}
+                title={sheetLink ? "구글 시트 링크 복사" : "복사할 시트 링크가 없음 (설정에서 입력)"}
+                aria-label="구글 시트 링크 복사"
               >
-                {isDetecting ? "방송감지 On" : "방송감지 Off"}
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                </svg>
               </button>
-              <span className={`live-badge ${chzzkLive && isDetecting ? "active" : ""}`}>LIVE</span>
-              {chzzkLive && isDetecting && chzzkCategory && (
-                <span className="live-category">{chzzkCategory}</span>
-              )}
-            </div>
-            <button type="button" onClick={handleImport}>구글시트 다운로드</button>
-            <button type="button" onClick={handleExport}>구글시트 업로드</button>
-            <button
-              type="button"
-              className="icon-button"
-              onClick={handleCopySheetLink}
-              disabled={!sheetLink}
-              title={sheetLink ? "구글 시트 링크 복사" : "복사할 시트 링크가 없음 (설정에서 입력)"}
-              aria-label="구글 시트 링크 복사"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              disabled
-              title="기능 테스트 중 — 다음 업데이트에서 활성화됩니다."
-            >
-              CSV 가져오기 (AI)
-            </button>
+            )}
+            {IS_ADMIN && isAdmin && (
+              <button
+                type="button"
+                disabled
+                title="기능 테스트 중 — 다음 업데이트에서 활성화됩니다."
+              >
+                CSV 가져오기 (AI)
+              </button>
+            )}
             <button
               type="button"
               onClick={undoLast}
@@ -3212,15 +3646,17 @@ function App() {
             </button>
           </div>
           <div className="action-group action-group-system" data-label="시스템">
-            <button
-              type="button"
-              className={`debug-toggle ${showDebugPanel ? "on" : "off"}`}
-              onClick={() => setShowDebugPanel((prev) => !prev)}
-              title={showDebugPanel ? "디버그 패널 숨기기" : "디버그 패널 보이기"}
-              aria-label="디버그 패널 토글"
-            >
-              {showDebugPanel ? "디버그 ▶" : "◀ 디버그"}
-            </button>
+            {IS_ADMIN && isAdmin && (
+              <button
+                type="button"
+                className={`debug-toggle ${showDebugPanel ? "on" : "off"}`}
+                onClick={() => setShowDebugPanel((prev) => !prev)}
+                title={showDebugPanel ? "디버그 패널 숨기기" : "디버그 패널 보이기"}
+                aria-label="디버그 패널 토글"
+              >
+                {showDebugPanel ? "디버그 ▶" : "◀ 디버그"}
+              </button>
+            )}
             <button
               ref={settingsButtonRef}
               type="button"
@@ -3235,23 +3671,29 @@ function App() {
       </header>
 
       <nav className="tabbar">
-        {tabs.map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            className={activeTab === tab.key ? "tab active" : "tab"}
-            onClick={() => setActiveTab(tab.key)}
-          >
-            {tab.label}
-          </button>
-        ))}
+        {tabs
+          .filter((tab) => {
+            // editor 빌드는 다시보기(썸네일러 task 영역) 탭 숨김. admin 또는 thumbnailer 는 그대로.
+            if (tab.key === "fullReplay" && !IS_ADMIN && !isAdmin && EMBED.role === "editor") return false;
+            return true;
+          })
+          .map((tab) => (
+            <button
+              key={tab.key}
+              type="button"
+              className={activeTab === tab.key ? "tab active" : "tab"}
+              onClick={() => setActiveTab(tab.key)}
+            >
+              {tab.label}
+            </button>
+          ))}
       </nav>
 
       <section className="meta">
         <span className={`sync-indicator sync-${syncPhase}`}>
           {syncPhase === "idle" && "동기화 대기 중"}
-          {syncPhase === "downloading" && `시트 내려받는 중... ${syncProgress.label}`}
-          {syncPhase === "uploading" && `시트 올리는 중... ${syncProgress.label}`}
+          {syncPhase === "downloading" && `${LABEL_SYNC_DOWNLOADING}... ${syncProgress.label}`}
+          {syncPhase === "uploading" && `${LABEL_SYNC_UPLOADING}... ${syncProgress.label}`}
           {syncPhase === "success" && (sheetsStatus || "동기화 완료")}
           {syncPhase === "error" && (sheetsStatus || "동기화 실패")}
         </span>
@@ -3411,8 +3853,15 @@ function App() {
               const isDropRow = dropTargetRowId === row.id && dragRowId && dragRowId !== row.id;
               const isDragRow = dragRowId === row.id;
               const isSelected = selectedRowByTab[activeTab] === row.id;
-              const hasTwoRows = activeTab !== "fullReplay" && row.thumbnailer !== undefined && row.editor !== undefined;
-              const subRoles: Array<EditorRole | null> = hasTwoRows ? ["thumbnailer", "editor"] : [null];
+              // staff 시점에서는 본인 role 의 1행만 표시 (다른 사람 행은 안 보임).
+              // admin 시점에서는 종전대로 썸네일러 + 영상편집자 2행 펼쳐서 표시.
+              const staffOwnRole: EditorRole | null = !isAdmin && (EMBED.role === "editor" || EMBED.role === "thumbnailer")
+                ? (EMBED.role as EditorRole)
+                : null;
+              const hasTwoRows = activeTab !== "fullReplay" && row.thumbnailer !== undefined && row.editor !== undefined && !staffOwnRole;
+              const subRoles: Array<EditorRole | null> = hasTwoRows
+                ? ["thumbnailer", "editor"]
+                : (staffOwnRole && activeTab !== "fullReplay" ? [staffOwnRole] : [null]);
               const isRowLocked = (row.values.upload || "") === "완";
 
               const rowDragOver = (e: React.DragEvent) => {
@@ -3483,9 +3932,16 @@ function App() {
                         tdProps.rowSpan = 2;
                       }
                       const isUploadCol = column.key === "upload";
+                      // 다시보기 탭의 썸네일러 일정 컬럼들 (assignee 이후) 은 shared=true 지만
+                      // 시각적으로 썸네일러 영역임을 좌측 색 바로 표시.
+                      const replayThumbnailerCol = activeTab === "fullReplay" && [
+                        "assignee", "editType", "subtitle", "editStartDate",
+                        "workStatus", "deliveryDate", "sourceShare", "deliveryShare"
+                      ].includes(column.key);
                       const cellClassName = [
                         isShared ? "shared-cell" : "role-cell",
                         role ? `role-${role}` : "",
+                        replayThumbnailerCol ? "role-cell role-thumbnailer" : "",
                         isRowLocked && !isUploadCol ? "is-locked" : ""
                       ].filter(Boolean).join(" ") || undefined;
                       return (
@@ -3653,34 +4109,41 @@ function App() {
               ×
             </button>
           </div>
+          {IS_ADMIN && isAdmin && (
           <nav className="settings-tabs" role="tablist">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={settingsTab === "sheet"}
-              className={`settings-tab ${settingsTab === "sheet" ? "active" : ""}`}
-              onClick={() => setSettingsTab("sheet")}
-            >
-              시트 설정
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={settingsTab === "connection"}
-              className={`settings-tab ${settingsTab === "connection" ? "active" : ""}`}
-              onClick={() => setSettingsTab("connection")}
-            >
-              구글 시트
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={settingsTab === "ai"}
-              className={`settings-tab ${settingsTab === "ai" ? "active" : ""}`}
-              onClick={() => setSettingsTab("ai")}
-            >
-              AI 연결
-            </button>
+            {IS_ADMIN && isAdmin && (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={settingsTab === "connection"}
+                className={`settings-tab ${settingsTab === "connection" ? "active" : ""}`}
+                onClick={() => setSettingsTab("connection")}
+              >
+                구글 시트
+              </button>
+            )}
+            {IS_ADMIN && isAdmin && (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={settingsTab === "sheet"}
+                className={`settings-tab ${settingsTab === "sheet" ? "active" : ""}`}
+                onClick={() => setSettingsTab("sheet")}
+              >
+                시트 설정
+              </button>
+            )}
+            {IS_ADMIN && isAdmin && (
+              <button
+                type="button"
+                role="tab"
+                aria-selected={settingsTab === "ai"}
+                className={`settings-tab ${settingsTab === "ai" ? "active" : ""}`}
+                onClick={() => setSettingsTab("ai")}
+              >
+                AI 연결
+              </button>
+            )}
             <button
               type="button"
               role="tab"
@@ -3691,17 +4154,14 @@ function App() {
               기타 설정
             </button>
           </nav>
+          )}
 
           <div className="settings-tabpanel">
-            {settingsTab === "sheet" && (
+            {IS_ADMIN && isAdmin && settingsTab === "sheet" && (
               <>
-                <div className="connection-help-banner">
-                  <div className="connection-help-text">
-                    <strong>스케줄러 앱 사용 방법</strong>
-                    <p>시트 컬럼 기능, 행/열 다루기, 그리고 시트설정과 시트의 연계 (예: 영상편집자는 아래 [편집자/썸네일러 등록]에 추가해야 시트의 담당자 셀에서 선택할 수 있어요) 등을 자세히 안내합니다.</p>
-                  </div>
+                <div className="connection-help-banner" style={{ justifyContent: "flex-start" }}>
                   <button type="button" className="connection-help-btn" onClick={openAppGuideHelp}>
-                    사용 방법 자세히 보기 ↗
+                    스케줄러 앱 사용 방법 자세히 보기 ↗
                   </button>
                 </div>
                 <label>
@@ -3741,20 +4201,44 @@ function App() {
                 <div className="staff-config">
                   <p>편집자 / 썸네일러 등록</p>
                   <div className="staff-add-row">
-                    <select
-                      className="staff-role-select"
-                      value={newStaffRole}
-                      onChange={(e) => setNewStaffRole(e.target.value as EditorRole)}
-                    >
-                      <option value="thumbnailer">썸네일러</option>
-                      <option value="editor">영상편집자</option>
-                    </select>
+                    <div className="staff-role-radio">
+                      <label className={`staff-role-option role-editor ${newStaffRole === "editor" ? "active" : ""}`}>
+                        <input
+                          type="radio"
+                          name="newStaffRole"
+                          value="editor"
+                          checked={newStaffRole === "editor"}
+                          onChange={() => setNewStaffRole("editor")}
+                        />
+                        <span>편집자</span>
+                      </label>
+                      <label className={`staff-role-option role-thumbnailer ${newStaffRole === "thumbnailer" ? "active" : ""}`}>
+                        <input
+                          type="radio"
+                          name="newStaffRole"
+                          value="thumbnailer"
+                          checked={newStaffRole === "thumbnailer"}
+                          onChange={() => setNewStaffRole("thumbnailer")}
+                        />
+                        <span>썸네일러</span>
+                      </label>
+                    </div>
                     <input
                       className="staff-name-input"
                       type="text"
                       value={newStaffName}
                       onChange={(e) => setNewStaffName(e.target.value)}
                       placeholder="이름"
+                      onKeyDown={(e) => { if (e.key === "Enter") addStaff(); }}
+                    />
+                    <input
+                      className="staff-email-input"
+                      type="email"
+                      value={newStaffEmail}
+                      onChange={(e) => setNewStaffEmail(e.target.value)}
+                      placeholder="Gmail (예: hong@gmail.com)"
+                      autoComplete="off"
+                      spellCheck={false}
                       onKeyDown={(e) => { if (e.key === "Enter") addStaff(); }}
                     />
                     <button type="button" className="staff-add-btn" onClick={addStaff} title="추가">
@@ -3765,9 +4249,13 @@ function App() {
                     {staffList.length === 0
                       ? <p className="staff-empty">등록된 인원이 없습니다.</p>
                       : staffList.map((staff) => (
-                          <span key={staff.id} className={`staff-chip role-${staff.role}`}>
-                            <span className="staff-role-tag">{ROLE_LABEL[staff.role]}</span>
+                          <span
+                            key={staff.id}
+                            className={`staff-chip role-${staff.role}`}
+                            title={`${ROLE_LABEL[staff.role]} · ${staff.name}${staff.email ? ` · ${staff.email}` : ""}`}
+                          >
                             <span className="staff-name">{staff.name}</span>
+                            {staff.email && <span className="staff-email">{staff.email}</span>}
                             <button type="button" onClick={() => removeStaff(staff.id)}>x</button>
                           </span>
                         ))
@@ -3844,20 +4332,45 @@ function App() {
               </>
             )}
 
-            {settingsTab === "connection" && (
+            {IS_ADMIN && isAdmin && settingsTab === "connection" && (
               <>
-                <div className="connection-help-banner">
-                  <div className="connection-help-text">
-                    <strong>설정 방법은 별도 가이드 페이지에서 확인하세요.</strong>
-                    <span>스크린샷 GIF가 큰 화면에서 잘 재생됩니다.</span>
+                <div className="oauth-card">
+                  <div className="oauth-card-head">
+                    <strong>Google 계정 연결</strong>
+                    {oauthLoggedIn && (
+                      <span className="oauth-status ok">● 연결됨</span>
+                    )}
                   </div>
-                  <button
-                    type="button"
-                    className="connection-help-btn"
-                    onClick={openSheetsSetupHelp}
-                  >
-                    설정 방법 자세히 보기 ↗
-                  </button>
+                  {oauthLoggedIn ? (
+                    <>
+                      <p className="oauth-card-desc">
+                        현재 <strong>{oauthEmail || "(이메일 미상)"}</strong> 계정으로 로그인
+                      </p>
+                      <button
+                        type="button"
+                        className="oauth-logout-btn"
+                        onClick={handleOAuthLogout}
+                        disabled={oauthBusy}
+                      >
+                        로그아웃
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <p className="oauth-card-desc">
+                        본인 Google 계정으로 로그인하세요.
+                      </p>
+                      <button
+                        type="button"
+                        className="oauth-login-btn"
+                        onClick={handleOAuthLogin}
+                        disabled={oauthBusy}
+                      >
+                        {oauthBusy ? "로그인 중…" : "Google 계정으로 로그인"}
+                      </button>
+                      {oauthError && <p className="oauth-error">{oauthError}</p>}
+                    </>
+                  )}
                 </div>
 
                 <label>
@@ -3870,50 +4383,37 @@ function App() {
                   />
                 </label>
 
-                <div className="service-account-row">
-                  <label>
-                    Service Account JSON
-                    <div className="sa-file-row">
-                      <input
-                        type="text"
-                        value={serviceAccountPath}
-                        readOnly
-                        placeholder="파일을 선택하세요"
-                      />
-                      <button type="button" onClick={pickServiceAccount}>파일 선택</button>
-                    </div>
-                  </label>
-                  <div
-                    className={`sa-dropzone ${isDraggingJson ? "dragging" : ""}`}
-                    onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingJson(true); }}
-                    onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingJson(true); }}
-                    onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingJson(false); }}
-                    onDrop={handleJsonDrop}
+                <div className="sheet-action-row">
+                  <button
+                    type="button"
+                    className="sa-test-btn"
+                    onClick={testConnection}
+                    disabled={!oauthLoggedIn || !sheetLink}
+                    title={
+                      !oauthLoggedIn ? "먼저 위에서 Google 계정으로 로그인하세요" :
+                      !sheetLink ? "Sheet URL 을 입력하세요" :
+                      "현재 로그인된 계정으로 시트 접근 가능 여부를 확인합니다"
+                    }
                   >
-                    <p className="sa-dropzone-text">
-                      {isDraggingJson ? "여기에 놓으세요" : "JSON 파일을 여기에 드래그&드롭"}
-                    </p>
-                  </div>
-                  {clientEmail && (
-                    <div className="sa-email-row">
-                      <span className="sa-email-label">서비스 계정 이메일</span>
-                      <code className="sa-email-value" title={clientEmail}>{clientEmail}</code>
-                      <button type="button" className="sa-email-copy" onClick={copyClientEmail}>이메일 복사</button>
-                    </div>
-                  )}
-                  <div className="sa-action-row">
-                    <button type="button" className="sa-test-btn" onClick={testConnection}>
-                      연결 테스트
-                    </button>
-                  </div>
+                    연결 테스트
+                  </button>
+                  <button
+                    type="button"
+                    className="sa-help-btn"
+                    onClick={openSheetsSetupHelp}
+                    title="Google 계정 로그인 + 시트 URL 등록 절차를 자세히 안내합니다"
+                  >
+                    설정 방법 자세히 보기
+                  </button>
                   {sheetsStatus && <p className="sheets-status">{sheetsStatus}</p>}
-                  <p className="sa-hint">
-                    시트 이름 규칙: 숏폼_{new Date().getFullYear()} / 롱폼_{new Date().getFullYear()} / 다시보기_{new Date().getFullYear()}
-                  </p>
                 </div>
+
+                <p className="sa-hint">
+                  시트 이름 규칙: 숏폼_{new Date().getFullYear()} / 롱폼_{new Date().getFullYear()} / 다시보기_{new Date().getFullYear()}
+                </p>
               </>
             )}
-            {settingsTab === "ai" && (
+            {IS_ADMIN && isAdmin && settingsTab === "ai" && (
               <>
                 <div className="ai-locked-banner">
                   <strong>⚠ 기능 테스트 중</strong>
@@ -4003,6 +4503,12 @@ function App() {
             )}
             {settingsTab === "etc" && (
               <>
+                {!IS_ADMIN && oauthLoggedIn && (
+                  <div className="staff-login-banner">
+                    <span className="staff-login-email">{oauthEmail || "(이메일 미상)"}</span>
+                    <span className="staff-login-suffix"> 계정으로 로그인</span>
+                  </div>
+                )}
                 <div className="etc-card">
                   <div className="etc-card-head">
                     <strong>윈도우 시작 시 자동 실행</strong>
@@ -4016,6 +4522,12 @@ function App() {
                       <span className="slider" />
                     </label>
                   </div>
+                  <p className="etc-card-desc">
+                    켜면 PC 부팅 시 자동으로 실행됩니다.
+                    {import.meta.env.DEV && (
+                      <> {" "}<em style={{ color: "#9ca3af" }}>(설치 빌드에서만 동작. 개발 환경에서는 효과 없음)</em></>
+                    )}
+                  </p>
                   {autoStartMessage && <p className="etc-card-msg">{autoStartMessage}</p>}
                 </div>
 
@@ -4041,12 +4553,58 @@ function App() {
                     </button>
                   </div>
                   <p className="etc-card-desc">
-                    AI API 키, 시트 링크, 그룹 표시 상태 등 앱 설정과 사용자 카테고리는
-                    Windows 표준 위치인 <code>%APPDATA%\Inel Work Scheduler\</code> 에 저장됩니다.
-                    설치 폴더(내문서)와는 다른 위치이므로, 백업하거나 다른 PC 로 옮길 때
-                    이 폴더를 함께 복사하세요.
+                    앱 설정과 캐시는 Windows 표준 위치인 <code>%APPDATA%\Inel Work Scheduler\</code> 에 저장됩니다.
                   </p>
                 </div>
+
+                {IS_ADMIN && isAdmin && (
+                <div className="etc-card">
+                  <div className="etc-card-head">
+                    <strong>편집자/썸네일러 전용 설치 파일 만들기</strong>
+                    <button
+                      type="button"
+                      className="connection-help-btn"
+                      onClick={openStaffInstallerHelp}
+                      style={{ marginLeft: "auto" }}
+                    >
+                      전체 가이드 ↗
+                    </button>
+                  </div>
+                  <div className="staff-installer-list">
+                    {staffList.length === 0 ? (
+                      <p className="etc-card-empty">
+                        먼저 [시트 설정] 탭에서 편집자/썸네일러를 등록하세요.
+                      </p>
+                    ) : (
+                      staffList.map((s) => (
+                        <div key={s.id} className="staff-installer-row">
+                          <span className={`installer-staff-chip role-${s.role}`} title={`${ROLE_LABEL[s.role]} · ${s.name}${s.email ? ` · ${s.email}` : ""}`}>
+                            <strong>{s.name}</strong>
+                            {s.email && <span>{s.email}</span>}
+                          </span>
+                          <button
+                            type="button"
+                            className="etc-installer-btn"
+                            onClick={() => openInstallerModal(s.id)}
+                            disabled={!sheetLink || !oauthLoggedIn || !s.email}
+                            title={
+                              !sheetLink
+                                ? "[구글 시트] 탭에서 시트 URL 부터 설정하세요"
+                                : !oauthLoggedIn
+                                ? "[구글 시트] 탭에서 Google 계정으로 로그인하세요"
+                                : !s.email
+                                ? "이 스태프의 Gmail 을 [시트 설정] 탭에서 먼저 등록하세요"
+                                : "인스톨러 빌드 시작"
+                            }
+                          >
+                            인스톨러 빌드
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+                )}
 
                 <div className="etc-card etc-danger-card">
                   <div className="etc-card-head">
@@ -4063,8 +4621,10 @@ function App() {
                     </button>
                   </div>
                   <p className="etc-card-desc">
-                    설치된 Inel Work Scheduler 와 모든 사용자 데이터(설정, 행, 카테고리)를 삭제합니다.
-                    이 작업은 되돌릴 수 없습니다. 시트에 업로드된 데이터는 그대로 유지됩니다.
+                    {IS_ADMIN && isAdmin && (
+                      <>Google Login 정보와 Google Sheet URL은 삭제되어 재설치 시 재입력이 필요합니다.{" "}</>
+                    )}
+                    [변경사항 저장] 한 데이터는 재설치 후 [일정 새로고침] 으로 다시 가져올 수 있습니다.
                   </p>
                 </div>
               </>
@@ -4079,7 +4639,7 @@ function App() {
           </div>
         </section>
       )}
-      {showDebugPanel && (
+      {IS_ADMIN && isAdmin && showDebugPanel && (
         <aside className="debug-panel">
           <div className="debug-header">
             <span>Debug Log <span className="debug-count">({debugLogs.length})</span></span>
@@ -4089,6 +4649,22 @@ function App() {
               <button type="button" onClick={() => setShowDebugPanel(false)} title="닫기">×</button>
             </div>
           </div>
+          {import.meta.env.DEV && (
+            <div className="debug-edition-row" title="dev 모드 전용 — 빌드 산출물에는 영향 없음">
+              <label>
+                시점 (dev)
+                <select
+                  value={devEdition}
+                  onChange={(e) => setDevEdition(e.target.value as Edition)}
+                >
+                  <option value="admin">admin (관리자)</option>
+                  <option value="editor">editor (영상 편집자)</option>
+                  <option value="thumbnailer">thumbnailer (썸네일러)</option>
+                </select>
+              </label>
+              <span className="debug-edition-hint">BUILD = {BUILD_EDITION}</span>
+            </div>
+          )}
           <div className="debug-body" ref={debugPanelRef}>
             {debugLogs.length === 0
               ? <p className="debug-empty">로그 없음</p>
@@ -4096,6 +4672,122 @@ function App() {
             }
           </div>
         </aside>
+      )}
+
+      {IS_ADMIN && installerModalOpen && (
+        <div
+          className="installer-modal-overlay"
+          onClick={() => { if (!installerBuilding) closeInstallerModal(); }}
+        >
+          <section className="installer-modal" onClick={(e) => e.stopPropagation()}>
+            <header className="installer-modal-header">
+              <h3>편집자 인스톨러 빌드</h3>
+              <div className="installer-modal-actions">
+                <button
+                  type="button"
+                  className="installer-help-btn"
+                  onClick={openStaffInstallerHelp}
+                  title="자세한 절차 / 사전 조건 / 권한 회수"
+                >
+                  도움말 ↗
+                </button>
+                <button
+                  type="button"
+                  className="installer-modal-close"
+                  onClick={closeInstallerModal}
+                  disabled={installerBuilding}
+                  aria-label="닫기"
+                >×</button>
+              </div>
+            </header>
+            <div className="installer-modal-body">
+              {(() => {
+                const target = staffList.find((s) => s.id === installerTargetStaffId);
+                if (!target) return <p>편집자 정보 없음</p>;
+                const prereqMissing: string[] = [];
+                if (!sheetLink) prereqMissing.push("Sheet URL 미입력 ([설정] → [구글 시트])");
+                if (!oauthLoggedIn) prereqMissing.push("Google 계정 미로그인 ([설정] → [구글 시트] → [Google 계정으로 로그인])");
+                if (!target.email) prereqMissing.push("이 스태프의 Gmail 미등록 ([설정] → [시트 설정] → 편집자/썸네일러 등록 시 이메일 입력)");
+                return (
+                  <>
+                    <div className="installer-target">
+                      <span
+                        className={`staff-chip role-${target.role}`}
+                        title={`${ROLE_LABEL[target.role]} · ${target.name}${target.email ? ` · ${target.email}` : ""}`}
+                      >
+                        <span className="staff-name">{target.name}</span>
+                        {target.email && <span className="staff-email">{target.email}</span>}
+                      </span>
+                    </div>
+                    {prereqMissing.length > 0 && (
+                      <div className="installer-prereq-warn">
+                        <strong>사전 조건이 충족되지 않았습니다</strong>
+                        <ul>{prereqMissing.map((m, i) => <li key={i}>{m}</li>)}</ul>
+                        <p>해당 항목을 먼저 등록한 뒤 다시 시도하세요. <button type="button" className="installer-help-inline" onClick={openStaffInstallerHelp}>전체 가이드 보기 ↗</button></p>
+                      </div>
+                    )}
+                    <div className="installer-field">
+                      <label>출력 폴더</label>
+                      <div className="installer-pick-row">
+                        <input
+                          type="text"
+                          value={installerOutputDir}
+                          onChange={(e) => setInstallerOutputDir(e.target.value)}
+                          placeholder="폴더 선택을 누르거나 경로를 직접 입력"
+                          spellCheck={false}
+                        />
+                        <button type="button" onClick={handlePickInstallerDir} disabled={installerBuilding}>
+                          폴더 선택
+                        </button>
+                      </div>
+                      <p className="installer-hint">권장: release/editors/{target.name}/</p>
+                    </div>
+                    <div className="installer-field">
+                      <label>연결 시트</label>
+                      <p className="installer-readonly">{sheetLink || "(시트 URL 미설정)"}</p>
+                    </div>
+                    {installerLogs.length > 0 && (
+                      <div className="installer-log">
+                        {installerLogs.map((l, i) => <div key={i} className="installer-log-line">{l}</div>)}
+                      </div>
+                    )}
+                    {installerResult && (
+                      <div className={`installer-result ${installerResult.ok ? "ok" : "err"}`}>
+                        {installerResult.ok ? (
+                          <>
+                            <strong>빌드 성공</strong>
+                            <p>출력: {installerResult.outputDir}</p>
+                            <p>파일 {installerResult.files?.length || 0}개</p>
+                          </>
+                        ) : (
+                          <>
+                            <strong>빌드 실패</strong>
+                            <p>{installerResult.error}</p>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+            <footer className="installer-modal-footer">
+              <button type="button" onClick={closeInstallerModal} disabled={installerBuilding}>
+                {installerResult?.ok ? "닫기" : "취소"}
+              </button>
+              {!installerResult?.ok && (
+                <button
+                  type="button"
+                  className="installer-build-btn"
+                  onClick={handleRunInstallerBuild}
+                  disabled={installerBuilding || !installerOutputDir || !sheetLink || !oauthLoggedIn}
+                >
+                  {installerBuilding ? "빌드 중…" : "빌드 시작"}
+                </button>
+              )}
+            </footer>
+          </section>
+        </div>
       )}
 
       {uninstallModalOpen && (
@@ -4176,7 +4868,7 @@ function App() {
         </div>
       )}
 
-      {csvModalOpen && (
+      {IS_ADMIN && csvModalOpen && (
         <div className="csv-modal-overlay" onClick={() => { if (csvPhase !== "analyzing" && csvPhase !== "uploading") { setCsvModalOpen(false); resetCsvModal(); } }}>
           <section className="csv-modal" onClick={(e) => e.stopPropagation()}>
             <header className="csv-modal-header">

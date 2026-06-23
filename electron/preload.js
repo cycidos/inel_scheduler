@@ -1,7 +1,17 @@
-const { contextBridge, ipcRenderer, webUtils } = require("electron");
+const { contextBridge, ipcRenderer } = require("electron");
+
+// 1.2.0+ — 스태프 본인 정보를 사이드카 .json 으로 받는다. preload 가 main 에 동기
+// 호출하여 renderer 의 EMBED 가 모듈 최상위에서 즉시 사용 가능하도록.
+// admin 빌드 또는 .json 미설치 시 모두 빈 값.
+let embed = { name: "", email: "", role: "", sheetUrl: "" };
+try {
+  const got = ipcRenderer.sendSync("embed-get-sync");
+  if (got && typeof got === "object") embed = { ...embed, ...got };
+} catch (_e) { /* preload 실패해도 앱 자체는 동작해야 함 */ }
 
 contextBridge.exposeInMainWorld("electronAPI", {
   appName: "Inel Work Scheduler",
+  embed,
 
   startChzzkPolling: (url, intervalMs) =>
     ipcRenderer.invoke("chzzk-start-polling", { url, intervalMs }),
@@ -33,9 +43,33 @@ contextBridge.exposeInMainWorld("electronAPI", {
     return () => ipcRenderer.removeListener("chzzk-error", handler);
   },
 
-  sheetsPickKeyfile: () => ipcRenderer.invoke("sheets-pick-keyfile"),
+  oauthLogin: () => ipcRenderer.invoke("oauth-login"),
+  oauthLogout: () => ipcRenderer.invoke("oauth-logout"),
+  oauthStatus: () => ipcRenderer.invoke("oauth-status"),
+  onOAuthAutoRestored: (callback) => {
+    const handler = (_event, data) => callback(data);
+    ipcRenderer.on("oauth-auto-restored", handler);
+    return () => ipcRenderer.removeListener("oauth-auto-restored", handler);
+  },
 
-  sheetsInitAuth: (keyFilePath) => ipcRenderer.invoke("sheets-init-auth", { keyFilePath }),
+  settingsSheetLoad: (sheetUrl) =>
+    ipcRenderer.invoke("settings-sheet-load", { sheetUrl }),
+
+  settingsSheetWrite: (sheetUrl, kv) =>
+    ipcRenderer.invoke("settings-sheet-write", { sheetUrl, kv }),
+
+  settingsSheetPatch: (sheetUrl, patch) =>
+    ipcRenderer.invoke("settings-sheet-patch", { sheetUrl, patch }),
+
+  pickOutputDir: (defaultPath) => ipcRenderer.invoke("pick-output-dir", { defaultPath }),
+
+  buildEditorInstaller: (payload) => ipcRenderer.invoke("build-editor-installer", payload),
+
+  onBuildInstallerLog: (callback) => {
+    const handler = (_event, line) => callback(line);
+    ipcRenderer.on("build-installer-log", handler);
+    return () => ipcRenderer.removeListener("build-installer-log", handler);
+  },
 
   sheetsImport: (sheetUrl, tabKey, year, headers) =>
     ipcRenderer.invoke("sheets-import", { sheetUrl, tabKey, year, headers }),
@@ -59,6 +93,7 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   helpOpenSheetsSetup: () => ipcRenderer.invoke("help-open-sheets-setup"),
   helpOpenAppGuide: () => ipcRenderer.invoke("help-open-app-guide"),
+  helpOpenStaffInstaller: () => ipcRenderer.invoke("help-open-staff-installer"),
   helpOpenAiSetup: () => ipcRenderer.invoke("help-open-ai-setup"),
 
   autostartGet: () => ipcRenderer.invoke("autostart-get"),
@@ -70,19 +105,5 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("ai-list-models", { provider, apiKey }),
 
   aiAnalyzeCsv: (provider, apiKey, model, csvHeader, csvSample, ourSchema) =>
-    ipcRenderer.invoke("ai-analyze-csv", { provider, apiKey, model, csvHeader, csvSample, ourSchema }),
-
-
-  /**
-   * Electron 32+에서는 File.path가 비어 있으므로 webUtils.getPathForFile()로
-   * 절대 경로를 얻어야 한다. 드래그&드롭으로 받은 File 객체에 사용.
-   */
-  getFilePath: (file) => {
-    try {
-      if (file && webUtils && typeof webUtils.getPathForFile === "function") {
-        return webUtils.getPathForFile(file) || "";
-      }
-    } catch (e) {}
-    return (file && file.path) || "";
-  }
+    ipcRenderer.invoke("ai-analyze-csv", { provider, apiKey, model, csvHeader, csvSample, ourSchema })
 });

@@ -1,0 +1,61 @@
+﻿# === Build / cache (에이전트가 읽거나 편집할 가치 0) ===
+node_modules/
+dist/
+dist-electron/
+release/
+*.log
+*.tmp
+
+# === 빌드 산출물 / 바이너리 (대용량, 인덱싱 의미 없음) ===
+*.exe
+*.msi
+*.dmg
+*.pkg
+*.deb
+*.rpm
+*.AppImage
+*.zip
+*.7z
+*.tar.gz
+*.blockmap
+*.asar
+*.node
+
+# === Secrets / 자격증명 (절대 노출 금지) ===
+.env
+.env.*
+*.pem
+*.key
+credentials.json
+service-account*.json
+google-service-account*.json
+*-service-account.json
+
+# === reference 폴더 (원본 코드 복사 금지 정책) ===
+reference/
+references/
+external/
+vendor/
+
+# === 사용자 로컬 데이터 ===
+chzzk-categories-user.json
+
+# === OS / IDE 잡파일 ===
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# === Python (현재 미사용이나 룰 대비) ===
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+
+# === electron-builder 캐시 ===
+.electron-builder/
+electron-builder-cache/

@@ -289,6 +289,445 @@
 
 ---
 
+## 추가 항목 (phase1 마무리 ~ 1.0.0)
+
+> 1차 배포(1.0.0) 직전까지 누적된 변경 모음. 위 본문 항목과 일관된 한 줄 표 형식 유지.
+
+### 영구 저장 (localStorage)
+
+`src/App.tsx | loadInitialRows | function | 앱 마운트 시 localStorage("inel.rowsByTab.v1") 에서 행 데이터 복원. 없으면 initialRows fallback. appData 의 useState lazy initializer 로 사용해 동기 로드 | -`
+
+`src/App.tsx | useEffect (rowsByTab 자동 저장) | hook | appData.rowsByTab 변경 시 500ms 디바운스 후 localStorage("inel.rowsByTab.v1") 저장. 시트 미연결도 로컬 영구화 | -`
+
+`src/App.tsx | useEffect (schemaByTab 영구 저장) | hook | appData.schemaByTab 변경 시 localStorage("inel.schemaByTab.v1") 저장. 시작 시 default schema 와 머지 로드 (새 컬럼 도입에도 호환) | -`
+
+`src/App.tsx | sortOrderByTab / SortOrder | state+type | 탭별 행 정렬 순서 ("desc"|"asc"). 기본 "desc". localStorage("inel.sortOrderByTab.v1") 영구 저장. filteredData useMemo 가 broadcastDate → broadcastStartTime 순으로 안정 정렬, 빈 날짜는 항상 맨 끝 | -`
+
+`src/App.tsx | toolbar-row + sort-select | UI | 월 페이저 우측에 "최신순/이전순" 드롭다운(.sort-select). margin-left:auto 로 우측 정렬. title 에 "앱 표시 전용. 시트는 항상 오름차순 고정" 안내 | -> sortOrderByTab`
+
+### 방송감지 영구 / 자동 재개
+
+`src/App.tsx | wasDetectingRef / autoResumeDoneRef | useRef | localStorage 의 inel.isDetecting.v1 값을 보관 + 앱 시작 시 1회 자동 재개 가드 | -`
+
+`src/App.tsx | useEffect (isDetecting 영구 저장 / 자동 재개) | hook | (1) isDetecting 변경 시 localStorage 저장. (2) 마운트 시 wasDetectingRef && chzzkLink 면 startChzzkPolling 1회 호출해 감지 자동 재개. autoResumeDoneRef 로 중복 방지 | -> startChzzkPolling`
+
+### 방송제목 타임라인 누적 (다시보기)
+
+`src/App.tsx | appendTitleTimeline | useCallback | fullReplay 활성 row.values.videoTitle 에 "HH:MM:SS - <제목>" entry 누적. 직전 entry 와 같으면 append 안 함 (중복 방지). schedulePatchActiveRow 호출로 즉시 시트 patch | -> schedulePatchActiveRow`
+
+`src/App.tsx | firstTitleRecorded (ref) | useRef | LIVE ON 첫 감지 시 한 번만 첫 제목을 timeline 에 기록. LIVE OFF / 토글 시 리셋 | -`
+
+`src/App.tsx | onChzzkTitleChange 핸들러 | logic | 매 title 변경마다 appendTitleTimeline 호출. ensureDetectRow 활성 row 가 없으면 무시 | -> appendTitleTimeline`
+
+`src/App.tsx | fullReplay schema 의 videoTitle | const update | label "영상제목 타임라인", type "text", width 320. shorts/longform 의 videoTitle 은 일반 단일값 유지 | -`
+
+`src/App.tsx | renderCell (timeline-cell 분기) | logic | activeTab==="fullReplay" && (column.key==="categoryTimeline" || column.key==="videoTitle") 일 때 read-only div.timeline-cell 로 렌더. 줄바꿈마다 .timeline-entry div | -`
+
+`src/styles.css | .timeline-cell / .timeline-entry | stylesheet | 다시보기 timeline 컬럼의 read-only multi-line 표시 (배경 약간 어둡고 cursor:default) | -`
+
+### 카테고리 타임라인 즉시 patch (t12-a, t12-b 완성)
+
+`src/App.tsx | appendCategoryTimeline | useCallback | fullReplay 활성 row.values.categoryTimeline 에 "HH:MM:SS - <카테고리>" entry 누적. 직전 entry 와 같으면 append 안 함. schedulePatchActiveRow 호출로 즉시 시트 patch. 신규 카테고리는 categoriesAddUser 자동 등록(별도 분기) | -> schedulePatchActiveRow, categoriesAddUser`
+
+### 시트 / Google Sheets 추가
+
+`electron/main.js | sheets-export 안정 정렬 | logic | export 직전 rows 를 broadcastDate 오름차순, 같으면 broadcastStartTime, 같으면 원래 입력 순으로 안정 정렬. 빈 날짜는 항상 맨 끝. 시트의 시간 흐름을 사람이 읽기 쉽게 고정 | -`
+
+`electron/main.js | sheets-patch-row USER_ENTERED | option | update/append 시 valueInputOption="USER_ENTERED" 로 호출해 Google Sheets 가 날짜를 진짜 날짜로 인식 (46144 같은 시리얼 숫자 표시 방지) | -`
+
+`src/App.tsx | handleCopySheetLink | async function | 시트 링크를 navigator.clipboard.writeText 로 복사 + sheetsStatus 짧게 갱신. sheetLink 비어 있으면 disabled | -> navigator.clipboard`
+
+`src/App.tsx | icon-button (copy sheet link) | UI button | "구글시트 업로드" 우측의 SVG 아이콘 버튼. .icon-button 정사각 + 중앙 정렬 | -> handleCopySheetLink`
+
+`src/App.tsx | settings-tab 라벨 "구글 시트" | UI const | 기존 "구글 시트 연결" → "구글 시트" 단축. settingsTab key 는 "connection" 그대로 유지 | -`
+
+### 다시보기 방송시작시간 (broadcastStartTime)
+
+`src/App.tsx | fullReplay schema 의 broadcastStartTime | const | type "text", HH:MM:SS KST 표시. ensureDetectRow 시 Chzzk openDate 를 KST 변환해 초기값. 같은 세션 안에서는 값이 안 변하므로 row 검색 키로 안전 사용 | -`
+
+`electron/main.js | chzzk-status 의 broadcastStartTime 계산 | logic | poll 응답의 openDate (KST 가정) 를 파싱해 HH:MM:SS 문자열 추출. polling 시작 시각 fallback 안 씀 (단절 후 재개에도 같은 시각 유지) | -`
+
+### Chzzk payload 키화 / 에러 정보 강화
+
+`electron/main.js | chzzk-error 에 stack 동봉 | logic | webContents.send("chzzk-error", { message, stack: err.stack }) 형태로 디버그 추적성 향상 | -`
+
+`electron/main.js | chzzk-title-change payload (categoryDisplay 사용) | fix | 과거 미정의 category 변수 참조로 인한 무한 emit 버그 해결. 비교는 lastCategory.categoryId, 표시값은 categoryDisplay 로 분리 | -`
+
+### 앱 삭제 기능 (Self-uninstall)
+
+`electron/main.js | app-uninstall (IPC) | handler | win32 & packaged 환경에서만 동작. process.execPath 의 dirname 에 있는 "Uninstall Inel Work Scheduler.exe" 를 spawn(["/S","--force-run"], { detached, stdio:ignore, windowsHide }) + child.unref. 600ms 뒤 app.quit() 로 파일 잠금 회피 | -> child_process.spawn`
+
+`electron/preload.js | uninstallApp | bridge | renderer → main "app-uninstall" IPC 호출 래퍼 | -`
+
+`src/App.tsx | uninstallModalOpen / uninstallConfirmText / uninstalling | state | 앱 삭제 모달 가시성 / 확인 문구 입력값 / 진행중 플래그. UNINSTALL_CONFIRM_PHRASE = "이늘 스케쥴러 삭제합니다" 정확히 입력해야 [삭제 진행] 활성화 | -`
+
+`src/App.tsx | settingsTab="etc" 안의 .etc-danger-card | UI | "기타 설정" 탭 최하단의 빨간 위험 카드. [앱 삭제하기] 빨간 버튼 → 확인 모달 오픈 | -> uninstallApp`
+
+`src/App.tsx | uninstall-modal-overlay | UI modal | 경고 메시지 + 입력 필드 + [취소][삭제 진행]. 확인 문구 정확 일치 시에만 [삭제 진행] enabled. 클릭 시 electronAPI.uninstallApp + setUninstalling(true) | -> uninstallApp`
+
+`src/styles.css | .etc-danger-card / .etc-danger-btn / .uninstall-modal-* | stylesheet | 빨간 danger 카드 + 모달 (overlay, warning, confirm-phrase input, confirm-btn) | -`
+
+### AI 연결 / CSV 가져오기 기능 잠금 (테스트 중)
+
+`src/App.tsx | ai-locked-banner + fieldset.ai-fieldset-locked | UI | "AI 연결" 탭 진입 시 노란 "⚠ 기능 테스트 중" 배너 + 아래 모든 컨트롤을 <fieldset disabled> 로 한 번에 잠금. pointer-events:none + opacity 0.55 로 시각적 비활성. provider/key/model select + key visibility / refresh / guide 모두 영향 | -`
+
+`src/App.tsx | "CSV 가져오기 (AI)" 상단바 버튼 | UI | disabled 고정 + title="기능 테스트 중 — 다음 업데이트에서 활성화됩니다." | -`
+
+`src/styles.css | .ai-locked-banner / .ai-fieldset-locked | stylesheet | 잠금 배너 색상 (warm yellow) + fieldset opacity / grayscale / pointer-events 처리 | -`
+
+### NSIS / Installer 보강
+
+`build/installer.nsh | !ifndef BUILD_UNINSTALLER 가드 | nsis | installer 전용 Var / Function / Page 정의가 uninstaller 빌드에 노출되면 NSIS warning 6010 (electron-builder 가 error 로 취급) 발생. 그래서 customUnInstall 만 가드 밖에 두고 나머지는 모두 안에 둠 | -`
+
+`build/installer.nsh | customUnInstall RMDir 안전망 | nsis | electron-builder 의 deleteAppDataOnUninstall:true 만으로는 $LOCALAPPDATA Chromium 캐시 잔존이 발생하므로 $APPDATA, $LOCALAPPDATA, $LOCALAPPDATA\${APP_PACKAGE_NAME}-updater 를 RMDir /r 로 강제 정리. 빈 $INSTDIR 도 RMDir | -`
+
+`build/installer.nsh | PendingAutoStart 핸드오프 | nsis+main | NSIS 가 Run 키를 직접 안 쓰고 HKCU\Software\${PRODUCT_NAME}\PendingAutoStart 에 "0"/"1" 만 적음. main.js 가 첫 실행 시 이를 읽어 app.setLoginItemSettings 호출 후 키 삭제. (Electron 의 인용 포맷 차이로 직접 Run 키를 만들면 getLoginItemSettings 가 OFF 로 인식) | -> app.setLoginItemSettings`
+
+### .cursor 하네스
+
+`.cursor/rules/00-project-context.mdc | alwaysApply rule | 매 세션 자동 로드. 스택 / 탭 구조 / 데이터 흐름 / 브랜치 전략 / 영구 저장 위치 / 보안 모델 핵심 요약 | -`
+
+`.cursor/rules/10-typescript-conventions.mdc | globs rule | src/**/*.{ts,tsx}, electron/**/*.js 편집 시 로드. IPC 4단계 동기화 의무 / strict TS / React 훅 / 상태 mutate 금지 | -`
+
+`.cursor/rules/20-deny-dangerous.mdc | alwaysApply rule | force push / npm install / package.json build / installer.nsh / app-uninstall 핸들러 등 위험 작업 시 사용자 동의 강제 | -`
+
+`.cursor/rules/30-secrets-policy.mdc | alwaysApply rule | Service Account / AI API Key / Chzzk 자격증명 취급. 마스킹 요청 / 노출 사고 절차 | -`
+
+`.cursor/rules/40-i18n.mdc | alwaysApply rule | 한국어 UI / 한국어 응답 정책. 식별자는 영어, 라벨은 한국어 | -`
+
+`.cursor/rules/dev-rule.mdc | alwaysApply rule | (기존) docs/code_flow / git / reference 정책 | -`
+
+`AGENTS.md | directory rule | 루트 큰 그림 + 디렉토리 지도 + IPC 카테고리 + 데이터 흐름 다이어그램 + 브랜치 전략 | -`
+
+`electron/AGENTS.md | directory rule | main/preload 컨벤션 + IPC 4단계 절차 + Sheets/Chzzk 호출 규약 + NSIS 핸드오프 | -`
+
+`src/AGENTS.md | directory rule | App.tsx 단일파일 정책 + 상태/localStorage 카탈로그 + IPC 호출 패턴 + 새 기능 추가 흐름 | -`
+
+`build/AGENTS.md | directory rule | NSIS 매크로 구조 + !ifndef BUILD_UNINSTALLER 함정 + 빌드 실패 패턴 + 업그레이드 정책 | -`
+
+`docs/AGENTS.md | directory rule | code_flow.md 갱신 의무 + plans/ 운영 + public/help/ HTML 가이드 관리 | -`
+
+`.cursor/skills/sheets-sync/SKILL.md | on-demand skill | Sheets 동기화 작업 시 자동 로드. 헤더 정렬 보존 / 2-row 구조 / patch-row 흐름 / 편집자별 SA 분리 보안 모델 | -`
+
+`.cursor/skills/chzzk-detection/SKILL.md | on-demand skill | 방송감지 작업 시 자동 로드. 1세션=1row 정책 / ensureDetectRow / appendTimeline / 단절 후 재개 / 즉시 patch | -`
+
+`.cursorignore | file | release, reference, node_modules, secrets 패턴 차단. .env, *-service-account.json 등 자격증명 우발 노출 방지 | -`
+
+`.cursorindexignore | file | public/help/gifs, src/assets, chzzk-categories.seed.json 등은 인덱싱(RAG)만 제외 - 명시 Read 는 허용 | -`
+
+---
+
+## 추가 항목 (phase2 - edition 분기 시스템 도입)
+
+> 편집자 / 썸네일러 인스톨러를 위한 role(edition) 시점 분기. 빌드 시점 상수로 dead-code 제거 보장.
+
+### 빌드 타임 상수
+
+`vite.config.ts | __IWS_EDITION__ define | config | process.env.IWS_EDITION ("admin" | "editor" | "thumbnailer", 기본 admin) 를 빌드 시 JSON 문자열로 inline. 잘못된 값이면 즉시 throw. | -> process.env`
+
+`src/App.tsx | declare const __IWS_EDITION__ | type | TypeScript 가 인식하도록 ambient declaration. Edition 타입과 BUILD_EDITION const 도 함께 정의 | -`
+
+`src/App.tsx | IS_ADMIN (모듈 const) | bool | __IWS_EDITION__ === "admin" 의 boolean literal. 모듈 최상위라 Rollup/esbuild 가 inline → JSX 의 `{IS_ADMIN && (...)}` 가 editor/thumbnailer 빌드에서 통째로 dead-code 제거 | -`
+
+`src/App.tsx | LABEL_SYNC_DOWNLOAD / UPLOAD / DOWNLOADING / UPLOADING | 모듈 const | "구글시트 다운로드" ↔ "일정 새로고침" 같은 라벨을 모듈 const 로 분기 → 양쪽 문자열이 산출물에 같이 남는 ternary 함정을 회피 | -`
+
+### 런타임 edition (dev 토글)
+
+`src/App.tsx | devEdition / setDevEdition | state | dev 모드에서만 admin/editor/thumbnailer 시점 즉시 전환. localStorage("inel.devEdition.v1") 영구 저장. production 빌드에는 BUILD_EDITION 그대로 사용 (import.meta.env.DEV 조건으로 코드 자체가 dead) | -`
+
+`src/App.tsx | edition / isAdmin / isStaff | const | edition = DEV ? devEdition : BUILD_EDITION. isAdmin = IS_ADMIN && edition === "admin" (모듈 상수 곱해서 dead-code 가능성 ↑). JSX 조건은 `{IS_ADMIN && isAdmin && (...)}` 형태로 빌드 + runtime 두 단계 가드 | -`
+
+`src/App.tsx | settingsTab 보정 useEffect | hook | staff(editor/thumbnailer) 시점일 때 settingsTab 이 admin 전용 탭(sheet/connection/ai)이면 자동 "etc" 로 보정. dev 시점 토글 직후 빈 패널 표시 방지 | -`
+
+### 디버그 패널 시점 드롭다운
+
+`src/App.tsx | .debug-edition-row | UI | 디버그 패널 헤더 아래 dev 전용 행. admin/editor/thumbnailer 드롭다운 + 현재 BUILD_EDITION 표시. production 빌드에선 import.meta.env.DEV === false 라 코드 자체가 dead | -> devEdition`
+
+`src/styles.css | .debug-edition-row | stylesheet | 다크 톤 행 (배경 #1f2937, 좌측 라벨/우측 BUILD = 힌트) | -`
+
+### admin only 가드 적용 위치
+
+`src/App.tsx | 상단바 admin only | UI | 시트 링크 복사 버튼, CSV 가져오기 (AI) 버튼, 디버그 토글 모두 {IS_ADMIN && isAdmin && (...)} 가드. editor 빌드 산출물에서 코드 자체 제거 | -`
+
+`src/App.tsx | 설정 패널 admin only | UI | 설정 탭 "시트 설정" / "구글 시트" / "AI 연결" 탭 버튼 + 본문 패널 모두 IS_ADMIN gate. staff 시점은 "기타 설정" 한 탭만 노출 | -`
+
+`src/App.tsx | 디버그 패널 + CSV 모달 admin only | UI | aside.debug-panel 과 .csv-modal-overlay 둘 다 {IS_ADMIN && (...)} 로 감싸 dead-code 제거. CSV 모달은 진입점 버튼이 admin only 라도 코드 자체 제거를 위해 별도 가드 필요 | -`
+
+`src/App.tsx | app-shell with-debug 클래스 가드 | UI | className 도 IS_ADMIN && isAdmin && showDebugPanel 로 합성. editor 빌드는 항상 no-debug → 레이아웃 정합 | -`
+
+### 빌드 산출물 검증 (1차 측정)
+
+`(검증) admin 빌드 | 296.07 kB | admin 문자열 6 (UI), staff 문자열 0 | -`
+
+`(검증) editor 빌드 | 269.88 kB | admin UI 문자열 0, 함수 body dlog 잔존 2 (Service Account hint, 호출 안 됨), staff 문자열 4 (UI) | -`
+
+`(검증) thumbnailer 빌드 | 269.88 kB | editor 빌드와 동일 패턴 | -`
+
+> 차이 ~26 kB / 9%. admin 전용 UI/JSX 가 staff 빌드 산출물에 없음을 확인. 함수 body 내부 일부 dlog 문자열은 향후 admin 전용 함수 모듈 분리로 추가 제거 가능 (현재는 호출 경로 자체가 없어 노출 위험 없음).
+
+### 라벨 매핑 (admin ↔ staff)
+
+| 위치 | admin | staff |
+|---|---|---|
+| 상단바 다운로드 | 구글시트 다운로드 | 일정 새로고침 |
+| 상단바 업로드 | 구글시트 업로드 | 변경사항 저장 |
+| 동기화 상태 (downloading) | 시트 내려받는 중 | 새로고침 중 |
+| 동기화 상태 (uploading) | 시트 올리는 중 | 저장 중 |
+
+---
+
+## 추가 항목 (phase2 - 인스톨러 빌드 분기)
+
+> admin / editor / thumbnailer 별로 다른 productName · appId · 산출물 파일명 · 시작메뉴 shortcut 으로 NSIS 빌드. 같은 머신에 3개 동시 설치 가능.
+
+`scripts/build-edition.mjs | build-edition | node script | IWS_EDITION 환경변수(admin/editor/thumbnailer, 기본 admin) 기반으로 package.json 의 build 섹션을 override 한 config 객체를 만들어 electron-builder Node API(build())로 Windows NSIS 빌드 실행. NSIS 의 ${PRODUCT_NAME} 매크로는 productName 을 그대로 받아쓰므로 설치 경로 / 레지스트리 / AppData 가 edition 별로 자연 분리됨 — installer.nsh 별도 수정 불필요 | -> electron-builder Node API, package.json`
+
+`package.json | scripts.dist:admin / dist:editor / dist:thumbnailer | npm script | cross-env IWS_EDITION=<edition> npm run build:web && cross-env IWS_EDITION=<edition> node scripts/build-edition.mjs. 두 단계 모두 환경변수 주입 필수 (vite + electron-builder 단계 각각). 기존 npm run dist 는 dist:admin 으로 alias | -> scripts/build-edition.mjs`
+
+### edition 별 빌드 메타데이터
+
+| edition | productName | appId | artifactName | shortcutName |
+|---|---|---|---|---|
+| admin | Inel Work Scheduler | com.inel.scheduler | Inel Work Scheduler-Setup-${version}.${ext} | Inel Work Scheduler |
+| editor | Inel Scheduler Editor | com.inel.scheduler.editor | Inel Scheduler-Editor-Setup-${version}.${ext} | 이늘 스케쥴러 (편집자) |
+| thumbnailer | Inel Scheduler Thumbnailer | com.inel.scheduler.thumbnailer | Inel Scheduler-Thumbnailer-Setup-${version}.${ext} | 이늘 스케쥴러 (썸네일러) |
+
+> productName / artifactName 은 폴더명·레지스트리·파일시스템 호환 위해 영문. shortcutName 만 한글 (시작메뉴 가시성).
+
+### 자동 분리되는 경로 (NSIS ${PRODUCT_NAME} 활용)
+
+- 설치 경로: `$DOCUMENTS\${PRODUCT_NAME}` → admin/editor/thumbnailer 별 다른 폴더
+- 레지스트리: `HKCU\Software\${PRODUCT_NAME}` 분리
+- AppData: `$APPDATA\${PRODUCT_NAME}` / `$LOCALAPPDATA\${PRODUCT_NAME}` 분리
+- 바탕화면 shortcut, customUnInstall 정리 경로 모두 분리
+
+### 1차 빌드 검증
+
+`(검증) admin .exe | 100.10 MB | Inel Work Scheduler-Setup-1.0.0.exe | -`
+`(검증) editor .exe | 100.09 MB | Inel Scheduler-Editor-Setup-1.0.0.exe | -`
+`(검증) thumbnailer .exe | 100.09 MB | Inel Scheduler-Thumbnailer-Setup-1.0.0.exe | -`
+
+> 크기는 거의 동일 (asar 안의 JS 차이 26 kB 는 .exe 100 MB 안에서 미미). 핵심은 appId 분리로 같은 머신에 3개 공존 설치 가능, 그리고 각자 다른 UI 빌드 (admin only UI 제거된 staff 빌드) 가 박혔다는 점.
+
+---
+
+## 추가 항목 (phase2 - 임베드 메타 + 토큰 검증 + 빌드 다이얼로그 + 난독화)
+
+> 편집자/썸네일러용 zero-setup 인스톨러 완성. 관리자 UI에서 빌드 → 편집자가 받아 설치 → 자동 인증 + 토큰 검증 → 작업 가능. 권한 회수는 `_tokens` 시트 status 변경.
+
+### Phase A — 임베드 메타데이터
+
+`vite.config.ts | IWS_NAME / ROLE / TOKEN / SHEET_URL / SA_KEY_B64 define 5종 | config | 각각 string literal 로 코드에 inline. admin 빌드는 모두 빈 문자열로 강제. SA JSON 은 base64 임베드 → main 이 디코딩해 userData 에 저장 | -> process.env`
+
+`src/App.tsx | EMBED { name, role, token, sheetUrl, hasSaKey } | const | __IWS_*__ 매크로를 모은 객체. hasSaKey 는 SA_KEY_B64 길이 > 0 검사로 boolean 화. UI 라벨 / 토큰 검증 / 자동 셋업 트리거에 활용 | -`
+
+`src/App.tsx | sheetLink useState lazy init | hook | EMBED.sheetUrl 이 있으면 초기값으로 주입 → 편집자는 시트 URL 입력 단계 없이 바로 연결 | -`
+
+`src/App.tsx | embedSetupDoneRef + 셋업 useEffect | hook+ref | 마운트 시 hasSaKey && !IS_ADMIN 이면 IPC setup-embed-sa 한 번 호출 → 응답으로 serviceAccountPath / clientEmail 설정 + 곧바로 verifyEmbedToken("startup") | -> setupEmbedSa`
+
+`electron/main.js | setup-embed-sa (IPC) | handler | saKeyB64 → JSON 검증 → userData/google-credentials.json 으로 쓰기 (이미 있으면 skip) → initSheetsAuth 호출. clientEmail 반환 | -> Buffer.from(b64), initSheetsAuth`
+
+`electron/preload.js | setupEmbedSa | bridge | renderer → main "setup-embed-sa" 호출 래퍼 | -`
+
+### Phase C — 토큰 검증 + 잠금 화면
+
+`electron/main.js | ensureTokensSheet / readTokensRows / generateToken | helper | _tokens 시트 (헤더: name|role|token|issuedAt|status|lastSeen) 자동 생성/보충 + 행 파싱 + crypto.randomBytes 토큰 발급. 모두 spreadsheetId 인자 받는 비공개 함수 | -> crypto, sheetsClient`
+
+`electron/main.js | tokens-verify (IPC) | handler | sheetUrl + name(NFC 정규화) + role + token 으로 _tokens 시트 첫 매칭 행 검색. status==="active" 면 valid=true 반환 + lastSeen 갱신. 그 외 valid=false + status 반환 | -> ensureTokensSheet, readTokensRows`
+
+`electron/main.js | tokens-issue (IPC) | handler | 같은 (name, role) 의 기존 행이 있으면 새 토큰으로 update (rotate), 없으면 append. 결과 토큰 반환 | -> ensureTokensSheet, readTokensRows, generateToken`
+
+`electron/preload.js | tokensVerify / tokensIssue | bridge | renderer → main IPC 호출 래퍼 | -`
+
+`src/App.tsx | lockState ("ok"|"verifying"|"locked") + lockReason | state | staff 빌드 prod 의 마운트 직후 "verifying" → 검증 결과에 따라 ok / locked. admin 과 dev 는 무조건 "ok" 즉시 통과 | -`
+
+`src/App.tsx | verifyEmbedToken (useCallback) | function | EMBED.token 으로 tokens-verify IPC 호출. startup 시점이면 통신 실패도 잠금 처리, periodic 은 톨러런스 (일시 장애 무시). valid=true 면 lockState="ok", 아니면 reason 메시지 분기 | -> tokensVerify`
+
+`src/App.tsx | 주기적 재검증 useEffect | hook | staff prod 빌드 한정 10분 간격 setInterval 로 verifyEmbedToken("periodic"). 권한 회수 시 자동 잠금 | -> verifyEmbedToken`
+
+`src/App.tsx | .lock-overlay / .lock-card 잠금 화면 렌더 | UI | !IS_ADMIN && lockState !== "ok" 면 본문 대신 잠금 화면 표시. 아이콘 + 사용자 이름 + 사유 + [다시 시도] 버튼 | -`
+
+`src/styles.css | .lock-overlay / .lock-card / .lock-retry-btn 등 | stylesheet | 핑크 그라데이션 배경 + 흰 카드 + 핑크 강조 버튼 | -`
+
+### Phase B — 관리자 인스톨러 빌드 다이얼로그
+
+`electron/main.js | pick-output-dir (IPC) | handler | dialog.showOpenDialog (openDirectory + createDirectory) 으로 인스톨러 출력 폴더 선택. defaultPath 옵션 | -> dialog`
+
+`electron/main.js | build-editor-installer (IPC) | handler | 핵심. (1) _tokens 토큰 발급 (2) SA JSON 읽어 base64 (3) spawn("npm.cmd", ["run", "dist:editor"|"dist:thumbnailer"]) + env 로 IWS_NAME/ROLE/TOKEN/SHEET_URL/SA_KEY_B64 forward (4) release/Inel Scheduler-Role-Setup-*.exe + .blockmap 을 outputDir 로 복사. 매 단계 webContents.send("build-installer-log", line) emit | -> spawn, fs.copyFileSync`
+
+`electron/preload.js | pickOutputDir / buildEditorInstaller / onBuildInstallerLog | bridges | onBuildInstallerLog 는 build-installer-log 이벤트 구독 + unsubscribe 콜백 반환 (cleanup 패턴) | -`
+
+`src/App.tsx | installerModalOpen / installerTargetStaffId / installerOutputDir / installerBuilding / installerLogs / installerResult | state | 빌드 모달 6종 상태. 빌드 중에는 모든 입력 disabled, ESC/배경 클릭으로 닫기 차단 | -`
+
+`src/App.tsx | openInstallerModal / handlePickInstallerDir / handleRunInstallerBuild / closeInstallerModal | function | 모달 열기 - 폴더 선택 IPC - 빌드 IPC + 실시간 로그 구독 - 닫기. 빌드 중에는 close 차단 | -> pickOutputDir, buildEditorInstaller, onBuildInstallerLog`
+
+`src/App.tsx | "기타 설정 > 편집자/썸네일러 인스톨러 빌드" 카드 활성화 | UI | 기존 disabled placeholder 제거. staffList 각 항목에 [인스톨러 빌드] 버튼 + onClick={openInstallerModal(s.id)}. sheetLink || serviceAccountPath 미설정 시 disabled + tooltip 안내 | -> openInstallerModal`
+
+`src/App.tsx | .installer-modal-overlay / .installer-modal 등 | UI modal | 편집자 chip + 출력 폴더 선택 + 시트 URL readonly 표시 + 실시간 빌드 로그 (까만 콘솔 박스) + 결과 카드 (성공/실패) + 푸터 [취소][빌드 시작] | -`
+
+`src/styles.css | .installer-modal-* 일괄 | stylesheet | 모달 overlay/header/body/footer + 폴더 pick row + 로그 박스 (#111827 어두운 톤) + 성공/실패 result 카드 | -`
+
+### Phase D — 경량 난독화 (staff 빌드 한정)
+
+`package.json devDeps | vite-plugin-javascript-obfuscator | npm dep | v3.1.0. javascript-obfuscator 의 vite plugin 래퍼. apply: "build" 시점에 stringArray + identifier mangling 적용 | -`
+
+`vite.config.ts | obfuscator plugin (staff 한정) | config | !IS_ADMIN 일 때만 plugins 에 push. stringArray + base64 encoding (한글 라벨, SA_KEY_B64, sheetUrl 등이 grep 으로 안 잡힘). controlFlowFlattening / deadCodeInjection / debugProtection 은 끔 (빌드 시간 / 사용자 PC 부담). identifierNamesGenerator: "mangled" | -> vite-plugin-javascript-obfuscator`
+
+### 종합 빌드 검증 (Phase A+C+B+D 통합)
+
+`(검증) admin index.js | 300.12 kB | "구글시트 다운로드" 1 (UI), "일정 새로고침" 0, "디버그 패널" 4 (UI), 난독화 X | -`
+`(검증) editor index.js | 296.40 kB | "구글시트 다운로드" 0, "일정 새로고침" 0 (난독화로 base64 인코딩), "Service Account" 1 (함수 body dlog), "__IWS" identifier 0 (모두 inline) | -`
+`(검증) thumbnailer .exe | 100.11 MB | editor 와 동일 패턴 | -`
+
+> editor 빌드는 base64 stringArray 로 "일정 새로고침" 도 grep 안 잡힘. 호기심 추출 차단 효과 정상. compact + mangled identifier 로 함수명 / 변수명 무의미 글자로 변환.
+
+### 최종 운영 흐름
+
+```
+[관리자]
+  설정 > 기타 설정 > 편집자/썸네일러 인스톨러 빌드 카드
+    └ "OOO 인스톨러 빌드" 클릭
+        └ 모달:
+            • 출력 폴더 선택 (release/editors/OOO/ 권장)
+            • 시트 URL 자동 표시 (현재 sheetLink)
+            • [빌드 시작] → IPC build-editor-installer
+                • _tokens 시트에 토큰 발급/갱신
+                • SA JSON base64 임베드
+                • spawn npm run dist:editor (또는 dist:thumbnailer)
+                • release/ 의 .exe 를 출력 폴더로 복사
+            • 실시간 로그 + 결과 카드
+
+[편집자/썸네일러]
+  관리자에게서 .exe 받음 → 더블클릭 설치 (NSIS UI)
+    └ 첫 실행:
+        • main 이 임베드된 SA → userData/google-credentials.json 풀어 저장
+        • renderer 가 setup-embed-sa IPC → 자동 인증
+        • verifyEmbedToken("startup") → _tokens 시트와 대조
+            ├ active → ok, 본문 표시
+            └ revoked/not-found → 잠금 화면
+    └ 평상시:
+        • 10분 간격 주기 재검증
+        • 권한 회수 (관리자가 status 를 revoked 로 바꿈) → 다음 폴링에서 자동 잠금
+
+[관리자가 권한 영구 회수 = 시트 공유 권한 해제]
+  Google Cloud Console 에서 해당 SA 의 이 시트 공유 권한 해제.
+  키 자체가 살아있어도 시트 접근 자체 차단.
+```
+
+---
+
+## 추가 항목 (phase2 - 1.1.0 배포: 안전 업그레이드 흐름)
+
+> NSIS 인스톨러 자동 업그레이드 시 사용자 데이터 (AppData / LocalAppData / 자동실행 / 바로가기) 보존 보장.
+
+`build/installer.nsh | !include FileFunc.nsh | nsis | GetParameters / GetOptions 매크로 사용 위해 추가 | -`
+
+`build/installer.nsh | customUnInstall 3분기 | nsis | (a) Silent + --force-run 없음 → 업그레이드 경로, 데이터 보존. (b) Silent + --force-run 있음 → in-app [앱 삭제하기] 경로, 모든 흔적 제거. (c) Silent 아님 → 수동 uninstall (제어판/시작메뉴), 모든 흔적 제거. main.js 의 app-uninstall spawn 이 "/S --force-run" 으로 호출하므로 in-app 삭제 의도가 명확히 구분됨 | -> GetParameters, GetOptions, Silent`
+
+`package.json | version 1.1.0 | metadata | phase2 (편집자 인스톨러 시스템 + 자동 임베드 + 토큰 검증 + 빌드 다이얼로그 + 경량 난독화 + 안전 업그레이드) minor up | -`
+
+### 1.0.0 → 1.1.0 업그레이드 주의 (해결됨, 아래 항목으로 대체)
+
+> 위 우려는 NSIS Rename 백업/복원 패턴과 _settings 시트 마이그레이션으로 완전히 해결되었다.
+
+---
+
+## 추가 항목 (phase2 - NSIS Rename + 시트 _settings 마이그레이션)
+
+> 1.0.0 사용자의 데이터 (localStorage + AppData) 가 1.1.0 업그레이드 시 100% 보존되도록 두 레이어 추가. 이후엔 시트가 진실의 단일 소스, localStorage 는 캐시.
+
+### NSIS Rename 안전 패턴 (작업 2)
+
+`build/installer.nsh | customInit | nsis | 옛 1.x.x 의 $APPDATA\${PRODUCT_NAME} 이 있으면 .upgrade-backup 으로 Rename. 디렉토리 엔트리만 변경하므로 즉시 끝나고 Chromium 캐시 잠금 영향 없음. 옛 customUnInstall 의 RMDir 는 빈 폴더만 발견하여 noop. $InelUpgradeFound 변수에 1 기록 | -`
+
+`build/installer.nsh | InelUpgradePageCreate / customPageAfterChangeDir | nsis | 옛 데이터 발견 시 "업데이트로 진행됩니다 — 모든 데이터 보존" 안내 페이지 노출. 사용자에게 마이그레이션 의도 명시 | -`
+
+`build/installer.nsh | customInstall 복원 | nsis | $APPDATA\${PRODUCT_NAME}.upgrade-backup 이 있으면 다시 원위치로 Rename. silent uninstall 이 만든 빈 폴더가 있으면 RMDir 후 복원 | -`
+
+### 시트 _settings 마이그레이션 (작업 1)
+
+`electron/main.js | _settings 시트 헬퍼 | helper | SETTINGS_SHEET_NAME="_settings", 헤더 [key, value]. ensureSettingsSheet (자동 생성/헤더 보충) + readSettingsKV (시트 → { key: value }, JSON 자동 파싱) + writeSettingsKV (clear → header → rows, 전체 덮어쓰기) + patchSettingsKV (기존 행 batchUpdate, 새 key append) | -> sheetsClient`
+
+`electron/main.js | settings-sheet-load / settings-sheet-write / settings-sheet-patch (IPC) | handler | renderer 가 _settings 시트와 양방향 동기화. load 는 kv 객체 반환, write 는 통째 덮어쓰기 (마이그레이션 1회용), patch 는 일부 key 만 update/append (자동 push 용) | -`
+
+`electron/preload.js | settingsSheetLoad / settingsSheetWrite / settingsSheetPatch | bridges | renderer → main IPC 호출 래퍼 | -`
+
+`src/App.tsx | settingsMigratedRef + setSettingsMigrated | useRef+fn | localStorage("inel.settingsMigrated.v1") 마이그레이션 마커. true 면 시트가 진실의 단일 소스로 간주, 이후 모든 settings 변경은 자동 시트 patch | -`
+
+`src/App.tsx | buildSettingsPayload (useCallback) | function | 시트 _settings 로 push 할 객체 빌드. sheetLink / serviceAccountPath 는 부트스트랩 정보라 제외. chzzkLink, pollingInterval, statusOptions, staffList, maxUndoSize, schemaByTab, sortOrderByTab, isDetecting, AI 4종, userCategories 포함 | -`
+
+`src/App.tsx | syncSettingsFromSheet (useCallback) | function | runImport 끝에 호출. settings-sheet-load 로 kv 받아서: 시트가 비어있고 마커 false 면 → 현재 localStorage 의 settings 를 시트로 통째 push (마이그레이션). 시트가 비어있지 않으면 → state 들 적용 (시트가 진실). 마커 true 설정 | -> settingsSheetLoad/Write, setSettingsMigrated`
+
+`src/App.tsx | settings 자동 push useEffect | hook | 디바운스 1.5초. 마커 true + sheetLink 있을 때 settings payload 의 어떤 state 가 변경되면 자동으로 settingsSheetPatch 호출. 다른 PC 에서 다음 [일정 새로고침] 으로 자동 동기화 | -> settingsSheetPatch`
+
+`src/App.tsx | saveSettings 안의 시트 patch | fn | 사용자가 [저장] 버튼 누르면 localStorage + 시트 _settings 양쪽 갱신. 마커 true + sheetLink 있을 때만 시트 patch | -> settingsSheetPatch`
+
+### 업그레이드 흐름 (시나리오)
+
+```
+[시나리오 A — 옛 1.0.0 사용자 + 시트 연결됨]
+1. 1.1.0 .exe 더블클릭
+   ├ NSIS customInit: AppData 를 .upgrade-backup 으로 Rename
+   ├ "업데이트로 진행" 안내 페이지
+   ├ 옛 1.0.0 silent uninstall (RMDir 가 빈 폴더만 발견, noop)
+   ├ 1.1.0 파일 설치
+   └ NSIS customInstall: AppData 원위치 복원
+2. 1.1.0 첫 실행
+   ├ localStorage 그대로 (Rename 덕분에 보존됨)
+   ├ 사용자가 [일정 새로고침] → runImport 끝에 syncSettingsFromSheet
+   ├ 시트의 _settings 가 비어있고 마커 false 면 → settingsSheetWrite 로 통째 push
+   └ 마커 true. 이후 모든 settings 변경 자동 시트 patch.
+
+[시나리오 B — 옛 1.0.0 사용자 + 시트 미연결]
+1. 1.1.0 .exe → NSIS Rename 보존 (시트 미사용이라 마이그레이션 보류)
+2. 1.1.0 첫 실행 → localStorage 그대로
+3. 나중에 사용자가 시트 URL + SA 등록 → [일정 새로고침] → 자동 마이그레이션 → 마커 true
+
+[시나리오 C — 신규 사용자]
+1. 1.1.0 신규 설치 → localStorage 비어있음
+2. 시트 URL + SA 등록 → 시트 _settings 받음 → 마커 true. 시트가 진실
+
+[시나리오 D — 다른 PC 에서 이미 마이그레이션됨]
+1. 1.1.0 첫 실행, localStorage 있음 + 시트 _settings 도 있음
+2. syncSettingsFromSheet: sheetHasData=true → 시트 kv 로 state 덮어쓰기. 마커 true
+```
+
+### 검증 빌드
+
+`(검증) admin 1.1.0 .exe | 100.10 MB | NSIS Rename 흐름 + _settings 마이그레이션 통합 | release/Inel Work Scheduler-Setup-1.1.0.exe`
+
+---
+
+## 추가 항목 (편집자 인스톨러 빌드 문서화 + 모달 안내 보강)
+
+`public/help/scheduler-app-guide.html | §10 편집자/썸네일러 전용 인스톨러 만들기 | static guide | 6단계 안내 (① 사전 조건 ② 빌드 절차 ③ _tokens 시트 ④ 편집자 실행 ⑤ 권한 회수/재발급/영구 차단 ⑥ 흔한 에러). 사용자가 모달의 에러 "Service Account JSON 이 없습니다" 만 보고 어디서 등록해야 할지 모르는 케이스 대응 | -`
+
+`public/help/scheduler-app-guide.html | §9 동기화 흐름 - _settings 자동 동기화 항목 추가 | static guide | 시트가 진실의 단일 소스, 다른 PC 에서 자동 복원 흐름 명시 | -`
+
+`src/App.tsx | _tokens 안내 카드 텍스트 갱신 | UI | 옛 "2차 배포에서 활성화될 예정" 문구 제거. 일시 회수 / 재발급 / 영구 차단 3가지 절차 명시 | -`
+
+`src/App.tsx | 인스톨러 빌드 모달 - [도움말 ↗] 버튼 + .installer-prereq-warn | UI | 헤더에 [도움말] 버튼 (openAppGuideHelp). sheetLink / serviceAccountPath 미설정 시 노란 경고 박스로 어떤 항목이 빠졌고 어디서 설정해야 하는지 명시. "도움말 §10 참조" 인라인 링크 | -> openAppGuideHelp`
+
+`src/styles.css | .installer-modal-actions / .installer-help-btn / .installer-prereq-warn / .installer-help-inline | stylesheet | 헤더 액션 그룹, 도움말 버튼 (밝은 핑크 outline), 사전조건 경고 박스 (yellow), 인라인 텍스트 링크 | -`
+
+---
+
+## 추가 항목 (편집자 인스톨러 전용 가이드 페이지)
+
+`public/help/staff-installer-guide.html | static guide | static page | 편집자/썸네일러 인스톨러 빌드 전용 가이드 페이지. 시트 설정 가이드와 동일한 핑크 톤 + 8단계 step 카드 스타일. 섹션: ① 사전 조건 ② 빌드 다이얼로그 ③ _tokens 시트 (테이블 예시 포함) ④ 편집자 첫 실행 흐름 ⑤ 권한 회수 / 재발급 / 영구 차단 4단계 (강도별 배지) ⑥ 흔한 에러 / 트러블슈팅. SA 키 회전 외부 링크 (Cloud Console) 포함 | -`
+
+`electron/main.js | help-open-staff-installer (IPC) | handler | openHelpPage("staff-installer-guide.html") 호출. 다른 도움말과 동일 패턴 | -> shell.openExternal`
+
+`electron/preload.js | helpOpenStaffInstaller | bridge | renderer → main IPC 호출 래퍼 | -`
+
+`src/App.tsx | openStaffInstallerHelp | function | helpOpenStaffInstaller IPC 호출. 인스톨러 빌드 모달의 [도움말 ↗] / 사전조건 경고박스의 인라인 링크 / 기타 설정 카드 헤더의 [전체 가이드 ↗] 에서 호출 | -> helpOpenStaffInstaller`
+
+`src/App.tsx | "편집자/썸네일러 전용 설치 파일 만들기" 카드 헤더 - [전체 가이드 ↗] 버튼 | UI | etc-card-head 우측에 connection-help-btn 스타일 적용. openStaffInstallerHelp 호출 | -`
+
+`public/help/scheduler-app-guide.html | §10 짧은 요약 + 전체 가이드 안내 | static guide | §10 본문은 짧게 (overview + callout 으로 전용 가이드 페이지 안내). 자세한 내용은 staff-installer-guide.html 로 분리 | -`
+
+---
+
 ## 업데이트 템플릿
 
 아래 형식으로 항목을 추가:

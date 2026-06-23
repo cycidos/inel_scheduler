@@ -4,11 +4,73 @@ const https = require("https");
 const fs = require("fs");
 const { execFile, spawn } = require("child_process");
 const { google } = require("googleapis");
+const oauth = require("./oauth");
 
 let pollingTimer = null;
 let lastCategory = null;
 let lastTitle = null;
 let pollingStartTime = null;
+
+/* ──────────────────────────────────────────────
+ * 스태프 빌드 사이드카 설정 (1.2.0+ 인스톨러 빌드 흐름)
+ *
+ * 관리자가 설치본의 [인스톨러 빌드] 버튼으로 만들어 스태프에게 전달하는 파일:
+ *   1) Inel Scheduler-Editor-Setup-X.Y.Z.exe   ← 사전 빌드된 template (임베드 빈 값)
+ *   2) inel-staff-config.json                  ← 스태프 본인 정보 (name/email/role/sheetUrl)
+ *
+ * 스태프가 두 파일이 같은 폴더에 있는 채로 .exe 실행 → NSIS 가 .json 도 설치
+ * 폴더로 함께 복사 (build/installer.nsh 의 customInstall) → 첫 실행 시 main 이
+ * 그것을 userData/embed.json 으로 옮겨 보관하고 설치 폴더 .json 은 제거.
+ *
+ * 다음 실행부터는 userData/embed.json 만 읽어 EMBED 정보로 사용.
+ * ──────────────────────────────────────────────
+ */
+let embedInfo = { name: "", email: "", role: "", sheetUrl: "" };
+
+function loadEmbedInfo() {
+  try {
+    const userEmbed = path.join(app.getPath("userData"), "embed.json");
+
+    // 1) 첫 실행 후처리 — 설치 폴더에 사이드카 .json 이 있으면 userData 로 옮긴다.
+    //    NSIS customInstall 이 인스톨러 옆 .json 을 $INSTDIR 로 복사한 케이스.
+    const installDirSidecar = path.join(path.dirname(app.getPath("exe")), "inel-staff-config.json");
+    if (fs.existsSync(installDirSidecar) && !fs.existsSync(userEmbed)) {
+      try {
+        const raw = fs.readFileSync(installDirSidecar, "utf8");
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") {
+          fs.writeFileSync(userEmbed, JSON.stringify({
+            name: String(parsed.name || ""),
+            email: String(parsed.email || ""),
+            role: String(parsed.role || ""),
+            sheetUrl: String(parsed.sheetUrl || "")
+          }, null, 2), "utf8");
+        }
+      } catch (_e) { /* malformed sidecar 무시 */ }
+      // 설치 폴더 .json 은 정리 — 다음 실행에 오염 방지.
+      try { fs.unlinkSync(installDirSidecar); } catch (_e) { /* ignore */ }
+    }
+
+    // 2) userData/embed.json 읽기
+    if (fs.existsSync(userEmbed)) {
+      const raw = fs.readFileSync(userEmbed, "utf8");
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") {
+        embedInfo = {
+          name: String(parsed.name || ""),
+          email: String(parsed.email || ""),
+          role: String(parsed.role || ""),
+          sheetUrl: String(parsed.sheetUrl || "")
+        };
+      }
+    }
+  } catch (_e) { /* embedInfo 빈 값으로 유지 */ }
+}
+
+// preload 가 contextBridge 노출 시 동기로 받는다 (renderer 의 EMBED 가 모듈 최상위에서 즉시 사용).
+ipcMain.on("embed-get-sync", (event) => {
+  event.returnValue = embedInfo;
+});
 
 function extractChannelId(url) {
   const match = url.match(/chzzk\.naver\.com\/(?:live\/)?([a-f0-9]{32})/);
@@ -391,26 +453,57 @@ function createWindow() {
 
   /* ── Google Sheets ── */
 
-  let sheetsAuth = null;
   let sheetsClient = null;
-  let sheetsClientEmail = null;
 
-  async function initSheetsAuth(keyFilePath) {
-    const auth = new google.auth.GoogleAuth({
-      keyFile: keyFilePath,
-      scopes: ["https://www.googleapis.com/auth/spreadsheets"]
-    });
-    sheetsAuth = auth;
-    sheetsClient = google.sheets({ version: "v4", auth });
+  /** OAuth2Client 를 sheets API 의 auth 로 등록. login/restore 성공 후 호출. */
+  function useOAuthClient(oauth2Client) {
+    sheetsClient = google.sheets({ version: "v4", auth: oauth2Client });
+  }
 
-    try {
-      const raw = fs.readFileSync(keyFilePath, "utf8");
-      const json = JSON.parse(raw);
-      sheetsClientEmail = json.client_email || null;
-    } catch {
-      sheetsClientEmail = null;
+  /**
+   * sheets API 호출 직전 토큰 신선화 보장. 매 IPC 핸들러 시작에서 호출.
+   */
+  async function ensureAuthReady() {
+    if (sheetsClient) {
+      await oauth.ensureFreshToken();
     }
   }
+
+  // 앱 시작 시 저장된 refresh_token 으로 자동 복원 시도.
+  (async () => {
+    try {
+      const res = await oauth.restore(app);
+      if (res.ok) {
+        useOAuthClient(oauth.getClient());
+        if (win && !win.isDestroyed()) {
+          try { win.webContents.send("oauth-auto-restored", { email: res.email }); } catch (_e) { /* renderer 아직 준비 안 됐을 수도 */ }
+        }
+      }
+    } catch (_e) { /* ignore */ }
+  })();
+
+  // OAuth 로그인 IPC — 사용자가 [Google 로그인] 클릭 시 호출
+  ipcMain.handle("oauth-login", async () => {
+    const res = await oauth.login(app);
+    if (res.ok) {
+      useOAuthClient(oauth.getClient());
+    }
+    return res;
+  });
+
+  ipcMain.handle("oauth-logout", async () => {
+    oauth.logout(app);
+    sheetsClient = null;
+    return { ok: true };
+  });
+
+  ipcMain.handle("oauth-status", async () => {
+    return {
+      ok: true,
+      loggedIn: oauth.isLoggedIn(),
+      email: oauth.getUserEmail()
+    };
+  });
 
   function extractSpreadsheetId(url) {
     const match = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
@@ -427,26 +520,236 @@ function createWindow() {
     return `${TAB_SHEET_MAP[tabKey] || tabKey}_${year}`;
   }
 
-  ipcMain.handle("sheets-pick-keyfile", async () => {
-    const result = await dialog.showOpenDialog(win, {
-      title: "Google Service Account JSON 선택",
-      filters: [{ name: "JSON", extensions: ["json"] }],
-      properties: ["openFile"]
+  // ── _settings 시트 헬퍼 ───────────────────────────────────────
+  // 관리자 환경 설정 일체를 시트에 저장. 헤더: key | value (value 는 JSON 문자열 가능)
+  // 시트 링크 같은 "부트스트랩 정보" 는 제외 (로컬 only).
+  const SETTINGS_SHEET_NAME = "_settings";
+  const SETTINGS_HEADER = ["key", "value"];
+
+  async function ensureSettingsSheet(spreadsheetId) {
+    const ss = await sheetsClient.spreadsheets.get({ spreadsheetId });
+    const has = (ss.data.sheets || []).some((s) => s.properties && s.properties.title === SETTINGS_SHEET_NAME);
+    if (!has) {
+      await sheetsClient.spreadsheets.batchUpdate({
+        spreadsheetId,
+        requestBody: { requests: [{ addSheet: { properties: { title: SETTINGS_SHEET_NAME } } }] }
+      });
+    }
+    const head = await sheetsClient.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${SETTINGS_SHEET_NAME}!A1:B1`
     });
-    if (result.canceled || result.filePaths.length === 0) return { ok: false };
-    const filePath = result.filePaths[0];
+    const row = (head.data.values && head.data.values[0]) || [];
+    if (row.length === 0) {
+      await sheetsClient.spreadsheets.values.update({
+        spreadsheetId,
+        range: `${SETTINGS_SHEET_NAME}!A1:B1`,
+        valueInputOption: "RAW",
+        requestBody: { values: [SETTINGS_HEADER] }
+      });
+    }
+  }
+
+  // 시트 → { key: value, ... } 로 직렬화. JSON 으로 파싱 가능하면 파싱.
+  async function readSettingsKV(spreadsheetId) {
+    const res = await sheetsClient.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${SETTINGS_SHEET_NAME}!A2:B`
+    });
+    const rows = res.data.values || [];
+    const out = {};
+    for (const r of rows) {
+      const k = (r[0] || "").trim();
+      const v = r[1] != null ? r[1] : "";
+      if (!k) continue;
+      // JSON 파싱 시도 (객체 / 배열 / true / false / 숫자)
+      const trimmed = (typeof v === "string" ? v : String(v)).trim();
+      if (trimmed.startsWith("{") || trimmed.startsWith("[") || trimmed === "true" || trimmed === "false" || /^-?\d+(\.\d+)?$/.test(trimmed)) {
+        try { out[k] = JSON.parse(trimmed); continue; } catch (_e) { /* fallthrough */ }
+      }
+      out[k] = v;
+    }
+    return out;
+  }
+
+  // 시트의 settings 를 통째로 덮어쓰기 (clear → header → rows).
+  // 한 번에 모든 key 를 push 할 때 사용 (마이그레이션 / 강제 sync).
+  async function writeSettingsKV(spreadsheetId, kv) {
+    await ensureSettingsSheet(spreadsheetId);
+    await sheetsClient.spreadsheets.values.clear({
+      spreadsheetId,
+      range: `${SETTINGS_SHEET_NAME}!A2:B`
+    });
+    const entries = Object.entries(kv).filter(([k]) => k && typeof k === "string");
+    if (entries.length === 0) return;
+    const values = entries.map(([k, v]) => [k, typeof v === "string" ? v : JSON.stringify(v)]);
+    await sheetsClient.spreadsheets.values.update({
+      spreadsheetId,
+      range: `${SETTINGS_SHEET_NAME}!A2:B${1 + values.length}`,
+      valueInputOption: "RAW",
+      requestBody: { values }
+    });
+  }
+
+  // 일부 key 만 업데이트 (부분 patch). 기존 key 면 같은 행 update, 새 key 면 append.
+  async function patchSettingsKV(spreadsheetId, patch) {
+    if (!patch || typeof patch !== "object") return;
+    await ensureSettingsSheet(spreadsheetId);
+    const res = await sheetsClient.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${SETTINGS_SHEET_NAME}!A2:A`
+    });
+    const existing = (res.data.values || []).map((r, i) => ({ key: (r[0] || "").trim(), rowNum: i + 2 }));
+    const updates = [];
+    const appends = [];
+    for (const [k, v] of Object.entries(patch)) {
+      if (!k) continue;
+      const serialized = typeof v === "string" ? v : JSON.stringify(v);
+      const found = existing.find((e) => e.key === k);
+      if (found) {
+        updates.push({ rowNum: found.rowNum, val: serialized });
+      } else {
+        appends.push([k, serialized]);
+      }
+    }
+    // 1) 기존 행 update — 한 번에 batchUpdate 로
+    if (updates.length > 0) {
+      await sheetsClient.spreadsheets.values.batchUpdate({
+        spreadsheetId,
+        requestBody: {
+          valueInputOption: "RAW",
+          data: updates.map((u) => ({
+            range: `${SETTINGS_SHEET_NAME}!B${u.rowNum}`,
+            values: [[u.val]]
+          }))
+        }
+      });
+    }
+    // 2) 새 key append
+    if (appends.length > 0) {
+      await sheetsClient.spreadsheets.values.append({
+        spreadsheetId,
+        range: `${SETTINGS_SHEET_NAME}!A:B`,
+        valueInputOption: "RAW",
+        requestBody: { values: appends }
+      });
+    }
+  }
+
+  ipcMain.handle("settings-sheet-load", async (_event, { sheetUrl }) => {
     try {
-      await initSheetsAuth(filePath);
-      return { ok: true, path: filePath, clientEmail: sheetsClientEmail };
+      await ensureAuthReady();
+      if (!sheetsClient) return { ok: false, error: "Sheets 인증 미초기화" };
+      const spreadsheetId = extractSpreadsheetId(sheetUrl);
+      if (!spreadsheetId) return { ok: false, error: "유효한 시트 URL이 아닙니다." };
+      await ensureSettingsSheet(spreadsheetId);
+      const kv = await readSettingsKV(spreadsheetId);
+      return { ok: true, kv, count: Object.keys(kv).length };
     } catch (err) {
       return { ok: false, error: err.message };
     }
   });
 
-  ipcMain.handle("sheets-init-auth", async (_event, { keyFilePath }) => {
+  ipcMain.handle("settings-sheet-write", async (_event, { sheetUrl, kv }) => {
     try {
-      await initSheetsAuth(keyFilePath);
-      return { ok: true, clientEmail: sheetsClientEmail };
+      await ensureAuthReady();
+      if (!sheetsClient) return { ok: false, error: "Sheets 인증 미초기화" };
+      const spreadsheetId = extractSpreadsheetId(sheetUrl);
+      if (!spreadsheetId) return { ok: false, error: "유효한 시트 URL이 아닙니다." };
+      await writeSettingsKV(spreadsheetId, kv || {});
+      return { ok: true, count: Object.keys(kv || {}).length };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle("settings-sheet-patch", async (_event, { sheetUrl, patch }) => {
+    try {
+      await ensureAuthReady();
+      if (!sheetsClient) return { ok: false, error: "Sheets 인증 미초기화" };
+      const spreadsheetId = extractSpreadsheetId(sheetUrl);
+      if (!spreadsheetId) return { ok: false, error: "유효한 시트 URL이 아닙니다." };
+      await patchSettingsKV(spreadsheetId, patch || {});
+      return { ok: true, count: Object.keys(patch || {}).length };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  // 인스톨러 출력 폴더 선택 다이얼로그 (관리자가 빌드 시 호출)
+  ipcMain.handle("pick-output-dir", async (_event, { defaultPath } = {}) => {
+    const result = await dialog.showOpenDialog(win, {
+      title: "인스톨러 출력 폴더 선택",
+      properties: ["openDirectory", "createDirectory"],
+      defaultPath: defaultPath || undefined
+    });
+    if (result.canceled || !result.filePaths[0]) return { ok: false, canceled: true };
+    return { ok: true, path: result.filePaths[0] };
+  });
+
+  // 관리자 UI 에서 편집자/썸네일러 인스톨러를 즉시 발급 (1.2.0+ 흐름).
+  //
+  // 동작:
+  //   1) admin 설치본 안에 동봉된 template .exe (build/installer-templates/) 를
+  //      복사해서 출력 폴더로 둠 — 자식 프로세스 spawn 없음, 즉시 끝남.
+  //   2) 같은 폴더에 inel-staff-config.json 생성 (name/email/role/sheetUrl).
+  //   3) 두 파일을 함께 스태프에게 전달하면, 스태프가 같은 폴더에서 .exe 실행 시
+  //      NSIS 의 customInstall 이 .json 을 설치 폴더로 복사 → 첫 실행 시 main.js 가
+  //      userData/embed.json 으로 흡수한다.
+  ipcMain.handle("build-editor-installer", async (_event, { name, email, role, sheetUrl, outputDir }) => {
+    try {
+      if (!name || !role) return { ok: false, error: "name, role 필수" };
+      if (!["editor", "thumbnailer"].includes(role)) return { ok: false, error: "role 은 editor 또는 thumbnailer" };
+      if (!email) return { ok: false, error: "스태프 Gmail (email) 필수 — 본인 인증 매칭용" };
+      if (!sheetUrl) return { ok: false, error: "시트 URL 이 없습니다." };
+      if (!outputDir) return { ok: false, error: "출력 폴더 미지정" };
+
+      const emit = (line) => {
+        try { if (win && !win.isDestroyed()) win.webContents.send("build-installer-log", line); } catch (_e) { /* ignore */ }
+      };
+      emit(`[1/3] 사전 빌드된 template 검색…`);
+      emit(`     스태프: ${name} <${email}> · ${role}`);
+
+      // template 위치 — packaged 빌드는 process.resourcesPath/installer-templates,
+      // dev 빌드는 프로젝트 루트의 build/installer-templates/.
+      const candidates = [
+        path.join(process.resourcesPath || "", "installer-templates"),
+        path.resolve(__dirname, "..", "build", "installer-templates")
+      ];
+      let templateDir = null;
+      for (const p of candidates) {
+        if (p && fs.existsSync(p)) { templateDir = p; break; }
+      }
+      if (!templateDir) {
+        return { ok: false, error: "스태프 인스톨러 template 폴더를 찾을 수 없습니다 (build/installer-templates 또는 resources/installer-templates)." };
+      }
+
+      const roleLabel = role === "editor" ? "Editor" : "Thumbnailer";
+      const prefix = `Inel Scheduler-${roleLabel}-Setup-`;
+      const templateExe = (fs.readdirSync(templateDir).find((f) => f.startsWith(prefix) && f.endsWith(".exe"))) || null;
+      if (!templateExe) {
+        return { ok: false, error: `${roleLabel} template .exe 가 없습니다. 빌드 시 'npm run dist:full' 로 다시 빌드하세요.` };
+      }
+      emit(`     template: ${templateExe}`);
+
+      // 출력 폴더 보장
+      fs.mkdirSync(outputDir, { recursive: true });
+
+      // [2/3] template .exe 복사
+      emit(`[2/3] 출력 폴더로 복사…`);
+      const dstExe = path.join(outputDir, templateExe);
+      fs.copyFileSync(path.join(templateDir, templateExe), dstExe);
+      emit(`     → ${dstExe}`);
+
+      // [3/3] 사이드카 .json 생성 (스태프 본인 정보)
+      emit(`[3/3] inel-staff-config.json 생성…`);
+      const sidecar = path.join(outputDir, "inel-staff-config.json");
+      const payload = JSON.stringify({ name, email, role, sheetUrl }, null, 2);
+      fs.writeFileSync(sidecar, payload, "utf8");
+      emit(`     → ${sidecar}`);
+
+      emit(`완료. 두 파일 (.exe + .json) 을 같은 폴더에 두고 스태프에게 전달하세요.`);
+      return { ok: true, outputDir, files: [dstExe, sidecar] };
     } catch (err) {
       return { ok: false, error: err.message };
     }
@@ -544,8 +847,9 @@ function createWindow() {
   });
 
   ipcMain.handle("sheets-test-connection", async (_event, { sheetUrl }) => {
+    await ensureAuthReady();
     if (!sheetsClient) {
-      return { ok: false, error: "Service Account JSON이 등록되지 않았습니다." };
+      return { ok: false, error: "Sheets 인증이 초기화되지 않았습니다. Google 계정으로 먼저 로그인하세요." };
     }
     const spreadsheetId = extractSpreadsheetId(sheetUrl);
     if (!spreadsheetId) {
@@ -558,14 +862,15 @@ function createWindow() {
       });
       const title = meta.data.properties?.title || "";
       const sheetTitles = (meta.data.sheets || []).map((s) => s.properties.title);
-      return { ok: true, title, sheets: sheetTitles, clientEmail: sheetsClientEmail };
+      return { ok: true, title, sheets: sheetTitles };
     } catch (err) {
       return { ok: false, error: err.message };
     }
   });
 
   ipcMain.handle("sheets-import", async (_event, { sheetUrl, tabKey, year, headers }) => {
-    if (!sheetsClient) return { ok: false, error: "인증되지 않음. Service Account JSON을 먼저 설정하세요." };
+    await ensureAuthReady();
+    if (!sheetsClient) return { ok: false, error: "Sheets 인증이 초기화되지 않음. Google 계정으로 먼저 로그인하세요." };
     const spreadsheetId = extractSpreadsheetId(sheetUrl);
     if (!spreadsheetId) return { ok: false, error: "잘못된 Google Sheets URL" };
 
@@ -643,7 +948,8 @@ function createWindow() {
   });
 
   ipcMain.handle("sheets-export", async (_event, { sheetUrl, tabKey, year, headers, rows }) => {
-    if (!sheetsClient) return { ok: false, error: "인증되지 않음. Service Account JSON을 먼저 설정하세요." };
+    await ensureAuthReady();
+    if (!sheetsClient) return { ok: false, error: "Sheets 인증이 초기화되지 않음. Google 계정으로 먼저 로그인하세요." };
     const spreadsheetId = extractSpreadsheetId(sheetUrl);
     if (!spreadsheetId) return { ok: false, error: "잘못된 Google Sheets URL" };
 
@@ -739,7 +1045,8 @@ function createWindow() {
   // 시트에서 해당 행을 식별 → 그 행 전체를 rowValues 로 update. 매칭 행이 없으면 append.
   // 카테고리 변경마다 호출되므로 빠르고 가벼운 단일 행 작업만 수행.
   ipcMain.handle("sheets-patch-row", async (_event, { sheetUrl, tabKey, year, headers, matchPairs, rowValues }) => {
-    if (!sheetsClient) return { ok: false, error: "인증되지 않음. Service Account JSON을 먼저 설정하세요." };
+    await ensureAuthReady();
+    if (!sheetsClient) return { ok: false, error: "Sheets 인증이 초기화되지 않음. Google 계정으로 먼저 로그인하세요." };
     const spreadsheetId = extractSpreadsheetId(sheetUrl);
     if (!spreadsheetId) return { ok: false, error: "잘못된 Google Sheets URL" };
     const sheetName = getSheetName(tabKey, year);
@@ -877,6 +1184,10 @@ function createWindow() {
     return openHelpPage("scheduler-app-guide.html");
   });
 
+  ipcMain.handle("help-open-staff-installer", async () => {
+    return await openHelpPage("staff-installer-guide.html");
+  });
+
   ipcMain.handle("help-open-ai-setup", async () => {
     return openHelpPage("ai-setup.html");
   });
@@ -923,7 +1234,17 @@ function createWindow() {
       }
       const installDir = path.dirname(process.execPath);
       // electron-builder NSIS 디폴트 패턴: "Uninstall <productName>.exe"
-      const uninstallerPath = path.join(installDir, "Uninstall Inel Work Scheduler.exe");
+      // staff 빌드 (Inel Scheduler Editor / Inel Scheduler Thumbnailer) 에서도 동작하도록 동적 결정.
+      const productName = app.getName();
+      let uninstallerPath = path.join(installDir, `Uninstall ${productName}.exe`);
+      if (!fs.existsSync(uninstallerPath)) {
+        // fallback: install dir 의 모든 파일 중 "Uninstall ... .exe" 패턴을 찾는다.
+        try {
+          const candidate = fs.readdirSync(installDir)
+            .find((f) => /^Uninstall .+\.exe$/i.test(f));
+          if (candidate) uninstallerPath = path.join(installDir, candidate);
+        } catch (_e) { /* ignore */ }
+      }
       if (!fs.existsSync(uninstallerPath)) {
         return { ok: false, error: `uninstaller 를 찾을 수 없음: ${uninstallerPath}` };
       }
@@ -1068,8 +1389,13 @@ function createWindow() {
       if (devUrl) {
         target = `${devUrl.replace(/\/$/, "")}/help/${fileName}`;
       } else {
-        const filePath = path.join(__dirname, "..", "dist", "help", fileName);
-        target = `file://${filePath.replace(/\\/g, "/")}`;
+        // packaged 빌드: __dirname 이 app.asar 안을 가리킴. shell.openExternal 은 OS
+        // 핸들러로 가서 .asar 안의 파일을 file:// 로 못 연다. 그래서 package.json 의
+        // asarUnpack 으로 dist/help/** 를 .asar 밖에 풀어두고, 경로를 .asar.unpacked
+        // 로 치환해서 OS 가 실제 파일을 찾을 수 있게 한다.
+        const raw = path.join(__dirname, "..", "dist", "help", fileName);
+        const unpacked = raw.replace(/app\.asar([\\/])/, "app.asar.unpacked$1");
+        target = `file://${unpacked.replace(/\\/g, "/")}`;
       }
       await shell.openExternal(target);
       return { ok: true, url: target };
@@ -1089,31 +1415,38 @@ function createWindow() {
  *     (Electron 의 getLoginItemSettings 가 자기 형식으로 등록된 키만 정확히 인식)
  */
 function applyPendingAutoStart() {
-  if (process.platform !== "win32") return;
-  if (!app.isPackaged) return;
-  try {
-    const productName = app.getName();
-    const subKey = `HKCU\\Software\\${productName}`;
-    execFile("reg.exe", ["query", subKey, "/v", "PendingAutoStart"], (err, stdout) => {
-      if (err) return;
-      const m = String(stdout || "").match(/PendingAutoStart\s+REG_SZ\s+(\d)/i);
-      if (!m) return;
-      const enabled = m[1] === "1";
-      try {
-        app.setLoginItemSettings({
-          openAtLogin: enabled,
-          path: process.execPath,
-          args: []
-        });
-      } catch (_) {}
-      execFile("reg.exe", ["delete", subKey, "/v", "PendingAutoStart", "/f"], () => {});
-    });
-  } catch (_) {}
+  return new Promise((resolve) => {
+    if (process.platform !== "win32") return resolve();
+    if (!app.isPackaged) return resolve();
+    try {
+      const productName = app.getName();
+      const subKey = `HKCU\\Software\\${productName}`;
+      execFile("reg.exe", ["query", subKey, "/v", "PendingAutoStart"], (err, stdout) => {
+        if (err) return resolve();
+        const m = String(stdout || "").match(/PendingAutoStart\s+REG_SZ\s+(\d)/i);
+        if (!m) return resolve();
+        const enabled = m[1] === "1";
+        try {
+          app.setLoginItemSettings({
+            openAtLogin: enabled,
+            path: process.execPath,
+            args: []
+          });
+        } catch (_) { /* ignore */ }
+        execFile("reg.exe", ["delete", subKey, "/v", "PendingAutoStart", "/f"], () => resolve());
+      });
+    } catch (_) { resolve(); }
+  });
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
-  applyPendingAutoStart();
+  // 사이드카 설정 (스태프 인스톨러용 inel-staff-config.json) 이 있으면 흡수 → userData/embed.json
+  // createWindow 이전에 호출하여 preload 의 sync IPC 가 빈값을 반환하지 않게 한다.
+  loadEmbedInfo();
+  // PendingAutoStart 레지스트리 처리 완료 후 createWindow → renderer 의 autostartGet 호출
+  // 시점엔 이미 setLoginItemSettings 가 끝나있어 [기타 설정] 토글이 정확한 ON 상태 표시.
+  await applyPendingAutoStart();
   createWindow();
 
   app.on("activate", () => {

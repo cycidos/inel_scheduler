@@ -20,7 +20,13 @@ node_modules/
 dist/
 dist-electron/
 release/
+release-*/
+release.old.*/
 *.log
+
+# Staff installer templates (admin 빌드 시 동적으로 채워짐)
+build/installer-templates/*.exe
+build/installer-templates/*.blockmap
 
 # build/ is for electron-builder resources (icon.png 등) → 추적함
 # 만약 build 산출물 디렉토리는 따로 dist-electron / release 사용
@@ -38,6 +44,11 @@ chzzk-categories-user.json
 .env
 .env.*
 
-# Local environment files
-.env
-.env.*
+# OAuth 2.0 Desktop Client (Google Cloud Console 에서 발급).
+# Desktop OAuth client secret 은 공개 인정이지만 우리 시크릿 운영 일관성 위해 추적 제외.
+# 다른 개발 머신에서 빌드하려면 Google Cloud Console 에서 같은 OAuth Client ID 의
+# JSON 을 받아 electron/oauth-client.json 으로 직접 복사하세요.
+electron/oauth-client.json
+oauth-client.json
+*-oauth-client.json
+client_secret_*.json

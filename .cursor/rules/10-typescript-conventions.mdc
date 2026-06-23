@@ -1,0 +1,43 @@
+---
+description: "TypeScript / React 컨벤션 — src/*.ts, *.tsx 편집 시 적용"
+globs: src/**/*.ts,src/**/*.tsx,electron/**/*.js
+alwaysApply: false
+---
+
+# TypeScript / React Conventions
+
+## TypeScript
+- `strict: true` (tsconfig 기준). `any` 새로 추가 금지 — 어쩔 수 없을 때만 `unknown` + 타입가드.
+- `import type { Foo } from "..."` 로 타입 전용 임포트 명확화.
+- 외부 IPC 결과(`(window as any).electronAPI?.xxx`) 같이 정적 타입을 못 잡는 경계는 짧게만 사용. 결과는 즉시 narrow.
+
+## React
+- 함수형 컴포넌트 + 훅. 클래스 컴포넌트 신규 추가 금지.
+- `useState` 초기값이 무거우면 **lazy initializer** 형태 사용 (`useState(() => load())`).
+- `useEffect` 의존성 누락 / 무한 루프 주의. 새 effect 추가 시 dependency array 명시.
+- 비효율 재계산 의심되는 곳에만 `useMemo` / `useCallback`. 무분별한 메모 금지.
+- 상태 변형은 **반드시 새 객체/배열 반환**. (`rows.push(...)` 같은 mutate 금지)
+
+## 명명 / 스타일
+- 변수/함수: `camelCase` / 상수: `UPPER_SNAKE` / 컴포넌트/타입: `PascalCase`.
+- 한국어 라벨은 JSX/문자열 리터럴에만. 식별자/주석 본문은 영어 우선, 도메인 용어는 한국어 허용.
+- 들여쓰기 2 spaces. 세미콜론 사용 (기존 코드 일관성).
+
+## 상태 / IPC 패턴
+- 메인 ↔ 렌더러 통신은 항상 `electron/preload.js` 의 `contextBridge` 통해서만. `nodeIntegration` 직접 사용 금지.
+- IPC 핸들러 추가 시 4곳 동기화 필요:
+  1. `electron/main.js` — `ipcMain.handle(...)`
+  2. `electron/preload.js` — `contextBridge` 노출
+  3. `src/App.tsx` — `(window as any).electronAPI?.xxx` 호출부
+  4. `docs/structure/code_flow.md` — 신규/변경 기록
+- 누락하면 dev 모드에서 동작해도 빌드 후 깨지는 경우 있음 (preload hot reload 안 됨).
+
+## 에러 처리
+- 사용자에게 노출되는 경고는 `dlog(...)` + `sheetsStatus` / `aiModelError` 등 상태 변수로.
+- main 프로세스 예외는 `chzzk-error` / `sheets-error` 같은 IPC 이벤트로 전달.
+- `console.error` 만으로 끝내지 말 것 — 디버그 패널에서 보이게 `dlog` 통과시키기.
+
+## 금지 사항
+- `eval()`, `new Function(...)` 사용 금지.
+- 외부 패키지 import 전 `package.json` 의존성 확인. 없으면 사용자에게 설치 동의 먼저.
+- 컴포넌트 안에서 `window.location.reload()` 호출 금지 (Electron에서는 다른 흐름 필요).

@@ -1,0 +1,32 @@
+---
+description: "위험 명령 / 위험 파일 — 셸 실행과 파일 편집 사전 차단"
+alwaysApply: true
+---
+
+# Deny List — 위험 작업 사전 차단
+
+## 셸 명령 차단 (사용자 명시 허가 없이 실행 금지)
+- `git push --force` / `git push -f` — 강제 푸시.
+- `git reset --hard` (untracked 다수 존재 시) — 작업 손실 위험.
+- `npm install <패키지>` — 의존성 추가는 사용자 동의 후.
+- `rm -rf <상대경로 아닌 절대경로>` — 시스템 광역 삭제 가능.
+- `Remove-Item -Recurse -Force` / `rmdir /s /q` — 동일.
+- 임의의 `electron-builder` 옵션 변경 (cscLink, certificateFile 등 코드사인 관련).
+- `app.quit()` / NSIS 언인스톨러 직접 호출 — 사용자 데이터 파괴 가능.
+- 임의의 `node_modules` 삭제 — 재설치 비용 큼. 사용자 동의 필수.
+
+## 파일 편집 시 추가 확인 (수정 전 사용자 의도 재확인)
+- `package.json` 의 `build` / `scripts` / `dependencies` 블록.
+- `build/installer.nsh` — NSIS 매크로. 잘못 손대면 인스톨러 망가짐.
+- `electron/main.js` 의 `ipcMain.handle("app-uninstall", ...)` — 앱 자체를 지우는 핸들러.
+- `.gitignore`, `.cursorignore`, `.cursorindexignore` — 우발 노출 위험.
+- `tsconfig.json`, `vite.config.ts` — 빌드 파이프라인 영향.
+
+## 절대 만지지 말 것
+- `release/` 안의 `.exe`, `.blockmap` — 빌드 산출물. 수동 편집 의미 없음.
+- `reference/` 안의 모든 코드 — 참조용. 복사/모방/import 금지 (기존 dev-rule.mdc §4).
+- 사용자 PC의 `%APPDATA%\Inel Work Scheduler\` — 실행 중 앱이 사용. 외부에서 임의 편집하면 정합성 깨짐.
+
+## 처리 원칙
+- 위 항목에 해당하는 작업 요청 시 → **무엇을, 왜 하는지 한 줄 요약 + 사용자 명시 동의** 후 진행.
+- "괜찮을 것 같으니까 그냥 한다" 금지.

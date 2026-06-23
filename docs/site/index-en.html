@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Inel Work Scheduler</title>
+  <meta name="description" content="A desktop scheduler for individual streamers collaborating with video editors and thumbnailers." />
+  <link rel="icon" href="./icon.png" />
+  <style>
+    :root {
+      --pink-50: #fff7fb;
+      --pink-100: #fdf2f8;
+      --pink-200: #fce7f3;
+      --pink-300: #fbcfe8;
+      --pink-500: #f472b6;
+      --pink-600: #db2777;
+      --pink-700: #9d174d;
+      --gray-500: #6b7280;
+      --gray-700: #374151;
+      --gray-900: #111827;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      background: linear-gradient(180deg, var(--pink-50) 0%, #ffffff 320px);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+      color: var(--gray-900);
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+    .layout { max-width: 920px; margin: 0 auto; padding: 60px 24px 80px; }
+
+    .lang-toggle {
+      position: absolute;
+      top: 24px; right: 24px;
+      font-size: 12px;
+    }
+    .lang-toggle a {
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: #ffffff;
+      border: 1px solid var(--pink-200);
+      color: var(--pink-700);
+      text-decoration: none;
+      font-weight: 700;
+    }
+
+    header.hero {
+      display: flex; align-items: center; gap: 24px;
+      padding: 40px 36px;
+      background: #ffffff;
+      border: 1px solid var(--pink-200);
+      border-radius: 20px;
+      box-shadow: 0 10px 28px rgba(244, 114, 182, 0.10);
+      margin-bottom: 36px;
+    }
+    .hero-logo {
+      width: 96px; height: 96px;
+      background: linear-gradient(135deg, var(--pink-500), var(--pink-600));
+      border-radius: 24px;
+      display: inline-flex; align-items: center; justify-content: center;
+      color: #ffffff; font-size: 28px; font-weight: 800;
+      box-shadow: 0 6px 16px rgba(244, 114, 182, 0.35);
+    }
+    .hero-text h1 { margin: 0; font-size: 28px; color: var(--pink-700); }
+    .hero-text p { margin: 6px 0 0; color: var(--gray-700); font-size: 15px; }
+
+    section.card {
+      margin: 24px 0;
+      padding: 28px 32px;
+      background: #ffffff;
+      border: 1px solid var(--pink-200);
+      border-radius: 16px;
+      box-shadow: 0 4px 16px rgba(244, 114, 182, 0.06);
+    }
+    .card h2 {
+      margin: 0 0 14px;
+      font-size: 18px;
+      color: var(--pink-700);
+    }
+    .card p { margin: 6px 0; color: var(--gray-700); font-size: 14px; }
+    .card ul { margin: 8px 0; padding-left: 22px; color: var(--gray-700); font-size: 14px; }
+    .card li { margin: 6px 0; }
+    .card a { color: var(--pink-600); }
+    .card code {
+      background: var(--pink-50);
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-family: "Cascadia Code", "Consolas", monospace;
+      font-size: 12.5px;
+      color: var(--pink-700);
+      border: 1px solid var(--pink-200);
+    }
+
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 14px;
+      margin-top: 14px;
+    }
+    .feature {
+      padding: 16px 18px;
+      background: var(--pink-50);
+      border: 1px solid var(--pink-200);
+      border-radius: 12px;
+    }
+    .feature strong {
+      display: block;
+      font-size: 14px;
+      color: var(--pink-700);
+      margin-bottom: 4px;
+    }
+    .feature span { font-size: 12.5px; color: var(--gray-700); }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-top: 14px;
+      font-size: 13px;
+      color: var(--gray-700);
+    }
+    .meta strong { color: var(--pink-700); margin-right: 6px; }
+
+    footer {
+      margin-top: 50px;
+      text-align: center;
+      font-size: 12px;
+      color: var(--gray-500);
+    }
+    footer a { color: var(--pink-600); margin: 0 8px; }
+  </style>
+</head>
+<body>
+  <div class="lang-toggle">
+    <a href="./index.html">한국어</a>
+  </div>
+  <div class="layout">
+    <header class="hero">
+      <div class="hero-logo">IWS</div>
+      <div class="hero-text">
+        <h1>Inel Work Scheduler</h1>
+        <p>A Windows desktop scheduler for individual streamers collaborating with video editors and thumbnailers.</p>
+      </div>
+    </header>
+
+    <section class="card">
+      <h2>What is this app?</h2>
+      <p>
+        Inel Work Scheduler is a Windows desktop application that helps an individual live streamer
+        manage video production schedules together with their freelance video editors and thumbnail
+        designers.
+      </p>
+      <p>
+        All work data is synchronized bidirectionally with a single Google Sheet that the
+        <strong>user themselves owns</strong>. The app does not run any developer-side backend; it
+        only uses the user's Google account permissions to access the user's own sheet.
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>Main features</h2>
+      <div class="feature-grid">
+        <div class="feature">
+          <strong>Schedule management</strong>
+          <span>Shorts / Longform / Replay tabs with monthly paging and To-do / Done grouping.</span>
+        </div>
+        <div class="feature">
+          <strong>Editor collaboration</strong>
+          <span>Per-editor / per-thumbnailer custom installers with their own permissions. Each user sees only their assigned rows.</span>
+        </div>
+        <div class="feature">
+          <strong>Broadcast auto-logging</strong>
+          <span>Detects Chzzk live broadcasts and accumulates category / title timeline into the Replay tab.</span>
+        </div>
+        <div class="feature">
+          <strong>Google Sheet sync</strong>
+          <span>Bidirectional sync with a sheet the user owns. The sheet is the single source of truth for all data.</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Download &amp; access</h2>
+      <p>
+        The app is currently in a private beta and distributed to a small number of individual users only.
+        Please contact us via the email below if you would like to try it.
+      </p>
+      <p>
+        Runs on Windows 10 / 11 (64-bit).
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>OAuth permissions (Google sign-in)</h2>
+      <p>
+        The app requests the following Google OAuth scopes from the user. All scopes are used only
+        within the boundary of the <strong>sheet that the user themselves owns</strong>.
+      </p>
+      <ul>
+        <li>
+          <strong>Google Sheets access</strong> (<code>spreadsheets</code>) —
+          Bidirectional sync of the schedule data inside the sheet whose URL the user explicitly entered.
+          The app uses the user's sheet as its only data store, instead of maintaining its own database.
+        </li>
+        <li>
+          <strong>Google Drive (per-file restricted)</strong> (<code>drive.file</code>) —
+          Used only for the metadata operations (e.g. creating per-year sub-sheets) on the sheet the
+          user registered. The app does not enumerate or read any other Drive file.
+        </li>
+        <li>
+          <strong>Email lookup</strong> (<code>userinfo.email</code>) —
+          Used to identify the signed-in account and to verify that an editor's Gmail matches the one
+          their administrator registered for them.
+        </li>
+      </ul>
+      <p>
+        The app does not transmit data to any external server, has no developer-side backend, no
+        analytics, and no advertising. See the <a href="./privacy-en.html">privacy policy</a> for details.
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>Contact</h2>
+      <div class="meta">
+        <span><strong>Developer:</strong> cycidos</span>
+        <span><strong>Email:</strong> <a href="mailto:cycidos@gmail.com">cycidos@gmail.com</a></span>
+      </div>
+    </section>
+
+    <footer>
+      <a href="./privacy-en.html">Privacy Policy</a>
+      · <span>© 2026 cycidos. All rights reserved.</span>
+    </footer>
+  </div>
+</body>
+</html>

@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>편집자/썸네일러 인스톨러 만들기 · 이늘 스케줄러</title>
+  <link rel="icon" href="../assets/icon.png" />
+  <style>
+    :root {
+      --pink-50: #fff7fb;
+      --pink-100: #fdf2f8;
+      --pink-200: #fce7f3;
+      --pink-300: #fbcfe8;
+      --pink-400: #f9a8c5;
+      --pink-500: #f472b6;
+      --pink-600: #db2777;
+      --pink-700: #9d174d;
+      --pink-900: #500724;
+      --gray-50: #f9fafb;
+      --gray-100: #f3f4f6;
+      --gray-200: #e5e7eb;
+      --gray-300: #d1d5db;
+      --gray-500: #6b7280;
+      --gray-700: #374151;
+      --gray-900: #111827;
+      --yellow-50: #fef9c3;
+      --yellow-300: #fde68a;
+      --yellow-600: #ca8a04;
+      --yellow-700: #92400e;
+      --red-50: #fef2f2;
+      --red-300: #fca5a5;
+      --red-700: #991b1b;
+      --green-50: #ecfdf5;
+      --green-300: #6ee7b7;
+      --green-700: #047857;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      background: linear-gradient(180deg, var(--pink-50) 0%, #ffffff 220px);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+      color: var(--gray-900);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    .layout {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 32px 24px 80px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 18px 22px;
+      border: 1px solid var(--pink-200);
+      background: #ffffff;
+      border-radius: 14px;
+      box-shadow: 0 6px 18px rgba(244, 114, 182, 0.08);
+    }
+    .topbar h1 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 800;
+      color: var(--pink-700);
+    }
+    .topbar .topbar-sub {
+      margin-left: auto;
+      font-size: 12px;
+      color: var(--gray-500);
+    }
+
+    .intro {
+      margin: 24px 0 8px;
+      padding: 22px 26px;
+      background: #ffffff;
+      border: 1px solid var(--pink-200);
+      border-radius: 14px;
+      box-shadow: 0 4px 14px rgba(244, 114, 182, 0.06);
+    }
+    .intro h2 {
+      margin: 0 0 10px;
+      font-size: 17px;
+      color: var(--gray-900);
+    }
+    .intro p {
+      margin: 4px 0;
+      color: var(--gray-700);
+      font-size: 14px;
+    }
+    .intro .checklist {
+      margin: 14px 0 0;
+      padding-left: 0;
+      list-style: none;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px 14px;
+    }
+    .intro .checklist li {
+      font-size: 13px;
+      color: var(--gray-700);
+    }
+    .intro .checklist li::before {
+      content: "✓";
+      display: inline-block;
+      width: 18px;
+      color: var(--pink-600);
+      font-weight: 800;
+    }
+
+    .toc {
+      position: sticky;
+      top: 16px;
+      margin: 24px 0;
+      padding: 14px 18px;
+      background: #ffffff;
+      border: 1px solid var(--pink-200);
+      border-radius: 12px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      z-index: 10;
+    }
+    .toc a {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: var(--pink-50);
+      color: var(--pink-700);
+      text-decoration: none;
+      font-size: 12px;
+      font-weight: 600;
+      border: 1px solid var(--pink-200);
+    }
+    .toc a:hover {
+      background: var(--pink-200);
+    }
+    .toc a .num {
+      display: inline-flex;
+      width: 18px;
+      height: 18px;
+      align-items: center;
+      justify-content: center;
+      background: var(--pink-600);
+      color: #ffffff;
+      border-radius: 50%;
+      font-size: 10px;
+      font-weight: 800;
+    }
+
+    .step {
+      margin: 22px 0;
+      padding: 22px 26px;
+      background: #ffffff;
+      border: 1px solid var(--pink-200);
+      border-radius: 14px;
+      box-shadow: 0 4px 14px rgba(244, 114, 182, 0.06);
+      scroll-margin-top: 80px;
+    }
+    .step-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .step-num {
+      display: inline-flex;
+      width: 28px;
+      height: 28px;
+      align-items: center;
+      justify-content: center;
+      background: var(--pink-600);
+      color: #ffffff;
+      border-radius: 50%;
+      font-size: 14px;
+      font-weight: 800;
+    }
+    .step-title {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--gray-900);
+    }
+    .step p {
+      margin: 4px 0 10px;
+      font-size: 14px;
+      color: var(--gray-700);
+    }
+    .step ol, .step ul {
+      margin: 8px 0 12px;
+      padding-left: 22px;
+    }
+    .step li {
+      margin: 5px 0;
+      font-size: 13.5px;
+      line-height: 1.65;
+      color: var(--gray-700);
+    }
+    .step li strong { color: var(--gray-900); }
+    .step code {
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: var(--gray-100);
+      font-family: ui-monospace, SFMono-Regular, monospace;
+      font-size: 12.5px;
+      color: var(--pink-700);
+    }
+    .step h4 {
+      margin: 18px 0 6px;
+      font-size: 14px;
+      color: var(--pink-700);
+    }
+
+    .callout {
+      margin: 12px 0;
+      padding: 12px 14px;
+      background: var(--pink-50);
+      border-left: 4px solid var(--pink-500);
+      border-radius: 6px;
+      font-size: 13px;
+      color: var(--gray-700);
+    }
+    .callout.warn {
+      background: var(--yellow-50);
+      border-left-color: var(--yellow-600);
+      color: var(--yellow-700);
+    }
+    .callout.danger {
+      background: var(--red-50);
+      border-left-color: #ef4444;
+      color: var(--red-700);
+    }
+    .callout.ok {
+      background: var(--green-50);
+      border-left-color: #10b981;
+      color: var(--green-700);
+    }
+
+    .ext-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      color: var(--pink-700);
+      font-weight: 600;
+      text-decoration: none;
+      border-bottom: 1px dotted var(--pink-300);
+    }
+    .ext-link:hover { color: var(--pink-600); }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      margin-left: 4px;
+    }
+    .badge-easy { background: var(--green-50); color: var(--green-700); }
+    .badge-strong { background: var(--red-50); color: var(--red-700); }
+
+    .footer {
+      margin-top: 36px;
+      text-align: center;
+      font-size: 12px;
+      color: var(--gray-500);
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <header class="topbar">
+      <h1>편집자 / 썸네일러 인스톨러 만들기</h1>
+      <span class="topbar-sub">이늘 스케줄러 · 관리자 전용 가이드</span>
+    </header>
+
+    <section class="intro">
+      <p>각 편집자/썸네일러에게 시트 URL · 이메일이 임베드된 .exe 인스톨러를 만들어 전달합니다. 받은 사람은 .exe 더블클릭 설치 후 본인 Google 계정으로 로그인하면 됩니다.</p>
+    </section>
+
+    <nav class="toc">
+      <a href="#step1"><span class="num">1</span>사전 조건</a>
+      <a href="#step2"><span class="num">2</span>빌드 다이얼로그</a>
+      <a href="#step3"><span class="num">3</span>편집자 첫 실행</a>
+      <a href="#step4"><span class="num">4</span>권한 회수</a>
+      <a href="#step5"><span class="num">5</span>흔한 에러</a>
+    </nav>
+
+    <article id="step1" class="step">
+      <div class="step-head">
+        <span class="step-num">1</span>
+        <h2 class="step-title">사전 조건 (빌드 버튼이 비활성이면 여기부터 확인)</h2>
+      </div>
+      <p>빌드를 시작하기 전에 관리자 앱에 다음 3가지가 준비되어 있어야 합니다.</p>
+      <ol>
+        <li><strong>설정 → 구글 시트</strong> 탭에서 [Google 계정으로 로그인] 완료</li>
+        <li>같은 탭에서 <strong>Sheet URL</strong> 입력 (연결 테스트 통과 권장)</li>
+        <li><strong>설정 → 시트 설정</strong>에서 해당 편집자/썸네일러를 <strong>이름 + Gmail</strong> 모두 입력해 등록</li>
+      </ol>
+      <div class="callout warn">
+        <strong>스태프의 Gmail 이 시트 공유 권한에도 추가되어 있어야</strong> 스태프 앱이 시트에 접근할 수 있습니다. 시트 우상단 [공유] 버튼에서 그 Gmail 을 편집자 권한으로 추가해두세요.
+      </div>
+    </article>
+
+    <article id="step2" class="step">
+      <div class="step-head">
+        <span class="step-num">2</span>
+        <h2 class="step-title">빌드 다이얼로그 — 인스톨러 생성</h2>
+      </div>
+      <ol>
+        <li><strong>설정 ⚙ → 기타 설정</strong> 탭으로 이동</li>
+        <li>"<strong>편집자/썸네일러 전용 설치 파일 만들기</strong>" 카드에서 해당 인원 옆 [<strong>인스톨러 빌드</strong>] 클릭</li>
+        <li>모달이 열리면:
+          <ul>
+            <li><strong>출력 폴더 선택</strong> — 예: 바탕화면 또는 <code>release/editors/홍길동/</code></li>
+            <li>연결 시트는 현재 등록된 URL 이 자동 표시 (수정 불가)</li>
+            <li>[<strong>빌드 시작</strong>] 클릭 → 약 30~40초 소요</li>
+          </ul>
+        </li>
+        <li>완료 시 결과 카드 표시 + 출력 폴더에 다음 2개 파일 생성:
+          <ul>
+            <li><code>Inel Scheduler-Editor-Setup-X.Y.Z.exe</code> (또는 <code>-Thumbnailer-</code>) — 본체</li>
+            <li><code>...-Setup-X.Y.Z.exe.blockmap</code> — 보조 파일</li>
+          </ul>
+        </li>
+        <li>그 .exe 파일만 편집자에게 전달 (USB / 메신저 / 클라우드 등)</li>
+      </ol>
+      <div class="callout">
+        <strong>임베드되는 정보</strong>: 시트 URL · 스태프 이름 · 스태프 Gmail · role (editor / thumbnailer). 스태프는 본인 Google 계정으로 로그인합니다.
+      </div>
+    </article>
+
+    <article id="step3" class="step">
+      <div class="step-head">
+        <span class="step-num">3</span>
+        <h2 class="step-title">편집자가 받은 .exe 실행 시</h2>
+      </div>
+      <p>편집자는 다음 흐름으로 사용합니다.</p>
+      <ol>
+        <li>관리자가 보낸 <code>Inel Scheduler-Editor-Setup-X.Y.Z.exe</code> 더블클릭</li>
+        <li>NSIS 인스톨러 진행 (기본 경로: 내 문서\Inel Scheduler Editor)</li>
+        <li>설치 완료 후 앱 실행 → 🔑 "Google 계정으로 로그인" 화면</li>
+        <li>[Google 계정으로 로그인] 클릭 → 시스템 브라우저에서 Google 로그인 페이지 열림</li>
+        <li><strong>관리자가 등록한 본인 Gmail</strong>로 로그인 + 권한 허용</li>
+        <li>앱으로 자동 복귀 → 본인 담당 행만 표시되는 본문 진입</li>
+        <li>매 10분 주기로 자동 권한 재확인. 시트 공유 권한이 해제되면 다음 새로고침 시 동기화 실패.</li>
+      </ol>
+      <div class="callout warn">
+        <strong>등록과 다른 Gmail 로 로그인하면</strong> "계정 불일치" 잠금 화면이 표시되고 사용 불가. 관리자가 등록한 그 Gmail 이어야 합니다.
+      </div>
+    </article>
+
+    <article id="step4" class="step">
+      <div class="step-head">
+        <span class="step-num">4</span>
+        <h2 class="step-title">권한 회수 / 재발급</h2>
+      </div>
+
+      <h4>① 권한 회수</h4>
+      <ol>
+        <li>관리자가 작업 시트 우상단 [<strong>공유</strong>] 버튼 클릭</li>
+        <li>해당 편집자의 Gmail 옆 권한 메뉴 → [<strong>권한 제거</strong>] 또는 [<strong>액세스 권한 삭제</strong>]</li>
+        <li>그 편집자의 앱은 다음 [일정 새로고침] 시점에 동기화 실패</li>
+      </ol>
+      <h4>② 재발급 (이메일 변경 / 정보 갱신)</h4>
+      <ol>
+        <li>관리자 앱 [시트 설정] 탭에서 그 편집자를 [X] 로 제거</li>
+        <li>새 정보로 다시 등록 (이름 / 새 Gmail / role)</li>
+        <li>시트 [공유] 에서도 기존 Gmail 제거 + 새 Gmail 추가</li>
+        <li>[기타 설정] → [인스톨러 빌드] 다시 → 새 .exe 전달</li>
+      </ol>
+
+      <h4>③ 임시 정지 (휴직 등)</h4>
+      <p>완전 회수 대신 잠시 비활성화하려면 시트 [공유] 에서 그 Gmail 의 권한을 <strong>편집자 → 뷰어</strong>로 낮추세요. 앱은 시트를 읽기만 가능하고 [변경사항 저장] 시 403 받음. 복귀 시 다시 편집자 권한 복원.</p>
+    </article>
+
+    <article id="step5" class="step">
+      <div class="step-head">
+        <span class="step-num">5</span>
+        <h2 class="step-title">흔한 에러 / 트러블슈팅</h2>
+      </div>
+      <ul>
+        <li><strong>"Google 계정으로 먼저 로그인하세요"</strong> → 관리자가 §1 사전 조건 ①번 미완료. 관리자 앱에서 OAuth 로그인 후 다시 시도.</li>
+        <li><strong>"시트 URL 이 없습니다"</strong> → §1 사전 조건 ②번 미완료. [구글 시트] 탭에서 URL 입력 후 다시 시도.</li>
+        <li><strong>"이 스태프의 Gmail 미등록"</strong> → [시트 설정] 탭에서 해당 인원의 이메일 입력 후 다시 시도.</li>
+        <li><strong>편집자 앱 - "계정 불일치" 잠금</strong> → 관리자가 등록한 Gmail 과 로그인 시도한 Gmail 이 다름. [로그아웃 후 다시 로그인] 으로 본인 Gmail 사용.</li>
+        <li><strong>편집자 앱 - 새로고침 시 권한 오류 (403)</strong> → 시트 공유에 그 Gmail 이 추가되어 있지 않음. 관리자가 [공유] 에 추가.</li>
+        <li><strong>편집자 앱 - "Google 계정으로 로그인" 안 됨 / "Access blocked"</strong> → 개발자에게 그 편집자의 Gmail 전달 → 개발자가 등록 후 재시도.</li>
+        <li><strong>같은 PC 에 관리자/편집자 둘 다 설치</strong> → 가능 (appId 분리). 시작메뉴에서 두 개 따로 보임.</li>
+        <li><strong>빌드 중 멈춤</strong> → 안티바이러스가 새 .exe 를 잠시 잠그는 경우. 잠시 기다린 후 모달 닫고 재시도.</li>
+      </ul>
+    </article>
+
+    <div class="footer">
+      이 문서는 앱 안에서 [인스톨러 빌드 모달 → 도움말 ↗] 버튼으로 언제든 다시 열 수 있습니다.
+    </div>
+  </div>
+</body>
+</html>

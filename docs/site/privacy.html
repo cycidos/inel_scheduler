@@ -1,0 +1,312 @@
+﻿<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>개인정보처리방침 · Inel Work Scheduler</title>
+  <meta name="description" content="Inel Work Scheduler 의 개인정보 처리 방침" />
+  <link rel="icon" href="./icon.png" />
+  <style>
+    :root {
+      --pink-50: #fff7fb;
+      --pink-100: #fdf2f8;
+      --pink-200: #fce7f3;
+      --pink-300: #fbcfe8;
+      --pink-500: #f472b6;
+      --pink-600: #db2777;
+      --pink-700: #9d174d;
+      --gray-500: #6b7280;
+      --gray-700: #374151;
+      --gray-900: #111827;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      background: linear-gradient(180deg, var(--pink-50) 0%, #ffffff 220px);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+      color: var(--gray-900);
+      line-height: 1.75;
+      min-height: 100vh;
+    }
+    .layout { max-width: 820px; margin: 0 auto; padding: 48px 24px 80px; }
+
+    .lang-toggle {
+      position: absolute;
+      top: 24px; right: 24px;
+      font-size: 12px;
+    }
+    .lang-toggle a {
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: #ffffff;
+      border: 1px solid var(--pink-200);
+      color: var(--pink-700);
+      text-decoration: none;
+      font-weight: 700;
+    }
+
+    header.topbar {
+      padding: 22px 28px;
+      background: #ffffff;
+      border: 1px solid var(--pink-200);
+      border-radius: 14px;
+      box-shadow: 0 6px 18px rgba(244, 114, 182, 0.08);
+      margin-bottom: 30px;
+      display: flex;
+      align-items: baseline;
+      gap: 16px;
+    }
+    .topbar h1 { margin: 0; font-size: 22px; color: var(--pink-700); }
+    .topbar .sub {
+      font-size: 12px;
+      color: var(--gray-500);
+      margin-left: auto;
+    }
+
+    section {
+      margin: 22px 0;
+      padding: 24px 28px;
+      background: #ffffff;
+      border: 1px solid var(--pink-200);
+      border-radius: 14px;
+      box-shadow: 0 4px 14px rgba(244, 114, 182, 0.06);
+    }
+    section h2 {
+      margin: 0 0 12px;
+      font-size: 17px;
+      color: var(--pink-700);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    section h2 .num {
+      width: 24px; height: 24px;
+      border-radius: 50%;
+      background: var(--pink-600);
+      color: #ffffff;
+      font-size: 12px;
+      font-weight: 800;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    section p { margin: 6px 0; font-size: 14px; color: var(--gray-700); }
+    section ul, section ol { padding-left: 22px; color: var(--gray-700); font-size: 14px; margin: 6px 0; }
+    section li { margin: 4px 0; }
+    section code {
+      background: var(--pink-50);
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-family: "Cascadia Code", "Consolas", monospace;
+      font-size: 12.5px;
+      color: var(--pink-700);
+      border: 1px solid var(--pink-200);
+    }
+    section a { color: var(--pink-600); }
+
+    .footer {
+      margin-top: 40px;
+      text-align: center;
+      font-size: 12px;
+      color: var(--gray-500);
+    }
+    .footer a { color: var(--pink-600); margin: 0 8px; }
+  </style>
+</head>
+<body>
+  <div class="lang-toggle">
+    <a href="./privacy-en.html">English</a>
+  </div>
+  <div class="layout">
+    <header class="topbar">
+      <h1>개인정보처리방침</h1>
+      <span class="sub">최종 갱신: 2026-05-25</span>
+    </header>
+
+    <section>
+      <h2><span class="num">1</span>적용 범위</h2>
+      <p>
+        본 방침은 <strong>Inel Work Scheduler</strong> (이하 "본 앱") 의 모든 사용자에게 적용됩니다.
+        본 앱은 cycidos (이하 "개발자") 가 개인 방송 협업 용도로 제작 / 배포한
+        Windows 데스크톱 애플리케이션입니다.
+      </p>
+    </section>
+
+    <section>
+      <h2><span class="num">2</span>수집하는 정보</h2>
+      <p>본 앱은 사용자가 직접 입력하거나 Google 계정 권한 동의를 통해 다음 정보에 접근합니다.</p>
+      <ul>
+        <li>
+          <strong>Google 계정 이메일 주소</strong> — 사용자가 본 앱에 로그인할 때 본인을 식별하기 위해
+          사용. Google OAuth <code>userinfo.email</code> 스코프를 통해 조회.
+        </li>
+        <li>
+          <strong>사용자가 지정한 Google Sheet 의 내용</strong> — 사용자가 본 앱에 입력한 시트 URL 의
+          데이터(영상 제목 / 작업 상태 / 담당자 / 방송 기록 등) 를 양방향으로 읽고 씁니다. Google OAuth
+          <code>spreadsheets</code> 및 <code>drive.file</code> 스코프 사용.
+        </li>
+        <li>
+          <strong>치지직(Chzzk) 공개 방송 정보</strong> — 사용자가 입력한 본인 채널의 공개 방송 상태 /
+          제목 / 카테고리. 치지직 공개 API 를 통해 인증 없이 조회. 개인 데이터 아님.
+        </li>
+        <li>
+          <strong>사용자가 본 앱에서 직접 입력한 작업 데이터</strong> — 편집자 명단 / 작업 상태 / 카테고리
+          시드 / 작업 일정 등. 모두 사용자가 본 앱 UI 에서 직접 입력한 값입니다.
+        </li>
+      </ul>
+      <p>
+        본 앱은 사용자의 입력 행위 / 사용 통계 / 트래킹 / 광고 ID / 위치 / 기기 정보 / 연락처를 수집하지 않습니다.
+      </p>
+    </section>
+
+    <section>
+      <h2><span class="num">3</span>정보의 사용</h2>
+      <p>수집한 정보는 오직 다음 목적으로만 사용됩니다.</p>
+      <ul>
+        <li>
+          <strong>Google Sheet 동기화</strong> — 사용자가 본 앱에서 입력한 데이터를 사용자 본인의 Google
+          Sheet 에 저장하고, 반대로 시트의 변경을 본 앱에 반영합니다. 즉 사용자의 시트가 본 앱의 단일 데이터
+          저장소 역할을 합니다.
+        </li>
+        <li>
+          <strong>본인 식별</strong> — 편집자 / 썸네일러용 앱 빌드에 임베드된 이메일과 실제 로그인한 이메일이
+          일치하는지 확인하여, 다른 사람이 그 빌드를 사용하지 못하도록 합니다.
+        </li>
+        <li>
+          <strong>방송 자동 기록</strong> — Chzzk 공개 API 로 조회한 사용자 본인 채널의 방송 상태를
+          사용자의 Google Sheet 의 "다시보기" 탭에 자동으로 기록합니다.
+        </li>
+      </ul>
+      <p>
+        수집한 정보는 위 목적 외의 용도로 사용되지 않으며, 본 앱 제작자 외 어떤 제3자에게도 전송되지 않습니다.
+      </p>
+    </section>
+
+    <section>
+      <h2><span class="num">4</span>정보의 저장 위치</h2>
+      <p>
+        본 앱은 개발자 서버 / 클라우드 데이터베이스 / 분석 서비스 / 광고 네트워크를 일체 운영하지 않습니다.
+        모든 데이터는 다음 두 위치에만 저장됩니다.
+      </p>
+      <ul>
+        <li>
+          <strong>사용자 본인의 Google Sheet</strong> — 사용자가 본 앱에 입력한 시트 URL 에 해당하는 시트.
+          사용자가 직접 소유하며, 사용자 본인의 Google 드라이브 안에 존재합니다.
+        </li>
+        <li>
+          <strong>사용자 본인 PC 의 로컬 저장소</strong> — Windows 의 <code>%APPDATA%\Inel Work Scheduler\</code>
+          폴더 및 Electron 의 <code>localStorage</code>. OAuth refresh token (Electron <code>safeStorage</code>
+          로 OS 키체인 / Windows DPAPI 암호화), 사용자 설정 캐시, 사용자 추가 카테고리가 여기 저장됩니다.
+        </li>
+      </ul>
+      <p>
+        본 앱은 사용자의 Google 계정 / 시트 / 로컬 데이터를 외부로 전송하지 않습니다.
+      </p>
+    </section>
+
+    <section>
+      <h2><span class="num">5</span>제3자 제공 및 공유</h2>
+      <p>
+        본 앱은 사용자의 어떤 정보도 제3자에게 제공하거나 공유하지 않습니다.
+      </p>
+      <p>
+        예외 — 사용자가 본 앱의 [편집자/썸네일러 인스톨러 빌드] 기능을 통해 다른 협업자에게 본인 시트의 공유
+        권한을 명시적으로 부여하는 경우, 그 협업자가 사용자의 시트에 접근할 수 있습니다. 이는 사용자의
+        능동적 행위에 의한 권한 부여이며, 본 앱이 자동으로 수행하지 않습니다.
+      </p>
+    </section>
+
+    <section>
+      <h2><span class="num">6</span>OAuth 권한 사용 범위</h2>
+      <p>
+        본 앱이 요청하는 Google OAuth 2.0 권한 범위와 사용 목적은 다음과 같으며, 사용자가 명시적으로 권한을
+        승인한 경우에 한해 사용됩니다.
+      </p>
+      <ul>
+        <li>
+          <code>https://www.googleapis.com/auth/spreadsheets</code> —
+          사용자가 본 앱에 입력한 시트 URL 의 내용을 양방향으로 동기화하기 위함. 사용자가 본 앱에 알려준 시트
+          한 장에만 접근합니다.
+        </li>
+        <li>
+          <code>https://www.googleapis.com/auth/drive.file</code> —
+          본 앱이 만든 / 사용자가 본 앱에 명시적으로 권한을 준 파일에만 접근하는 제한된 범위. 사용자의 Drive
+          전체를 탐색하지 않습니다.
+        </li>
+        <li>
+          <code>https://www.googleapis.com/auth/userinfo.email</code> —
+          본인 식별용 이메일 조회. 다른 프로필 정보 (이름 / 사진 / 성별 등) 는 조회하지 않습니다.
+        </li>
+      </ul>
+      <p>
+        본 앱은 Google API Services User Data Policy 와 그 안의 Limited Use 요구사항을 준수합니다.
+      </p>
+    </section>
+
+    <section>
+      <h2><span class="num">7</span>정보의 보유 기간 / 삭제</h2>
+      <p>
+        본 앱이 사용자 본인 PC 의 로컬 저장소에 저장한 데이터 (OAuth refresh token / 설정 캐시 등) 는 본
+        앱을 삭제할 때 함께 제거할 수 있습니다.
+      </p>
+      <ul>
+        <li>
+          <strong>본 앱의 [기타 설정] → [앱 삭제하기]</strong> 또는 Windows 제어판에서 본 앱을 제거하면
+          로컬에 저장된 모든 데이터가 삭제됩니다.
+        </li>
+        <li>
+          <strong>Google 계정 → 보안 → 타사 앱 / 액세스 권한</strong> 에서 본 앱의 권한을 철회할 수
+          있습니다. 권한을 철회하면 본 앱은 더 이상 사용자의 시트에 접근하지 못합니다.
+        </li>
+        <li>
+          사용자가 본 앱에 입력했던 데이터는 사용자 본인의 Google Sheet 안에 그대로 남아있으며, 사용자가
+          직접 시트를 삭제하거나 시트 내용을 지우실 수 있습니다.
+        </li>
+      </ul>
+    </section>
+
+    <section>
+      <h2><span class="num">8</span>보안</h2>
+      <p>
+        OAuth refresh token 은 Electron 의 <code>safeStorage</code> API 를 통해 OS 키체인 / Windows
+        DPAPI 로 암호화하여 저장합니다. 다른 OS 사용자가 같은 PC 의 디스크를 직접 열어봐도 토큰을 평문으로
+        읽을 수 없습니다.
+      </p>
+      <p>
+        본 앱과 Google 서버 간의 모든 통신은 HTTPS 로 암호화됩니다.
+      </p>
+    </section>
+
+    <section>
+      <h2><span class="num">9</span>아동의 정보</h2>
+      <p>
+        본 앱은 만 14세 미만 아동을 직접 대상으로 하지 않으며, 아동의 개인정보를 의도적으로 수집하지 않습니다.
+      </p>
+    </section>
+
+    <section>
+      <h2><span class="num">10</span>방침 변경</h2>
+      <p>
+        본 방침은 법령 변경 / 앱 기능 변경에 따라 갱신될 수 있습니다. 갱신 시에는 본 페이지의 최종 갱신 일자가
+        업데이트됩니다.
+      </p>
+    </section>
+
+    <section>
+      <h2><span class="num">11</span>문의</h2>
+      <p>
+        본 방침 또는 앱이 처리하는 데이터에 관한 문의는 아래로 부탁드립니다.
+      </p>
+      <ul>
+        <li>개발자: cycidos</li>
+        <li>이메일: <a href="mailto:cycidos@gmail.com">cycidos@gmail.com</a></li>
+      </ul>
+    </section>
+
+    <div class="footer">
+      <a href="./index.html">홈으로</a>
+      · <span>© 2026 cycidos. All rights reserved.</span>
+    </div>
+  </div>
+</body>
+</html>
